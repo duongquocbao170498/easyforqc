@@ -40,6 +40,7 @@ import type {
 type TabKey = "cases" | "design" | "run";
 type BusyKey = "issue" | "docs" | "draft" | "xmind" | "attach" | "suite" | "cycle" | "";
 type SettingsSection = "project" | "credentials" | "confluence" | "ai";
+type ConfluenceDocument = { title: string; url: string; text: string; error?: string };
 
 const emptyProject: ProjectConfig = {
   sourceRoot: "",
@@ -142,6 +143,36 @@ const makeEmptyCase = (index: number, issueKey: string): TestCase => ({
     },
   ],
 });
+
+function inferConfluenceBaseUrl(value: string) {
+  const firstLink = value
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .find((item) => /^https?:\/\//i.test(item));
+  if (!firstLink) return "";
+  try {
+    const url = new URL(firstLink);
+    if (url.pathname.startsWith("/wiki/")) return `${url.origin}/wiki`;
+    for (const marker of ["/display/", "/spaces/", "/pages/", "/plugins/", "/secure/"]) {
+      const index = url.pathname.indexOf(marker);
+      if (index > 0) return `${url.origin}${url.pathname.slice(0, index)}`.replace(/\/+$/, "");
+    }
+    return url.origin;
+  } catch {
+    return "";
+  }
+}
+
+function extractDocumentLinks(value: string) {
+  const matches = value.match(/https?:\/\/[^\s<>"')\]]+/gi) || [];
+  return Array.from(
+    new Set(
+      matches
+        .map((item) => item.replace(/[),.;\]]+$/g, ""))
+        .filter((item) => /confluence|docs\.|\/display\/|\/wiki\/|\/pages\/|pageId=/i.test(item)),
+    ),
+  );
+}
 
 async function apiPost<T>(url: string, body: unknown): Promise<T> {
   const response = await fetch(url, {
@@ -370,6 +401,8 @@ function App() {
   const [confluenceLinks, setConfluenceLinks] = useState("");
   const [docContext, setDocContext] = useState("");
   const [docIssueKey, setDocIssueKey] = useState("");
+  const [docStatus, setDocStatus] = useState("");
+  const [docSources, setDocSources] = useState<ConfluenceDocument[]>([]);
   const [archetypeKey, setArchetypeKey] = useState("auto");
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [outline, setOutline] = useState<TestDesignOutline>(emptyOutline(emptyIssue));
@@ -497,6 +530,15 @@ function App() {
     setConfluenceLinks("");
     setDocContext("");
     setDocIssueKey("");
+    setDocStatus("");
+    setDocSources([]);
+  }
+
+  function clearFetchedDocs(nextStatus = "") {
+    setDocContext("");
+    setDocIssueKey("");
+    setDocStatus(nextStatus);
+    setDocSources([]);
   }
 
   function handleJiraUrlChange(value: string) {
@@ -653,6 +695,16 @@ function App() {
         issue_type: payload.issue.issue_type || current.issue_type,
       }));
       setOutline((current) => ({ ...current, issue_key: payload.issue.key || current.issue_key }));
+      const detectedDocLinks = extractDocumentLinks(`${payload.issue.description}\n${payload.issue.summary}`);
+      if (detectedDocLinks.length && !confluenceLinks.trim()) {
+        const linksText = detectedDocLinks.join("\n");
+        setConfluenceLinks(linksText);
+        const inferredBaseUrl = confluenceBaseUrl.trim() || inferConfluenceBaseUrl(linksText);
+        if (inferredBaseUrl) {
+          setConfluenceBaseUrl(inferredBaseUrl);
+        }
+        clearFetchedDocs(`Tìm thấy ${detectedDocLinks.length} link doc trong Jira description. Nhấn Fetch docs để đọc nội dung vào Task context.`);
+      }
       setOutput(JSON.stringify(payload.issue, null, 2));
       setMessage(`Đã fetch Jira task ${payload.issue.key}.`);
     });
@@ -663,20 +715,27 @@ function App() {
       if (!confluenceBaseUrl.trim()) {
         throw new Error("Nhập Confluence Base URL cho task này trước khi Fetch docs.");
       }
-      const payload = await apiPost<{ documents: { title: string; url: string; text: string; error?: string }[]; combinedText: string }>(
+      const currentIssueKey = issueKeyFromText(jiraUrl) || issue.key;
+      const payload = await apiPost<{ documents: ConfluenceDocument[]; combinedText: string }>(
         "/api/confluence-docs",
         {
           links: confluenceLinks,
           confluenceCredentials: taskConfluenceCredentials,
         },
       );
+      const loadedDocs = payload.documents.filter((item) => item.text);
+      const failedDocs = payload.documents.filter((item) => item.error);
       setDocContext(payload.combinedText);
-      setDocIssueKey(issueKeyFromText(jiraUrl) || issue.key);
+      setDocIssueKey(payload.combinedText ? currentIssueKey : "");
+      setDocSources(payload.documents);
       setOutput(JSON.stringify(payload.documents, null, 2));
-      const failed = payload.documents.filter((item) => item.error).length;
+      const nextStatus = loadedDocs.length
+        ? `Doc context đã gắn với ${currentIssueKey}: đọc được ${loadedDocs.length}/${payload.documents.length} doc, ${payload.combinedText.length.toLocaleString()} ký tự. Generate draft sẽ dùng doc này cho đúng task hiện tại.`
+        : `Chưa đọc được nội dung doc cho ${currentIssueKey}. Kiểm tra lại Base URL, auth hoặc link Confluence.`;
+      setDocStatus(nextStatus);
       setMessage(
-        failed
-          ? `Đã đọc ${payload.documents.length - failed}/${payload.documents.length} Confluence doc. Có ${failed} doc lỗi.`
+        failedDocs.length
+          ? `Đã đọc ${loadedDocs.length}/${payload.documents.length} Confluence doc. Có ${failedDocs.length} doc lỗi.`
           : `Đã đọc ${payload.documents.length} Confluence doc.`,
       );
     });
@@ -849,8 +908,7 @@ function App() {
             value={confluenceBaseUrl}
             onChange={(value) => {
               setConfluenceBaseUrl(value);
-              setDocContext("");
-              setDocIssueKey(value.trim() && confluenceLinks.trim() ? issueKeyFromText(jiraUrl) || issue.key : "");
+              clearFetchedDocs(value.trim() && confluenceLinks.trim() ? "Base URL đã đổi. Nhấn Fetch docs để đọc lại doc cho task hiện tại." : "");
             }}
             placeholder="Optional, ví dụ https://confluence.vexere.net"
           />
@@ -1145,8 +1203,11 @@ function App() {
               value={confluenceLinks}
               onChange={(value) => {
                 setConfluenceLinks(value);
-                setDocContext("");
-                setDocIssueKey(value.trim() && confluenceBaseUrl.trim() ? issueKeyFromText(jiraUrl) || issue.key : "");
+                const inferredBaseUrl = confluenceBaseUrl.trim() ? "" : inferConfluenceBaseUrl(value);
+                if (inferredBaseUrl) {
+                  setConfluenceBaseUrl(inferredBaseUrl);
+                }
+                clearFetchedDocs(value.trim() ? "Đã nhận link doc. Nhấn Fetch docs để đọc nội dung vào Task context." : "");
               }}
               textarea
               rows={3}
@@ -1161,12 +1222,26 @@ function App() {
                 Fetch docs
               </IconButton>
             </div>
+            {docStatus ? <div className="mini-note">{docStatus}</div> : null}
+            {docSources.length ? (
+              <div className="doc-source-list">
+                {docSources.map((doc) => (
+                  <div className={doc.error ? "doc-source error" : "doc-source"} key={doc.url}>
+                    <strong>{doc.title || doc.url}</strong>
+                    <span>{doc.url}</span>
+                    <small>{doc.error ? `Lỗi: ${doc.error}` : `${doc.text.length.toLocaleString()} ký tự đã fetch`}</small>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <Field
               label="Nội dung doc đã fetch / paste thêm"
               value={docContext}
               onChange={(value) => {
                 setDocContext(value);
-                setDocIssueKey(issue.key);
+                setDocIssueKey(value.trim() ? issueKeyFromText(jiraUrl) || issue.key : "");
+                setDocStatus(value.trim() ? `Doc context thủ công đang gắn với ${issueKeyFromText(jiraUrl) || issue.key}. Generate draft sẽ dùng nội dung này nếu Base URL vẫn có giá trị.` : "");
+                setDocSources([]);
               }}
               textarea
               rows={5}

@@ -1024,6 +1024,23 @@ function confluencePageIdFromUrl(url) {
   return "";
 }
 
+function decodeConfluencePathSegment(value) {
+  try {
+    return decodeURIComponent(asText(value).replace(/\+/g, "%20"));
+  } catch {
+    return asText(value).replace(/\+/g, " ");
+  }
+}
+
+function confluenceDisplayPageFromUrl(url) {
+  const match = url.pathname.match(/\/display\/([^/]+)\/([^?#]+)/);
+  if (!match) return null;
+  return {
+    spaceKey: decodeConfluencePathSegment(match[1]),
+    title: decodeConfluencePathSegment(match[2]),
+  };
+}
+
 function confluenceBaseUrlFrom(url, credentials = {}) {
   const configured = asText(credentials.baseUrl);
   if (configured) {
@@ -1050,9 +1067,7 @@ async function fetchConfluenceDocument(link, credentials = {}) {
   const url = new URL(link);
   const pageId = confluencePageIdFromUrl(url);
   const headers = confluenceAuthHeaders(credentials);
-  if (pageId) {
-    const baseUrl = confluenceBaseUrlFrom(url, credentials);
-    const apiUrl = `${baseUrl}/rest/api/content/${encodeURIComponent(pageId)}?expand=body.storage,body.view,title,space`;
+  const fetchRestContent = async (apiUrl) => {
     const response = await fetch(apiUrl, { headers });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -1060,12 +1075,33 @@ async function fetchConfluenceDocument(link, credentials = {}) {
         status: response.status,
       });
     }
-    const html = payload?.body?.storage?.value || payload?.body?.view?.value || "";
+    const page = Array.isArray(payload.results) ? payload.results[0] : payload;
+    if (!page) {
+      throw Object.assign(new Error("Không tìm thấy page Confluence từ link đã nhập."), { status: 404 });
+    }
+    const html = page?.body?.storage?.value || page?.body?.view?.value || "";
     return {
-      title: asText(payload.title) || link,
+      title: asText(page.title) || link,
       url: link,
       text: htmlToText(html).slice(0, 12000),
     };
+  };
+  if (pageId) {
+    const baseUrl = confluenceBaseUrlFrom(url, credentials);
+    const apiUrl = `${baseUrl}/rest/api/content/${encodeURIComponent(pageId)}?expand=body.storage,body.view,title,space`;
+    return fetchRestContent(apiUrl);
+  }
+
+  const displayPage = confluenceDisplayPageFromUrl(url);
+  if (displayPage?.spaceKey && displayPage?.title) {
+    const baseUrl = confluenceBaseUrlFrom(url, credentials);
+    const params = new URLSearchParams({
+      spaceKey: displayPage.spaceKey,
+      title: displayPage.title,
+      expand: "body.storage,body.view,title,space",
+    });
+    const apiUrl = `${baseUrl}/rest/api/content?${params.toString()}`;
+    return fetchRestContent(apiUrl);
   }
 
   const response = await fetch(link, { headers: { ...headers, Accept: "text/html,application/json;q=0.8" } });
