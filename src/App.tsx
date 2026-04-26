@@ -835,7 +835,7 @@ function App() {
             <h2>AI Settings</h2>
           </div>
           <p className="panel-help">
-            Lưu model, API key và guideline riêng cho từng tài khoản để chuẩn bị cho bước generate bằng AI.
+            Khi bật, app sẽ dùng prompt mặc định của skill rồi bổ sung các guideline bên dưới. Khi tắt, app quay về prompt mặc định.
           </p>
           <label className="checkbox-field">
             <input
@@ -844,8 +844,8 @@ function App() {
               onChange={(event) => setAiSettingValue("enabled", event.target.checked)}
             />
             <span className="checkbox-copy">
-              <strong>Bật AI cho account này</strong>
-              <small>Sau này khi gọi AI, app sẽ dùng key/model bên dưới thay vì dùng key chung của admin.</small>
+              <strong>Áp dụng AI Settings khi generate</strong>
+              <small>Bật: skill mặc định + style/guideline bên dưới. Tắt: chỉ dùng prompt mặc định của skill.</small>
             </span>
           </label>
           <label className="field">
@@ -920,7 +920,7 @@ function App() {
           </div>
           {settingsStatus.ai ? <div className="mini-note">{settingsStatus.ai}</div> : null}
           <div className="mini-note">
-            API key và guideline được lưu mã hoá theo account. Bản hiện tại chỉ lưu settings để chuẩn bị cho bước tích hợp AI generation.
+            API key và guideline được lưu mã hoá theo account. Nếu bỏ tích, các thông tin này vẫn được lưu nhưng không áp dụng khi generate.
           </div>
         </section>
       </aside>

@@ -890,6 +890,38 @@ function normalizeAiSettings(raw = {}) {
   };
 }
 
+function aiCustomizationFromSettings(raw = {}) {
+  const settings = normalizeAiSettings(raw);
+  if (!settings.enabled) {
+    return null;
+  }
+  const guidance = {
+    prompt_mode: "default_skill_prompt_plus_user_ai_settings",
+    provider: settings.provider,
+    baseUrl: settings.baseUrl,
+    model: settings.model,
+    writingStyle: settings.writingStyle,
+    testCaseGuidelines: settings.testCaseGuidelines,
+    testDesignGuidelines: settings.testDesignGuidelines,
+    improvementNotes: settings.improvementNotes,
+  };
+  return Object.fromEntries(Object.entries(guidance).filter(([, value]) => Boolean(value)));
+}
+
+function aiGuidanceText(aiCustomization) {
+  if (!aiCustomization) {
+    return "";
+  }
+  return [
+    aiCustomization.writingStyle ? `Phong cách viết: ${aiCustomization.writingStyle}` : "",
+    aiCustomization.testCaseGuidelines ? `Cách viết test case: ${aiCustomization.testCaseGuidelines}` : "",
+    aiCustomization.testDesignGuidelines ? `Cách làm test design: ${aiCustomization.testDesignGuidelines}` : "",
+    aiCustomization.improvementNotes ? `Improve skill notes: ${aiCustomization.improvementNotes}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 function csvList(value) {
   return asText(value)
     .split(",")
@@ -1050,7 +1082,7 @@ function step(description, testData, expectedResult) {
   };
 }
 
-function buildCases(issue, archetypeKey, notes = "") {
+function buildCases(issue, archetypeKey, notes = "", aiCustomization = null) {
   const archetype = ARCHETYPES[archetypeKey] || ARCHETYPES.general;
   const key = issue.key || "JIRA-TASK";
   const summary = issue.summary || issue.title || "Phạm vi task";
@@ -1232,7 +1264,7 @@ function buildCases(issue, archetypeKey, notes = "") {
   });
 }
 
-function buildOutline(issue, archetypeKey, cases = [], notes = "") {
+function buildOutline(issue, archetypeKey, cases = [], notes = "", aiCustomization = null) {
   const archetype = ARCHETYPES[archetypeKey] || ARCHETYPES.general;
   const title = issue.title || `[${issue.key || "JIRA-TASK"}] ${issue.summary || "Test design"}`;
   const scopeLines = compactLines(`${issue.description}\n${notes}`, 8);
@@ -1281,6 +1313,9 @@ function buildOutline(issue, archetypeKey, cases = [], notes = "") {
       status: issue.status,
       issue_type: issue.issue_type,
       description_excerpt: asText(issue.description).slice(0, 1600),
+      ai_customization_applied: Boolean(aiCustomization),
+      ai_customization_guidance: aiGuidanceText(aiCustomization) || undefined,
+      ai_customization: aiCustomization || undefined,
     },
     design_rationale: {
       archetype: archetype.label,
@@ -1387,11 +1422,13 @@ app.post("/api/draft", async (req, res) => {
     }
     const archetypeKey = chooseArchetype(issue, req.body?.archetype);
     const notes = asText(req.body?.notes);
-    const testCases = buildCases(issue, archetypeKey, notes);
-    const outline = buildOutline(issue, archetypeKey, testCases, notes);
+    const aiCustomization = aiCustomizationFromSettings(req.body?.aiSettings);
+    const testCases = buildCases(issue, archetypeKey, notes, aiCustomization);
+    const outline = buildOutline(issue, archetypeKey, testCases, notes, aiCustomization);
     res.json({
       archetypeKey,
       archetype: ARCHETYPES[archetypeKey],
+      aiCustomizationApplied: Boolean(aiCustomization),
       testCases,
       outline,
     });

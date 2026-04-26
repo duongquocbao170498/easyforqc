@@ -128,7 +128,7 @@ Mỗi user đăng nhập có thể lưu AI Settings riêng:
 - Guideline làm test design.
 - Improve skill notes để ghi nhớ các chỉnh sửa user muốn giữ cho lần sau.
 
-API key và guideline được lưu mã hoá trong bảng `user_settings` bằng `APP_SESSION_SECRET`. Bản hiện tại chuẩn bị UI/storage trước; khi tích hợp AI generation, backend nên dùng AI key của chính user đang đăng nhập thay vì dùng một key chung của admin.
+Khi checkbox AI Settings được bật, app hiểu là dùng prompt mặc định của skill và bổ sung thêm các guideline riêng của user. Khi checkbox bị tắt, app bỏ qua AI Settings và quay lại prompt mặc định của skill. API key và guideline được lưu mã hoá trong bảng `user_settings` bằng `APP_SESSION_SECRET`; backend không dùng một key chung của admin cho user khác.
 
 Khi muốn dùng domain đẹp như `easyforqc.com`, cần mua domain rồi trỏ DNS về service Render hoặc server riêng.
 

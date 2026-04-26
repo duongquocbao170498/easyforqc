@@ -39,7 +39,7 @@ File này dùng để nhớ các nơi đang lưu source, app, database và confi
 | Google Client Secret | Google Cloud OAuth Client và Render Environment | Nếu từng bị lộ, reset secret trong Google Cloud rồi cập nhật lại Render. |
 | Jira auth/token của QC | Database Neon/local, bảng `user_settings`, field encrypted | App mã hoá bằng `APP_SESSION_SECRET`; lưu theo từng account đăng nhập. |
 | AI API key của từng QC | Database Neon/local, bảng `user_settings`, field `ai_settings_encrypted` | Lưu mã hoá theo từng account. Người khác dùng key riêng của họ, không ảnh hưởng token/chi phí của bạn. |
-| AI writing style/guidelines | Database Neon/local, bảng `user_settings`, field `ai_settings_encrypted` | Lưu phong cách viết, cách viết test case, cách làm test design và improve skill notes của từng user. |
+| AI writing style/guidelines | Database Neon/local, bảng `user_settings`, field `ai_settings_encrypted` | Khi bật checkbox AI Settings: prompt mặc định của skill + guideline riêng. Khi tắt checkbox: chỉ dùng prompt mặc định của skill. |
 
 ## Các File Cấu Hình Quan Trọng Trong Source
 
