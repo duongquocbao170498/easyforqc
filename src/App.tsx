@@ -38,6 +38,7 @@ import type {
 
 type TabKey = "cases" | "design" | "run";
 type BusyKey = "issue" | "draft" | "xmind" | "attach" | "suite" | "cycle" | "";
+type SettingsSection = "project" | "credentials" | "ai";
 
 const emptyProject: ProjectConfig = {
   sourceRoot: "",
@@ -338,8 +339,12 @@ function App() {
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState("");
-  const [settingsBusy, setSettingsBusy] = useState(false);
-  const [settingsStatus, setSettingsStatus] = useState("");
+  const [settingsBusy, setSettingsBusy] = useState<SettingsSection | "">("");
+  const [settingsStatus, setSettingsStatus] = useState<Record<SettingsSection, string>>({
+    project: "",
+    credentials: "",
+    ai: "",
+  });
   const [defaults, setDefaults] = useState<DefaultsResponse | null>(null);
   const [project, setProject] = useState<ProjectConfig>(emptyProject);
   const [credentials, setCredentials] = useState<Credentials>(emptyCredentials);
@@ -510,23 +515,32 @@ function App() {
     }
   }
 
-  async function saveUserSettings() {
-    setSettingsBusy(true);
-    setSettingsStatus("");
+  async function saveUserSettings(section: SettingsSection) {
+    const body =
+      section === "project"
+        ? { project }
+        : section === "credentials"
+          ? { credentials }
+          : { aiSettings };
+    const label =
+      section === "project"
+        ? "Project config"
+        : section === "credentials"
+          ? "Jira auth"
+          : "AI Settings";
+    setSettingsBusy(section);
+    setSettingsStatus((current) => ({ ...current, [section]: "" }));
     try {
-      await apiPost("/api/user-settings", {
-        project,
-        credentials,
-        aiSettings,
-      });
-      setSettingsStatus("Đã lưu Project config, Jira auth và AI Settings cho tài khoản này.");
-      setMessage("Đã lưu cấu hình. Lần sau đăng nhập app sẽ tự điền lại.");
+      await apiPost("/api/user-settings", body);
+      const text = `Đã lưu ${label} cho tài khoản này.`;
+      setSettingsStatus((current) => ({ ...current, [section]: text }));
+      setMessage(text);
     } catch (error) {
       const text = error instanceof Error ? error.message : "Không lưu được cấu hình.";
-      setSettingsStatus(text);
+      setSettingsStatus((current) => ({ ...current, [section]: text }));
       setMessage(text);
     } finally {
-      setSettingsBusy(false);
+      setSettingsBusy("");
     }
   }
 
@@ -776,14 +790,15 @@ function App() {
           </div>
           <div className="button-row">
             <IconButton
-              icon={settingsBusy ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
-              onClick={saveUserSettings}
-              disabled={settingsBusy}
+              icon={settingsBusy === "project" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+              onClick={() => saveUserSettings("project")}
+              disabled={Boolean(settingsBusy)}
               variant="primary"
             >
               Lưu
             </IconButton>
           </div>
+          {settingsStatus.project ? <div className="mini-note">{settingsStatus.project}</div> : null}
         </section>
 
         <section className="panel compact">
@@ -796,15 +811,15 @@ function App() {
           <Field label="Token" value={credentials.token} type="password" onChange={(value) => setCredentialValue("token", value)} />
           <div className="button-row">
             <IconButton
-              icon={settingsBusy ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
-              onClick={saveUserSettings}
-              disabled={settingsBusy}
+              icon={settingsBusy === "credentials" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+              onClick={() => saveUserSettings("credentials")}
+              disabled={Boolean(settingsBusy)}
               variant="primary"
             >
               Lưu
             </IconButton>
           </div>
-          {settingsStatus ? <div className="mini-note">{settingsStatus}</div> : null}
+          {settingsStatus.credentials ? <div className="mini-note">{settingsStatus.credentials}</div> : null}
           {defaults ? (
             <div className="status-stack">
               <StatusBadge ok={defaults.wrappers.jiraExists} text="Jira wrapper" />
@@ -895,14 +910,15 @@ function App() {
           />
           <div className="button-row">
             <IconButton
-              icon={settingsBusy ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
-              onClick={saveUserSettings}
-              disabled={settingsBusy}
+              icon={settingsBusy === "ai" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+              onClick={() => saveUserSettings("ai")}
+              disabled={Boolean(settingsBusy)}
               variant="primary"
             >
               Lưu
             </IconButton>
           </div>
+          {settingsStatus.ai ? <div className="mini-note">{settingsStatus.ai}</div> : null}
           <div className="mini-note">
             API key và guideline được lưu mã hoá theo account. Bản hiện tại chỉ lưu settings để chuẩn bị cho bước tích hợp AI generation.
           </div>

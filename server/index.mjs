@@ -755,9 +755,22 @@ app.post("/api/user-settings", async (req, res) => {
       return;
     }
     const email = normalizeEmail(req.session.email);
-    const project = normalizeProject(req.body?.project);
-    const credentials = normalizeCredentials(req.body?.credentials);
-    const aiSettings = normalizeAiSettings(req.body?.aiSettings);
+    const body = req.body || {};
+    const hasProject = Object.prototype.hasOwnProperty.call(body, "project");
+    const hasCredentials = Object.prototype.hasOwnProperty.call(body, "credentials");
+    const hasAiSettings = Object.prototype.hasOwnProperty.call(body, "aiSettings");
+    const existing = await db.query(
+      `
+        SELECT project_config, credentials_encrypted, ai_settings_encrypted
+        FROM user_settings
+        WHERE user_email = $1
+      `,
+      [email],
+    );
+    const row = existing.rows[0];
+    const project = hasProject ? normalizeProject(body.project) : row?.project_config || {};
+    const credentials = hasCredentials ? normalizeCredentials(body.credentials) : decryptSettingsJson(row?.credentials_encrypted);
+    const aiSettings = hasAiSettings ? normalizeAiSettings(body.aiSettings) : decryptSettingsJson(row?.ai_settings_encrypted);
     await db.query(
       `
         INSERT INTO user_settings (user_email, project_config, credentials_encrypted, ai_settings_encrypted)
