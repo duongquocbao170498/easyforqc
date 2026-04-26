@@ -1,0 +1,63 @@
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: easyforqc-caddy
+    restart: unless-stopped
+    depends_on:
+      - qa-test-studio
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile.example:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  qa-test-studio:
+    build: .
+    container_name: easyforqc-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "5173"
+    environment:
+      APP_ADMIN_EMAIL: "${APP_ADMIN_EMAIL:-admin@easyforqc.com}"
+      APP_ADMIN_PASSWORD: "${APP_ADMIN_PASSWORD:?Set APP_ADMIN_PASSWORD in .env.production before starting}"
+      APP_SESSION_SECRET: "${APP_SESSION_SECRET:?Set APP_SESSION_SECRET in .env.production before starting}"
+      APP_COOKIE_SECURE: "true"
+      DISPLAY_HOST: "${DISPLAY_HOST:-easyforqc.com}"
+      JIRA_BASE_URL: "${JIRA_BASE_URL:-https://jira.vexere.net}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env.production before starting}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:?Set GOOGLE_CLIENT_SECRET in .env.production before starting}"
+      GOOGLE_CALLBACK_URL: "${GOOGLE_CALLBACK_URL:-https://easyforqc.com/api/auth/google/callback}"
+      GOOGLE_ALLOWED_EMAILS: "${GOOGLE_ALLOWED_EMAILS:-}"
+      QA_SOURCE_ROOT: "/app/vendor/qa-source"
+      DATABASE_URL: "postgres://qa_studio:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production before starting}@postgres:5432/qa_studio"
+    volumes:
+      - qa_runs:/app/.qa-runs
+      - qa_output:/app/qa
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: easyforqc-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: qa_studio
+      POSTGRES_USER: qa_studio
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production before starting}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qa_studio -d qa_studio"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  qa_runs:
+  qa_output:
+  postgres_data:
+  caddy_data:
+  caddy_config:

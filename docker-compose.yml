@@ -1,0 +1,64 @@
+services:
+  qa-test-studio:
+    build: .
+    container_name: qa-test-studio
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${PORT:-5173}:5173"
+    environment:
+      APP_ADMIN_EMAIL: "${APP_ADMIN_EMAIL:-qa@gmail.com}"
+      APP_ADMIN_PASSWORD: "${APP_ADMIN_PASSWORD:?Set APP_ADMIN_PASSWORD in .env before starting}"
+      APP_SESSION_SECRET: "${APP_SESSION_SECRET:?Set APP_SESSION_SECRET in .env before starting}"
+      DISPLAY_HOST: "${DISPLAY_HOST:-qa-studio.local}"
+      JIRA_BASE_URL: "${JIRA_BASE_URL:-https://jira.vexere.net}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
+      GOOGLE_CALLBACK_URL: "${GOOGLE_CALLBACK_URL:-}"
+      GOOGLE_ALLOWED_EMAILS: "${GOOGLE_ALLOWED_EMAILS:-}"
+      QA_SOURCE_ROOT: "/app/vendor/qa-source"
+      DATABASE_URL: "postgres://qa_studio:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting}@postgres:5432/qa_studio"
+    volumes:
+      - qa_runs:/app/.qa-runs
+      - qa_output:/app/qa
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: qa-test-studio-postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    environment:
+      POSTGRES_DB: qa_studio
+      POSTGRES_USER: qa_studio
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qa_studio -d qa_studio"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: qa-test-studio-pgadmin
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "${PGADMIN_EMAIL:-admin@example.com}"
+      PGADMIN_DEFAULT_PASSWORD: "${PGADMIN_PASSWORD:?Set PGADMIN_PASSWORD in .env before starting}"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+volumes:
+  qa_runs:
+  qa_output:
+  postgres_data:
+  pgadmin_data:

@@ -1,0 +1,46 @@
+{
+  "source_root": "/abs/path/to/repo-that-contains-omniagent-source-skills/.agent/skills",
+  "jira": {
+    "base_url": "https://jira.example.com",
+    "user": "name@example.com",
+    "password": "",
+    "token": ""
+  },
+  "jira_test_cases": {
+    "project_key": "AI",
+    "folder_root": "/Bao QC",
+    "run_root": "/AI Chatbot",
+    "label_policy": {
+      "mode": "custom",
+      "always_labels": [
+        "AI_Testcases"
+      ],
+      "status_labels": {
+        "to do": "TestCase1",
+        "in progress": "TestCase1",
+        "ready to test": "TestCase2",
+        "testing": "TestCase3",
+        "done": "TestCase3"
+      }
+    }
+  },
+  "xmind_test_design": {
+    "output_dir": "./qa/xmind-test-design",
+    "default_template": "auto",
+    "attach_all": true,
+    "replace_existing": true,
+    "label_policy": {
+      "mode": "custom",
+      "always_labels": [
+        "QA_testdesign"
+      ],
+      "status_labels": {
+        "to do": "TestDesign1",
+        "in progress": "TestDesign1",
+        "ready to test": "TestDesign2",
+        "testing": "TestDesign3",
+        "done": "TestDesign3"
+      }
+    }
+  }
+}

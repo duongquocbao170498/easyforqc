@@ -1,0 +1,14 @@
+{
+  "source_root": "/abs/path/to/repo-that-contains-omniagent-source-skills/.agent/skills",
+  "jira": {
+    "base_url": "https://jira.example.com"
+  },
+  "jira_test_cases": {
+    "project_key": "AI",
+    "folder_root": "/Test Cases",
+    "run_root": "/Test Runs"
+  },
+  "xmind_test_design": {
+    "output_dir": "./qa/xmind-test-design"
+  }
+}

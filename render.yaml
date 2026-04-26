@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: easyforqc
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 10000
+      - key: DISPLAY_HOST
+        value: easyforqc.onrender.com
+      - key: APP_COOKIE_SECURE
+        value: "true"
+      - key: JIRA_BASE_URL
+        value: https://jira.vexere.net
+      - key: GOOGLE_CALLBACK_URL
+        value: https://easyforqc.onrender.com/api/auth/google/callback
+      - key: GOOGLE_ALLOWED_EMAILS
+        value: ""
+      - key: QA_SOURCE_ROOT
+        value: /app/vendor/qa-source
+      - key: DATABASE_URL
+        sync: false
+      - key: APP_SESSION_SECRET
+        sync: false
+      - key: APP_ADMIN_EMAIL
+        sync: false
+      - key: APP_ADMIN_PASSWORD
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
