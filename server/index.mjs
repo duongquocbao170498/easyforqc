@@ -990,7 +990,7 @@ function normalizeProject(raw = {}, fallback = {}) {
 function normalizeIssue(raw = {}, jiraUrl = "") {
   const parsed = parseIssueReference(jiraUrl || raw.url || raw.key || "");
   return {
-    key: asText(raw.key || raw.issueKey || parsed.issueKey).toUpperCase(),
+    key: asText(parsed.issueKey || raw.key || raw.issueKey).toUpperCase(),
     summary: asText(raw.summary),
     title: asText(raw.title),
     description: asText(raw.description),

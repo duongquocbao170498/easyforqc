@@ -104,6 +104,10 @@ const emptyIssue: IssueSummary = {
   issue_type: "",
 };
 
+function issueKeyFromText(value: string): string {
+  return value.match(/\b[A-Z][A-Z0-9]+-\d+\b/i)?.[0].toUpperCase() || "";
+}
+
 const emptyOutline = (issue: IssueSummary): TestDesignOutline => ({
   issue_key: issue.key,
   title: issue.key ? `[${issue.key}] ${issue.summary || "Test design"}` : issue.summary || "Test design",
@@ -470,10 +474,40 @@ function App() {
     setAiSettings((current) => ({ ...current, [key]: value }));
   }
 
+  function resetGeneratedDraft(nextIssueKey: string) {
+    const nextIssue = { ...emptyIssue, key: nextIssueKey };
+    setTestCases([]);
+    setOutline(emptyOutline(nextIssue));
+    setCaseKeys("");
+    setOutput("");
+    setActiveTab("cases");
+  }
+
+  function clearTaskSpecificContext() {
+    setNotes("");
+    setConfluenceLinks("");
+    setDocContext("");
+  }
+
+  function handleJiraUrlChange(value: string) {
+    setJiraUrl(value);
+    const nextIssueKey = issueKeyFromText(value);
+    if (nextIssueKey && nextIssueKey !== issue.key) {
+      setIssue({ ...emptyIssue, key: nextIssueKey });
+      resetGeneratedDraft(nextIssueKey);
+      clearTaskSpecificContext();
+      setMessage(`Đã chuyển sang ${nextIssueKey}. Nhấn Fetch để đọc Jira task mới.`);
+    }
+  }
+
   function setIssueValue(key: keyof IssueSummary, value: string) {
     setIssue((current) => ({ ...current, [key]: value }));
     if (key === "key") {
       setOutline((current) => ({ ...current, issue_key: value }));
+      if (value && value !== issue.key) {
+        resetGeneratedDraft(value);
+        clearTaskSpecificContext();
+      }
     }
   }
 
@@ -576,6 +610,10 @@ function App() {
   function parseJiraLink() {
     setBusyRun("issue", async () => {
       const parsed = await apiPost<{ issueKey: string; baseUrl: string }>("/api/parse-jira", { jiraUrl });
+      if (parsed.issueKey && parsed.issueKey !== issue.key) {
+        resetGeneratedDraft(parsed.issueKey);
+        clearTaskSpecificContext();
+      }
       setIssue((current) => ({ ...current, key: parsed.issueKey || current.key }));
       if (parsed.baseUrl) {
         setProject((current) => ({ ...current, jiraBaseUrl: parsed.baseUrl }));
@@ -586,12 +624,18 @@ function App() {
 
   function fetchIssue() {
     setBusyRun("issue", async () => {
+      const nextIssueKey = issueKeyFromText(jiraUrl) || issue.key;
       const payload = await apiPost<{ issue: IssueSummary; stdout: string }>("/api/issue", {
         jiraUrl,
-        issueKey: issue.key,
+        issueKey: nextIssueKey,
         project,
         credentials,
       });
+      const fetchedIssueKey = payload.issue.key || nextIssueKey;
+      const generatedIssueKey = outline.issue_key || testCases[0]?.requirement_ref || "";
+      if (fetchedIssueKey && generatedIssueKey && generatedIssueKey !== fetchedIssueKey) {
+        resetGeneratedDraft(fetchedIssueKey);
+      }
       setIssue((current) => ({
         ...current,
         ...payload.issue,
@@ -625,11 +669,16 @@ function App() {
 
   function generateDraft() {
     setBusyRun("draft", async () => {
+      const effectiveIssueKey = issueKeyFromText(jiraUrl) || issue.key;
+      const effectiveIssue = { ...issue, key: effectiveIssueKey };
       const payload = await apiPost<{
         archetypeKey: string;
         testCases: TestCase[];
         outline: TestDesignOutline;
-      }>("/api/draft", requestBody);
+      }>("/api/draft", {
+        ...requestBody,
+        issue: effectiveIssue,
+      });
       setArchetypeKey(payload.archetypeKey);
       setTestCases(payload.testCases);
       setOutline(payload.outline);
@@ -776,7 +825,7 @@ function App() {
             <Link size={18} />
             <h2>Jira task</h2>
           </div>
-          <Field label="Jira URL hoặc issue key" value={jiraUrl} onChange={setJiraUrl} placeholder="https://jira.vexere.net/browse/AI-707" />
+          <Field label="Jira URL hoặc issue key" value={jiraUrl} onChange={handleJiraUrlChange} placeholder="https://jira.vexere.net/browse/AI-707" />
           <div className="button-row">
             <IconButton icon={<RefreshCw size={16} />} onClick={parseJiraLink} disabled={isWorking} title="Đọc issue key từ link">
               Parse
