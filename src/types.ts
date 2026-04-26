@@ -18,6 +18,18 @@ export type Credentials = {
   token: string;
 };
 
+export type AiSettings = {
+  enabled: boolean;
+  provider: string;
+  baseUrl: string;
+  model: string;
+  apiKey: string;
+  writingStyle: string;
+  testCaseGuidelines: string;
+  testDesignGuidelines: string;
+  improvementNotes: string;
+};
+
 export type IssueSummary = {
   key: string;
   summary: string;

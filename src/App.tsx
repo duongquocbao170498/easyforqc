@@ -24,6 +24,7 @@ import {
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type {
+  AiSettings,
   ArchetypeInfo,
   Credentials,
   DefaultsResponse,
@@ -56,6 +57,18 @@ const emptyCredentials: Credentials = {
   user: "",
   password: "",
   token: "",
+};
+
+const emptyAiSettings: AiSettings = {
+  enabled: false,
+  provider: "openai-compatible",
+  baseUrl: "https://api.openai.com/v1",
+  model: "",
+  apiKey: "",
+  writingStyle: "",
+  testCaseGuidelines: "",
+  testDesignGuidelines: "",
+  improvementNotes: "",
 };
 
 function projectFromDefaults(payload: DefaultsResponse): ProjectConfig {
@@ -330,6 +343,7 @@ function App() {
   const [defaults, setDefaults] = useState<DefaultsResponse | null>(null);
   const [project, setProject] = useState<ProjectConfig>(emptyProject);
   const [credentials, setCredentials] = useState<Credentials>(emptyCredentials);
+  const [aiSettings, setAiSettings] = useState<AiSettings>(emptyAiSettings);
   const [jiraUrl, setJiraUrl] = useState("");
   const [issue, setIssue] = useState<IssueSummary>(emptyIssue);
   const [notes, setNotes] = useState("");
@@ -356,11 +370,13 @@ function App() {
     setDefaults(payload);
     let nextProject = projectFromDefaults(payload);
     let nextCredentials = emptyCredentials;
+    let nextAiSettings = emptyAiSettings;
     const settingsResponse = await fetch("/api/user-settings");
     if (settingsResponse.ok) {
       const settings = (await settingsResponse.json()) as {
         project?: Partial<ProjectConfig> | null;
         credentials?: Partial<Credentials> | null;
+        aiSettings?: Partial<AiSettings> | null;
       };
       if (settings.project) {
         nextProject = { ...nextProject, ...settings.project };
@@ -368,9 +384,13 @@ function App() {
       if (settings.credentials) {
         nextCredentials = { ...nextCredentials, ...settings.credentials };
       }
+      if (settings.aiSettings) {
+        nextAiSettings = { ...nextAiSettings, ...settings.aiSettings };
+      }
     }
     setProject(nextProject);
     setCredentials(nextCredentials);
+    setAiSettings(nextAiSettings);
   }
 
   useEffect(() => {
@@ -403,6 +423,7 @@ function App() {
     issue,
     project,
     credentials,
+    aiSettings,
     notes,
     archetype: archetypeKey === "auto" ? undefined : archetypeKey,
   };
@@ -413,6 +434,10 @@ function App() {
 
   function setCredentialValue(key: keyof Credentials, value: string) {
     setCredentials((current) => ({ ...current, [key]: value }));
+  }
+
+  function setAiSettingValue<K extends keyof AiSettings>(key: K, value: AiSettings[K]) {
+    setAiSettings((current) => ({ ...current, [key]: value }));
   }
 
   function setIssueValue(key: keyof IssueSummary, value: string) {
@@ -492,8 +517,9 @@ function App() {
       await apiPost("/api/user-settings", {
         project,
         credentials,
+        aiSettings,
       });
-      setSettingsStatus("Đã lưu Project config và Jira auth cho tài khoản này.");
+      setSettingsStatus("Đã lưu Project config, Jira auth và AI Settings cho tài khoản này.");
       setMessage("Đã lưu cấu hình. Lần sau đăng nhập app sẽ tự điền lại.");
     } catch (error) {
       const text = error instanceof Error ? error.message : "Không lưu được cấu hình.";
@@ -786,6 +812,94 @@ function App() {
               <StatusBadge ok={defaults.wrappers.sourceRootExists} text="Source root" />
             </div>
           ) : null}
+        </section>
+
+        <section className="panel compact">
+          <div className="panel-title">
+            <Wand2 size={18} />
+            <h2>AI Settings</h2>
+          </div>
+          <label className="checkbox-field">
+            <input
+              type="checkbox"
+              checked={aiSettings.enabled}
+              onChange={(event) => setAiSettingValue("enabled", event.target.checked)}
+            />
+            <span>Dùng AI settings riêng của tài khoản này</span>
+          </label>
+          <label className="field">
+            <span>Provider</span>
+            <select value={aiSettings.provider} onChange={(event) => setAiSettingValue("provider", event.target.value)}>
+              <option value="openai-compatible">OpenAI compatible</option>
+              <option value="openai">OpenAI</option>
+              <option value="azure-openai">Azure OpenAI</option>
+              <option value="custom">Custom endpoint</option>
+            </select>
+          </label>
+          <Field
+            label="Base URL"
+            value={aiSettings.baseUrl}
+            onChange={(value) => setAiSettingValue("baseUrl", value)}
+            placeholder="https://api.openai.com/v1"
+          />
+          <Field
+            label="Model"
+            value={aiSettings.model}
+            onChange={(value) => setAiSettingValue("model", value)}
+            placeholder="Nhập model mà user muốn dùng"
+          />
+          <Field
+            label="API key"
+            value={aiSettings.apiKey}
+            type="password"
+            onChange={(value) => setAiSettingValue("apiKey", value)}
+            placeholder="Key riêng của từng user"
+          />
+          <Field
+            label="Phong cách viết"
+            value={aiSettings.writingStyle}
+            onChange={(value) => setAiSettingValue("writingStyle", value)}
+            textarea
+            rows={4}
+            placeholder="Ví dụ: viết ngắn gọn, rõ precondition, expected result dạng bullet..."
+          />
+          <Field
+            label="Cách viết test case"
+            value={aiSettings.testCaseGuidelines}
+            onChange={(value) => setAiSettingValue("testCaseGuidelines", value)}
+            textarea
+            rows={5}
+            placeholder="Các đầu mục, format step, rule đặt tên, priority, coverage tag..."
+          />
+          <Field
+            label="Cách làm test design"
+            value={aiSettings.testDesignGuidelines}
+            onChange={(value) => setAiSettingValue("testDesignGuidelines", value)}
+            textarea
+            rows={5}
+            placeholder="Cách chia branch, rule Out of scope, risk lens, edge case..."
+          />
+          <Field
+            label="Improve skill notes"
+            value={aiSettings.improvementNotes}
+            onChange={(value) => setAiSettingValue("improvementNotes", value)}
+            textarea
+            rows={5}
+            placeholder="Những điều user đã chỉnh và muốn app ghi nhớ cho lần sau"
+          />
+          <div className="button-row">
+            <IconButton
+              icon={settingsBusy ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+              onClick={saveUserSettings}
+              disabled={settingsBusy}
+              variant="primary"
+            >
+              Lưu
+            </IconButton>
+          </div>
+          <div className="mini-note">
+            API key và guideline được lưu mã hoá theo account. Bản hiện tại chỉ lưu settings để chuẩn bị cho bước tích hợp AI generation.
+          </div>
         </section>
       </aside>
 

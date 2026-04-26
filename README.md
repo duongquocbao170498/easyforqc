@@ -116,7 +116,19 @@ Nếu Render cấp URL khác, dùng URL thật đó thay cho `easyforqc.onrender
 
 ### 5. Lưu ý của bản miễn phí
 
-Render Free có thể sleep khi không có người dùng, lần mở đầu tiên sẽ chậm hơn. File output local như `.qa-runs/` và `qa/xmind-test-design/` trên Render có thể mất khi app restart hoặc redeploy, nên bản public nên dùng flow tạo và attach trực tiếp lên Jira. Database, account, mật khẩu, config Jira auth và Project config sẽ được lưu trong Neon.
+Render Free có thể sleep khi không có người dùng, lần mở đầu tiên sẽ chậm hơn. File output local như `.qa-runs/` và `qa/xmind-test-design/` trên Render có thể mất khi app restart hoặc redeploy, nên bản public nên dùng flow tạo và attach trực tiếp lên Jira. Database, account, mật khẩu, config Jira auth, Project config và AI Settings sẽ được lưu trong Neon.
+
+### AI Settings theo từng account
+
+Mỗi user đăng nhập có thể lưu AI Settings riêng:
+
+- Provider, Base URL, Model và API key riêng.
+- Phong cách viết.
+- Guideline viết test case.
+- Guideline làm test design.
+- Improve skill notes để ghi nhớ các chỉnh sửa user muốn giữ cho lần sau.
+
+API key và guideline được lưu mã hoá trong bảng `user_settings` bằng `APP_SESSION_SECRET`. Bản hiện tại chuẩn bị UI/storage trước; khi tích hợp AI generation, backend nên dùng AI key của chính user đang đăng nhập thay vì dùng một key chung của admin.
 
 Khi muốn dùng domain đẹp như `easyforqc.com`, cần mua domain rồi trỏ DNS về service Render hoặc server riêng.
 

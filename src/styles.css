@@ -439,6 +439,23 @@ select:focus {
   overflow-wrap: anywhere;
 }
 
+.checkbox-field {
+  align-items: flex-start;
+  color: var(--text);
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 8px 0 12px;
+}
+
+.checkbox-field input {
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
 .step-row {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);

@@ -325,10 +325,12 @@ async function initializeDatabase() {
       user_email TEXT PRIMARY KEY REFERENCES users(email) ON DELETE CASCADE,
       project_config JSONB NOT NULL DEFAULT '{}'::jsonb,
       credentials_encrypted TEXT NOT NULL DEFAULT '',
+      ai_settings_encrypted TEXT NOT NULL DEFAULT '',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_settings_encrypted TEXT NOT NULL DEFAULT ''");
 
   const adminEmail = normalizeEmail(APP_ADMIN_EMAIL);
   if (!adminEmail || !APP_ADMIN_PASSWORD) {
@@ -724,12 +726,12 @@ app.post("/api/auth/change-password", async (req, res) => {
 app.get("/api/user-settings", async (req, res) => {
   try {
     if (!db) {
-      res.json({ project: null, credentials: null });
+      res.json({ project: null, credentials: null, aiSettings: null });
       return;
     }
     const result = await db.query(
       `
-        SELECT project_config, credentials_encrypted
+        SELECT project_config, credentials_encrypted, ai_settings_encrypted
         FROM user_settings
         WHERE user_email = $1
       `,
@@ -739,6 +741,7 @@ app.get("/api/user-settings", async (req, res) => {
     res.json({
       project: row?.project_config || null,
       credentials: decryptSettingsJson(row?.credentials_encrypted),
+      aiSettings: decryptSettingsJson(row?.ai_settings_encrypted),
     });
   } catch (error) {
     sendError(res, error);
@@ -754,22 +757,25 @@ app.post("/api/user-settings", async (req, res) => {
     const email = normalizeEmail(req.session.email);
     const project = normalizeProject(req.body?.project);
     const credentials = normalizeCredentials(req.body?.credentials);
+    const aiSettings = normalizeAiSettings(req.body?.aiSettings);
     await db.query(
       `
-        INSERT INTO user_settings (user_email, project_config, credentials_encrypted)
-        VALUES ($1, $2::jsonb, $3)
+        INSERT INTO user_settings (user_email, project_config, credentials_encrypted, ai_settings_encrypted)
+        VALUES ($1, $2::jsonb, $3, $4)
         ON CONFLICT (user_email)
         DO UPDATE SET
           project_config = EXCLUDED.project_config,
           credentials_encrypted = EXCLUDED.credentials_encrypted,
+          ai_settings_encrypted = EXCLUDED.ai_settings_encrypted,
           updated_at = NOW()
       `,
-      [email, JSON.stringify(project), encryptSettingsJson(credentials)],
+      [email, JSON.stringify(project), encryptSettingsJson(credentials), encryptSettingsJson(aiSettings)],
     );
     res.json({
       saved: true,
       project,
       credentials,
+      aiSettings,
     });
   } catch (error) {
     sendError(res, error);
@@ -853,6 +859,21 @@ function normalizeCredentials(raw = {}) {
     user: asText(raw.user || raw.jiraUser),
     password: asText(raw.password || raw.jiraPassword),
     token: asText(raw.token || raw.jiraToken),
+  };
+}
+
+function normalizeAiSettings(raw = {}) {
+  const baseUrl = asText(raw.baseUrl || raw.apiBaseUrl);
+  return {
+    enabled: raw.enabled === true || asText(raw.enabled).toLowerCase() === "true",
+    provider: asText(raw.provider) || "openai-compatible",
+    baseUrl: baseUrl || "https://api.openai.com/v1",
+    model: asText(raw.model),
+    apiKey: asText(raw.apiKey || raw.token),
+    writingStyle: asText(raw.writingStyle),
+    testCaseGuidelines: asText(raw.testCaseGuidelines),
+    testDesignGuidelines: asText(raw.testDesignGuidelines),
+    improvementNotes: asText(raw.improvementNotes),
   };
 }
 
