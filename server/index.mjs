@@ -905,7 +905,7 @@ function selectRelevantDocLines(docContext, anchorText, limit = 5) {
   if (!lines.length) return [];
   const keywords = keywordsFrom(anchorText, 40);
   if (!keywords.length) return lines.slice(0, Math.min(limit, 3));
-  return lines
+  const ranked = lines
     .map((line) => {
       const normalized = normalizeSearchText(line);
       const score = keywords.reduce((total, keyword) => total + (normalized.includes(keyword) ? 1 : 0), 0);
@@ -915,6 +915,7 @@ function selectRelevantDocLines(docContext, anchorText, limit = 5) {
     .sort((a, b) => b.score - a.score)
     .map((item) => item.line)
     .slice(0, limit);
+  return ranked.length ? ranked : lines.slice(0, Math.min(limit, 4));
 }
 
 function sourceContextFrom(issue, sourceInput = {}) {
@@ -956,6 +957,32 @@ function workflowMode(issue, archetypeKey) {
 function shortText(value, limit = 96) {
   const text = asText(value).replace(/\s+/g, " ");
   return text.length > limit ? `${text.slice(0, limit - 1).trim()}...` : text;
+}
+
+function titleFromIntent(value, fallback = "Kiểm tra behavior chính") {
+  let text = asText(value)
+    .replace(/^user story\s*[:：-]\s*/i, "")
+    .replace(/^acceptance criteria\s*[:：-]\s*/i, "")
+    .replace(/^expected\s*[:：-]\s*/i, "")
+    .replace(/^rule\s*[:：-]\s*/i, "")
+    .replace(/^tạo\s+(một\s+)?/i, "")
+    .replace(/^kiểm tra\s+/i, "")
+    .replace(/^đảm bảo\s+/i, "")
+    .replace(/^hiển thị\s+/i, "Hiển thị ")
+    .replace(/\s+/g, " ")
+    .trim();
+  text = text.replace(/[.:;,\s]+$/g, "");
+  if (!text) text = fallback;
+  const words = text.split(/\s+/).slice(0, 12).join(" ");
+  return shortText(words.charAt(0).toUpperCase() + words.slice(1), 86);
+}
+
+function bulletList(items) {
+  return items
+    .map(asText)
+    .filter(Boolean)
+    .map((item) => `- ${item}`)
+    .join("\n");
 }
 
 function parseIssueReference(input) {
@@ -1449,25 +1476,39 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
       .join("\n");
   const testInputsFor = (intent) => {
     if (mode.isConversation) {
-      return [`Tin nhắn/flow user thể hiện nhu cầu: ${intent}`, "Dữ liệu hội thoại đủ để kiểm tra expected behavior trong Jira."];
+      return [
+        `User hỏi/tương tác theo scenario: ${titleFromIntent(intent)}`,
+        "User bổ sung thông tin còn thiếu nếu bot hỏi lại.",
+      ];
     }
     if (mode.isIntegration) {
-      return [`Payload/request/data setup cho requirement: ${intent}`, "Dữ liệu downstream hoặc mock response đúng với scope task."];
+      return [
+        `Payload/request có dữ liệu đại diện cho: ${titleFromIntent(intent)}`,
+        "Mock/downstream response đúng với scope task.",
+      ];
     }
-    return [`Màn hình/chức năng liên quan tới: ${summary}`, `Dữ liệu test cho requirement: ${intent}`];
+    return [
+      `Môi trường test có build chứa task ${key}.`,
+      `Dữ liệu test đại diện cho scenario: ${titleFromIntent(intent)}`,
+    ];
   };
+  const testDataFor = (item) => {
+    if (mode.isConversation) return quoteLines(item.inputs);
+    return bulletList(item.inputs);
+  };
+  const setupDataFor = (item) => (mode.isConversation ? "" : bulletList(item.inputs));
   const makeStructuredSteps = (item) => [
     step(
       mode.isConversation
-        ? "Chuẩn bị conversation hoặc message state đúng theo Jira task."
+        ? "Mở conversation mới hoặc conversation có state phù hợp."
         : mode.isIntegration
           ? "Chuẩn bị request, payload, dữ liệu nguồn và dependency liên quan."
           : "Chuẩn bị dữ liệu và mở màn hình/chức năng cần kiểm thử.",
-      quoteLines(item.inputs),
-      "",
+      setupDataFor(item),
+      mode.isConversation ? "" : "- Dữ liệu test sẵn sàng và đúng scope Jira.",
     ),
     step(item.action, item.stepData || "", ""),
-    step("Đối chiếu kết quả với Jira description/acceptance criteria và tài liệu tham chiếu liên quan.", "", expectation(...item.checks)),
+    step("Đối chiếu kết quả thực tế.", "", expectation(...item.checks)),
   ];
 
   const candidates = [];
@@ -1484,7 +1525,7 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
   context.primaryLines.slice(0, 10).forEach((line, index) => {
     const isMain = index === 0;
     addCandidate({
-      title: `${mode.unit} ${isMain ? "bao phủ luồng chính" : "bao phủ yêu cầu"}: ${shortText(line, 76)}`,
+      title: titleFromIntent(line, isMain ? "Luồng chính đúng scope Jira" : "Yêu cầu Jira được đáp ứng"),
       objective: `Xác nhận requirement trong Jira: ${line}`,
       priority: isMain ? "High" : index <= 3 ? "High" : "Normal",
       technique: isMain ? archetype.primary[0] : archetype.primary[index % archetype.primary.length] || "Use-case / scenario flow",
@@ -1492,10 +1533,10 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
       tags: [isMain ? "happy_path" : "jira_requirement", "jira_description"],
       scenario: isMain ? "happy_path" : "requirement_coverage",
       inputs: testInputsFor(line),
-      action: `Thực hiện luồng hoặc biến thể kiểm thử bám trực tiếp requirement: ${line}`,
-      stepData: `Jira source: ${line}`,
+      action: `Thực hiện scenario: ${titleFromIntent(line)}.`,
+      stepData: bulletList([`Requirement Jira: ${line}`]),
       checks: [
-        "Kết quả thực tế khớp đúng wording/intent trong Jira description.",
+        "Kết quả thực tế khớp đúng intent trong Jira description/AC.",
         "Không lấy rule từ tài liệu khác nếu Jira task không yêu cầu.",
         "Không phát sinh side effect ngoài phạm vi task này.",
       ],
@@ -1504,7 +1545,7 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
 
   context.docLines.slice(0, 6).forEach((line, index) => {
     addCandidate({
-      title: `${mode.unit} kiểm tra rule tham chiếu từ doc: ${shortText(line, 72)}`,
+      title: `${titleFromIntent(line, "Rule trong doc được áp dụng đúng")} theo doc`,
       objective: `Đối chiếu doc liên quan với Jira scope, chỉ áp dụng phần có keyword khớp task: ${line}`,
       priority: index <= 1 ? "High" : "Normal",
       technique: "Reference doc validation",
@@ -1512,8 +1553,8 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
       tags: ["confluence_reference", "doc_grounding"],
       scenario: "reference_doc",
       inputs: testInputsFor(line),
-      action: "Thực hiện biến thể có dữ liệu/điều kiện được mô tả trong doc tham chiếu và liên quan trực tiếp tới Jira task.",
-      stepData: `Confluence related line: ${line}`,
+      action: `Thực hiện scenario theo rule trong doc: ${titleFromIntent(line)}.`,
+      stepData: bulletList([`Rule từ doc: ${line}`, "Đối chiếu với Jira description để chỉ giữ phần đúng scope."]),
       checks: [
         "Chỉ rule trong doc có liên quan tới Jira description được áp dụng.",
         "Nếu Jira và doc lệch nhau, Jira description/AC được ưu tiên.",
@@ -1524,56 +1565,56 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
 
   const guardrails = [
     {
-      title: `${mode.unit} không xử lý sai khi thiếu dữ liệu bắt buộc`,
+      title: "Thiếu dữ liệu bắt buộc",
       technique: archetype.supporting[0] || "Boundary value analysis",
       tag: "missing_data",
       applies: true,
       check: "Thiếu required data/null/empty được xử lý rõ ràng, không tạo trạng thái hoặc kết quả sai.",
     },
     {
-      title: `${mode.unit} từ chối hoặc hướng dẫn đúng khi input ngoài scope`,
+      title: "Input ngoài scope task",
       technique: "Negative path / out-of-scope",
       tag: "out_of_scope",
       applies: true,
       check: "Request ngoài mô tả Jira task không được tự mở rộng sang doc/tool khác.",
     },
     {
-      title: `${mode.unit} giữ đúng context mới nhất khi user đổi điều kiện`,
+      title: "Không reuse context cũ",
       technique: "State transition",
       tag: "state_transition",
       applies: mode.isConversation || archetypeKey === "workflow",
       check: "Context mới nhất được ưu tiên, không reuse dữ liệu hoặc doc của task/turn trước.",
     },
     {
-      title: `${mode.unit} mapping đúng request/response và field hiển thị`,
+      title: "Mapping request/response đúng",
       technique: "Integration contract / field mapping",
       tag: "mapping",
       applies: mode.isIntegration || mode.isConversation,
       check: "Payload, field hiển thị và response mapping đúng source of truth của task.",
     },
     {
-      title: `${mode.unit} fallback đúng khi dependency lỗi hoặc trả rỗng`,
+      title: "Fallback khi dependency lỗi",
       technique: "Fallback / partial failure / recovery",
       tag: "fallback",
       applies: mode.isIntegration || mode.isConversation || archetypeKey === "workflow",
       check: "Timeout/empty/error response được xử lý fail-safe và có thông báo phù hợp.",
     },
     {
-      title: `${mode.unit} không tạo duplicate khi retry cùng thao tác`,
+      title: "Không duplicate khi retry",
       technique: "Retry / idempotency / duplicate event",
       tag: "retry",
       applies: mode.isIntegration || archetypeKey === "workflow",
       check: "Retry không tạo kết quả/trạng thái trùng hoặc ghi nhận sai.",
     },
     {
-      title: `${mode.unit} hiển thị dữ liệu đúng sau reload hoặc refresh`,
+      title: "Dữ liệu đúng sau reload",
       technique: "Regression",
       tag: "ui_regression",
       applies: archetypeKey === "reporting" || /\b(hiển thị|highlight|display|screen|ui|message)\b/i.test(`${issue.summary} ${issue.description}`),
       check: "Dữ liệu vẫn đúng sau reload/refresh và không bị mất binding.",
     },
     {
-      title: `${mode.unit} regression các luồng cũ gần vùng thay đổi`,
+      title: "Regression luồng cũ liên quan",
       technique: "Risk-based regression",
       tag: "regression",
       applies: true,
@@ -1594,16 +1635,23 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
         tags: [item.tag, "risk_based"],
         scenario: item.tag,
         inputs: testInputsFor(reference),
-        action: `Thực hiện biến thể kiểm thử rủi ro: ${item.title}.`,
-        stepData: `Reference from Jira/doc: ${reference}`,
+        action: `Thực hiện biến thể: ${item.title}.`,
+        stepData: bulletList([`Dữ liệu/điều kiện biến thể: ${reference}`]),
         checks: [item.check, "Kết quả vẫn bám Jira description/AC.", "Không phát sinh side effect ngoài scope."],
       });
     });
 
-  const selected = candidates.slice(0, targetCount);
+  const docCandidates = candidates.filter((item) => item.tags?.includes("confluence_reference"));
+  const nonDocCandidates = candidates.filter((item) => !item.tags?.includes("confluence_reference"));
+  const docQuota = context.docContextApplied ? Math.min(docCandidates.length, Math.max(2, Math.ceil(targetCount * 0.25))) : 0;
+  const selected = [...nonDocCandidates.slice(0, Math.max(0, targetCount - docQuota)), ...docCandidates.slice(0, docQuota)];
+  for (const candidate of nonDocCandidates.slice(Math.max(0, targetCount - docQuota))) {
+    if (selected.length >= targetCount) break;
+    selected.push(candidate);
+  }
   return selected.map((item, index) => {
     const steps = makeStructuredSteps(item);
-    const testData = quoteLines(item.inputs);
+    const testData = testDataFor(item);
     const expectedResult = steps
       .flatMap((itemStep) => itemStep.expected_result.split("\n"))
       .filter(Boolean)
