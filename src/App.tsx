@@ -819,13 +819,19 @@ function App() {
             <Wand2 size={18} />
             <h2>AI Settings</h2>
           </div>
+          <p className="panel-help">
+            Lưu model, API key và guideline riêng cho từng tài khoản để chuẩn bị cho bước generate bằng AI.
+          </p>
           <label className="checkbox-field">
             <input
               type="checkbox"
               checked={aiSettings.enabled}
               onChange={(event) => setAiSettingValue("enabled", event.target.checked)}
             />
-            <span>Dùng AI settings riêng của tài khoản này</span>
+            <span className="checkbox-copy">
+              <strong>Bật AI cho account này</strong>
+              <small>Sau này khi gọi AI, app sẽ dùng key/model bên dưới thay vì dùng key chung của admin.</small>
+            </span>
           </label>
           <label className="field">
             <span>Provider</span>
