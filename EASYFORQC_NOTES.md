@@ -19,8 +19,8 @@ File này dùng để nhớ các nơi đang lưu source, app, database và confi
 | GitHub | Source code EasyForQC, Dockerfile, README, render.yaml, portable QA scripts | Repo: `duongquocbao170498/easyforqc`; branch: `main` | Root source trên GitHub tương ứng với local `/Users/gumball.bi/Documents/New project` |
 | Render | Web service public chạy Docker app | Service: `easyforqc`; URL: `https://easyforqc.onrender.com`; Docker build từ GitHub | Container app dùng `/app`; source nằm trong `/app`; output local trong container có thể mất khi redeploy/restart |
 | Render Environment | Secret/config runtime của app | `DATABASE_URL`, `APP_SESSION_SECRET`, `APP_ADMIN_EMAIL`, `APP_ADMIN_PASSWORD`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `GOOGLE_ALLOWED_EMAILS` | Vào Render service > Environment để xem/sửa. Không lưu giá trị thật vào GitHub |
-| Neon | Postgres database production | Lưu account app, Gmail login user, password hash, Project config, Jira auth và AI Settings đã mã hoá | Database hiện dùng connection string Neon; xem trong Neon dashboard |
-| Neon tables | Dữ liệu app | `users`: tài khoản/password hash/Gmail profile; `user_settings`: Project config, Jira auth mã hoá và AI Settings mã hoá theo từng account | Không sửa tay nếu không cần backup/debug |
+| Neon | Postgres database production | Lưu account app, Gmail login user, password hash, Project config, Jira auth, Confluence auth và AI Settings đã mã hoá | Database hiện dùng connection string Neon; xem trong Neon dashboard |
+| Neon tables | Dữ liệu app | `users`: tài khoản/password hash/Gmail profile; `user_settings`: Project config, Jira auth, Confluence auth và AI Settings mã hoá theo từng account | Không sửa tay nếu không cần backup/debug |
 | Google Cloud OAuth | OAuth Client cho nút Login with Google | Lưu `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, redirect URI | Authorized redirect URI production: `https://easyforqc.onrender.com/api/auth/google/callback` |
 | Google Cloud OAuth consent | Màn xin quyền login Google | Cần app name, support email, test users nếu app còn Testing | Nếu muốn ai cũng login được thật, cần publish OAuth consent app hoặc cấu hình user access phù hợp |
 | Docker local | Chạy app, Postgres, pgAdmin trên máy | Compose file: `docker-compose.yml` | Volumes: `qa_runs`, `qa_output`, `postgres_data`, `pgadmin_data` |
@@ -38,6 +38,7 @@ File này dùng để nhớ các nơi đang lưu source, app, database và confi
 | `APP_ADMIN_PASSWORD` | Render Environment và `.env` local | Mật khẩu admin app. Trong DB chỉ lưu password hash. |
 | Google Client Secret | Google Cloud OAuth Client và Render Environment | Nếu từng bị lộ, reset secret trong Google Cloud rồi cập nhật lại Render. |
 | Jira auth/token của QC | Database Neon/local, bảng `user_settings`, field encrypted | App mã hoá bằng `APP_SESSION_SECRET`; lưu theo từng account đăng nhập. |
+| Confluence auth/token của QC | Database Neon/local, bảng `user_settings`, field `confluence_credentials_encrypted` | Dùng để fetch doc links trong Task context. Nếu Confluence nội bộ không public, paste nội dung doc thủ công vào app. |
 | AI API key của từng QC | Database Neon/local, bảng `user_settings`, field `ai_settings_encrypted` | Lưu mã hoá theo từng account. Người khác dùng key riêng của họ, không ảnh hưởng token/chi phí của bạn. |
 | AI writing style/guidelines | Database Neon/local, bảng `user_settings`, field `ai_settings_encrypted` | Khi bật checkbox AI Settings: prompt mặc định của skill + guideline riêng. Khi tắt checkbox: chỉ dùng prompt mặc định của skill. |
 

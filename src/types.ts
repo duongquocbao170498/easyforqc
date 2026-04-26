@@ -18,6 +18,13 @@ export type Credentials = {
   token: string;
 };
 
+export type ConfluenceCredentials = {
+  baseUrl: string;
+  user: string;
+  password: string;
+  token: string;
+};
+
 export type AiSettings = {
   enabled: boolean;
   provider: string;

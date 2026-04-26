@@ -26,6 +26,7 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   AiSettings,
   ArchetypeInfo,
+  ConfluenceCredentials,
   Credentials,
   DefaultsResponse,
   IssueSummary,
@@ -37,8 +38,8 @@ import type {
 } from "./types";
 
 type TabKey = "cases" | "design" | "run";
-type BusyKey = "issue" | "draft" | "xmind" | "attach" | "suite" | "cycle" | "";
-type SettingsSection = "project" | "credentials" | "ai";
+type BusyKey = "issue" | "docs" | "draft" | "xmind" | "attach" | "suite" | "cycle" | "";
+type SettingsSection = "project" | "credentials" | "confluence" | "ai";
 
 const emptyProject: ProjectConfig = {
   sourceRoot: "",
@@ -55,6 +56,13 @@ const emptyProject: ProjectConfig = {
 };
 
 const emptyCredentials: Credentials = {
+  user: "",
+  password: "",
+  token: "",
+};
+
+const emptyConfluenceCredentials: ConfluenceCredentials = {
+  baseUrl: "",
   user: "",
   password: "",
   token: "",
@@ -343,15 +351,19 @@ function App() {
   const [settingsStatus, setSettingsStatus] = useState<Record<SettingsSection, string>>({
     project: "",
     credentials: "",
+    confluence: "",
     ai: "",
   });
   const [defaults, setDefaults] = useState<DefaultsResponse | null>(null);
   const [project, setProject] = useState<ProjectConfig>(emptyProject);
   const [credentials, setCredentials] = useState<Credentials>(emptyCredentials);
+  const [confluenceCredentials, setConfluenceCredentials] = useState<ConfluenceCredentials>(emptyConfluenceCredentials);
   const [aiSettings, setAiSettings] = useState<AiSettings>(emptyAiSettings);
   const [jiraUrl, setJiraUrl] = useState("");
   const [issue, setIssue] = useState<IssueSummary>(emptyIssue);
   const [notes, setNotes] = useState("");
+  const [confluenceLinks, setConfluenceLinks] = useState("");
+  const [docContext, setDocContext] = useState("");
   const [archetypeKey, setArchetypeKey] = useState("auto");
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [outline, setOutline] = useState<TestDesignOutline>(emptyOutline(emptyIssue));
@@ -375,12 +387,14 @@ function App() {
     setDefaults(payload);
     let nextProject = projectFromDefaults(payload);
     let nextCredentials = emptyCredentials;
+    let nextConfluenceCredentials = emptyConfluenceCredentials;
     let nextAiSettings = emptyAiSettings;
     const settingsResponse = await fetch("/api/user-settings");
     if (settingsResponse.ok) {
       const settings = (await settingsResponse.json()) as {
         project?: Partial<ProjectConfig> | null;
         credentials?: Partial<Credentials> | null;
+        confluenceCredentials?: Partial<ConfluenceCredentials> | null;
         aiSettings?: Partial<AiSettings> | null;
       };
       if (settings.project) {
@@ -389,12 +403,16 @@ function App() {
       if (settings.credentials) {
         nextCredentials = { ...nextCredentials, ...settings.credentials };
       }
+      if (settings.confluenceCredentials) {
+        nextConfluenceCredentials = { ...nextConfluenceCredentials, ...settings.confluenceCredentials };
+      }
       if (settings.aiSettings) {
         nextAiSettings = { ...nextAiSettings, ...settings.aiSettings };
       }
     }
     setProject(nextProject);
     setCredentials(nextCredentials);
+    setConfluenceCredentials(nextConfluenceCredentials);
     setAiSettings(nextAiSettings);
   }
 
@@ -428,6 +446,9 @@ function App() {
     issue,
     project,
     credentials,
+    confluenceCredentials,
+    confluenceLinks,
+    docContext,
     aiSettings,
     notes,
     archetype: archetypeKey === "auto" ? undefined : archetypeKey,
@@ -439,6 +460,10 @@ function App() {
 
   function setCredentialValue(key: keyof Credentials, value: string) {
     setCredentials((current) => ({ ...current, [key]: value }));
+  }
+
+  function setConfluenceCredentialValue(key: keyof ConfluenceCredentials, value: string) {
+    setConfluenceCredentials((current) => ({ ...current, [key]: value }));
   }
 
   function setAiSettingValue<K extends keyof AiSettings>(key: K, value: AiSettings[K]) {
@@ -521,13 +546,17 @@ function App() {
         ? { project }
         : section === "credentials"
           ? { credentials }
-          : { aiSettings };
+          : section === "confluence"
+            ? { confluenceCredentials }
+            : { aiSettings };
     const label =
       section === "project"
         ? "Project config"
         : section === "credentials"
           ? "Jira auth"
-          : "AI Settings";
+          : section === "confluence"
+            ? "Confluence auth"
+            : "AI Settings";
     setSettingsBusy(section);
     setSettingsStatus((current) => ({ ...current, [section]: "" }));
     try {
@@ -571,6 +600,26 @@ function App() {
       setOutline((current) => ({ ...current, issue_key: payload.issue.key || current.issue_key }));
       setOutput(JSON.stringify(payload.issue, null, 2));
       setMessage(`Đã fetch Jira task ${payload.issue.key}.`);
+    });
+  }
+
+  function fetchConfluenceDocs() {
+    setBusyRun("docs", async () => {
+      const payload = await apiPost<{ documents: { title: string; url: string; text: string; error?: string }[]; combinedText: string }>(
+        "/api/confluence-docs",
+        {
+          links: confluenceLinks,
+          confluenceCredentials,
+        },
+      );
+      setDocContext(payload.combinedText);
+      setOutput(JSON.stringify(payload.documents, null, 2));
+      const failed = payload.documents.filter((item) => item.error).length;
+      setMessage(
+        failed
+          ? `Đã đọc ${payload.documents.length - failed}/${payload.documents.length} Confluence doc. Có ${failed} doc lỗi.`
+          : `Đã đọc ${payload.documents.length} Confluence doc.`,
+      );
     });
   }
 
@@ -831,6 +880,36 @@ function App() {
 
         <section className="panel compact">
           <div className="panel-title">
+            <FileText size={18} />
+            <h2>Confluence auth</h2>
+          </div>
+          <Field
+            label="Base URL"
+            value={confluenceCredentials.baseUrl}
+            onChange={(value) => setConfluenceCredentialValue("baseUrl", value)}
+            placeholder="https://confluence.vexere.net"
+          />
+          <Field label="User" value={confluenceCredentials.user} onChange={(value) => setConfluenceCredentialValue("user", value)} placeholder="name@example.com" />
+          <Field label="Password" value={confluenceCredentials.password} type="password" onChange={(value) => setConfluenceCredentialValue("password", value)} />
+          <Field label="Token" value={confluenceCredentials.token} type="password" onChange={(value) => setConfluenceCredentialValue("token", value)} />
+          <div className="button-row">
+            <IconButton
+              icon={settingsBusy === "confluence" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+              onClick={() => saveUserSettings("confluence")}
+              disabled={Boolean(settingsBusy)}
+              variant="primary"
+            >
+              Lưu
+            </IconButton>
+          </div>
+          {settingsStatus.confluence ? <div className="mini-note">{settingsStatus.confluence}</div> : null}
+          <div className="mini-note">
+            Dùng để đọc doc Confluence khi task Jira có tài liệu mô tả flow/AC riêng.
+          </div>
+        </section>
+
+        <section className="panel compact">
+          <div className="panel-title">
             <Wand2 size={18} />
             <h2>AI Settings</h2>
           </div>
@@ -989,6 +1068,31 @@ function App() {
             </div>
             <Field label="Summary" value={issue.summary} onChange={(value) => setIssueValue("summary", value)} placeholder="[Payment] Route callback..." />
             <Field label="Description / acceptance criteria" value={issue.description} onChange={(value) => setIssueValue("description", value)} textarea rows={8} />
+            <Field
+              label="Confluence / doc links"
+              value={confluenceLinks}
+              onChange={setConfluenceLinks}
+              textarea
+              rows={3}
+              placeholder="Mỗi dòng một link Confluence hoặc tài liệu liên quan"
+            />
+            <div className="button-row">
+              <IconButton
+                icon={busy === "docs" ? <Loader2 className="spin" size={16} /> : <FileText size={16} />}
+                onClick={fetchConfluenceDocs}
+                disabled={isWorking || !confluenceLinks.trim()}
+              >
+                Fetch docs
+              </IconButton>
+            </div>
+            <Field
+              label="Nội dung doc đã fetch / paste thêm"
+              value={docContext}
+              onChange={setDocContext}
+              textarea
+              rows={5}
+              placeholder="Nội dung Confluence sẽ tự đổ vào đây, hoặc QA có thể paste thủ công nếu link không truy cập được"
+            />
             <Field label="Ghi chú thêm của QA" value={notes} onChange={setNotes} textarea rows={4} placeholder="Risk, data seed, out of scope, known bug..." />
           </div>
 

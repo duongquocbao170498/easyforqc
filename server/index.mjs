@@ -325,11 +325,13 @@ async function initializeDatabase() {
       user_email TEXT PRIMARY KEY REFERENCES users(email) ON DELETE CASCADE,
       project_config JSONB NOT NULL DEFAULT '{}'::jsonb,
       credentials_encrypted TEXT NOT NULL DEFAULT '',
+      confluence_credentials_encrypted TEXT NOT NULL DEFAULT '',
       ai_settings_encrypted TEXT NOT NULL DEFAULT '',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS confluence_credentials_encrypted TEXT NOT NULL DEFAULT ''");
   await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_settings_encrypted TEXT NOT NULL DEFAULT ''");
 
   const adminEmail = normalizeEmail(APP_ADMIN_EMAIL);
@@ -726,12 +728,12 @@ app.post("/api/auth/change-password", async (req, res) => {
 app.get("/api/user-settings", async (req, res) => {
   try {
     if (!db) {
-      res.json({ project: null, credentials: null, aiSettings: null });
+      res.json({ project: null, credentials: null, confluenceCredentials: null, aiSettings: null });
       return;
     }
     const result = await db.query(
       `
-        SELECT project_config, credentials_encrypted, ai_settings_encrypted
+        SELECT project_config, credentials_encrypted, confluence_credentials_encrypted, ai_settings_encrypted
         FROM user_settings
         WHERE user_email = $1
       `,
@@ -741,6 +743,7 @@ app.get("/api/user-settings", async (req, res) => {
     res.json({
       project: row?.project_config || null,
       credentials: decryptSettingsJson(row?.credentials_encrypted),
+      confluenceCredentials: decryptSettingsJson(row?.confluence_credentials_encrypted),
       aiSettings: decryptSettingsJson(row?.ai_settings_encrypted),
     });
   } catch (error) {
@@ -758,10 +761,11 @@ app.post("/api/user-settings", async (req, res) => {
     const body = req.body || {};
     const hasProject = Object.prototype.hasOwnProperty.call(body, "project");
     const hasCredentials = Object.prototype.hasOwnProperty.call(body, "credentials");
+    const hasConfluenceCredentials = Object.prototype.hasOwnProperty.call(body, "confluenceCredentials");
     const hasAiSettings = Object.prototype.hasOwnProperty.call(body, "aiSettings");
     const existing = await db.query(
       `
-        SELECT project_config, credentials_encrypted, ai_settings_encrypted
+        SELECT project_config, credentials_encrypted, confluence_credentials_encrypted, ai_settings_encrypted
         FROM user_settings
         WHERE user_email = $1
       `,
@@ -770,24 +774,35 @@ app.post("/api/user-settings", async (req, res) => {
     const row = existing.rows[0];
     const project = hasProject ? normalizeProject(body.project) : row?.project_config || {};
     const credentials = hasCredentials ? normalizeCredentials(body.credentials) : decryptSettingsJson(row?.credentials_encrypted);
+    const confluenceCredentials = hasConfluenceCredentials
+      ? normalizeConfluenceCredentials(body.confluenceCredentials)
+      : decryptSettingsJson(row?.confluence_credentials_encrypted);
     const aiSettings = hasAiSettings ? normalizeAiSettings(body.aiSettings) : decryptSettingsJson(row?.ai_settings_encrypted);
     await db.query(
       `
-        INSERT INTO user_settings (user_email, project_config, credentials_encrypted, ai_settings_encrypted)
-        VALUES ($1, $2::jsonb, $3, $4)
+        INSERT INTO user_settings (user_email, project_config, credentials_encrypted, confluence_credentials_encrypted, ai_settings_encrypted)
+        VALUES ($1, $2::jsonb, $3, $4, $5)
         ON CONFLICT (user_email)
         DO UPDATE SET
           project_config = EXCLUDED.project_config,
           credentials_encrypted = EXCLUDED.credentials_encrypted,
+          confluence_credentials_encrypted = EXCLUDED.confluence_credentials_encrypted,
           ai_settings_encrypted = EXCLUDED.ai_settings_encrypted,
           updated_at = NOW()
       `,
-      [email, JSON.stringify(project), encryptSettingsJson(credentials), encryptSettingsJson(aiSettings)],
+      [
+        email,
+        JSON.stringify(project),
+        encryptSettingsJson(credentials),
+        encryptSettingsJson(confluenceCredentials),
+        encryptSettingsJson(aiSettings),
+      ],
     );
     res.json({
       saved: true,
       project,
       credentials,
+      confluenceCredentials,
       aiSettings,
     });
   } catch (error) {
@@ -823,6 +838,137 @@ function parseIssueReference(input) {
     issueKey: keyMatch ? keyMatch[0].toUpperCase() : "",
     baseUrl,
   };
+}
+
+function parseDocumentLinks(input) {
+  return asText(input)
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item, index, items) => items.indexOf(item) === index);
+}
+
+function htmlToText(html) {
+  return asText(html)
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<\/(p|div|li|tr|h[1-6]|br)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function confluenceAuthHeaders(credentials = {}) {
+  const headers = { Accept: "application/json, text/html;q=0.8" };
+  const user = asText(credentials.user);
+  const password = asText(credentials.password);
+  const token = asText(credentials.token);
+  if (user && (password || token)) {
+    headers.Authorization = `Basic ${Buffer.from(`${user}:${password || token}`).toString("base64")}`;
+  } else if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+function confluencePageIdFromUrl(url) {
+  const pageId = url.searchParams.get("pageId");
+  if (pageId) return pageId;
+  const pageMatch = url.pathname.match(/\/pages\/(\d+)(?:\/|$)/);
+  if (pageMatch) return pageMatch[1];
+  const contentMatch = url.pathname.match(/\/content\/(\d+)(?:\/|$)/);
+  if (contentMatch) return contentMatch[1];
+  return "";
+}
+
+function confluenceBaseUrlFrom(url, credentials = {}) {
+  const configured = asText(credentials.baseUrl);
+  if (configured) {
+    try {
+      const parsed = new URL(configured);
+      return `${parsed.origin}${parsed.pathname.replace(/\/+$/, "")}`;
+    } catch {
+      return configured.replace(/\/+$/, "");
+    }
+  }
+  if (url.pathname.startsWith("/wiki/")) {
+    return `${url.origin}/wiki`;
+  }
+  for (const marker of ["/spaces/", "/pages/", "/display/", "/plugins/", "/secure/"]) {
+    const index = url.pathname.indexOf(marker);
+    if (index > 0) {
+      return `${url.origin}${url.pathname.slice(0, index)}`.replace(/\/+$/, "");
+    }
+  }
+  return url.origin;
+}
+
+async function fetchConfluenceDocument(link, credentials = {}) {
+  const url = new URL(link);
+  const pageId = confluencePageIdFromUrl(url);
+  const headers = confluenceAuthHeaders(credentials);
+  if (pageId) {
+    const baseUrl = confluenceBaseUrlFrom(url, credentials);
+    const apiUrl = `${baseUrl}/rest/api/content/${encodeURIComponent(pageId)}?expand=body.storage,body.view,title,space`;
+    const response = await fetch(apiUrl, { headers });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw Object.assign(new Error(payload.message || payload.errorMessage || `Confluence HTTP ${response.status}`), {
+        status: response.status,
+      });
+    }
+    const html = payload?.body?.storage?.value || payload?.body?.view?.value || "";
+    return {
+      title: asText(payload.title) || link,
+      url: link,
+      text: htmlToText(html).slice(0, 12000),
+    };
+  }
+
+  const response = await fetch(link, { headers: { ...headers, Accept: "text/html,application/json;q=0.8" } });
+  const text = await response.text();
+  if (!response.ok) {
+    throw Object.assign(new Error(`Confluence HTTP ${response.status}`), { status: response.status });
+  }
+  const titleMatch = text.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  return {
+    title: htmlToText(titleMatch?.[1] || link),
+    url: link,
+    text: htmlToText(text).slice(0, 12000),
+  };
+}
+
+async function fetchConfluenceDocuments(linksText, credentials = {}) {
+  const links = parseDocumentLinks(linksText);
+  const documents = [];
+  for (const link of links) {
+    try {
+      if (!/^https?:\/\//i.test(link)) {
+        throw Object.assign(new Error("Link doc phải bắt đầu bằng http hoặc https."), { status: 400 });
+      }
+      documents.push(await fetchConfluenceDocument(link, credentials));
+    } catch (error) {
+      documents.push({
+        title: link,
+        url: link,
+        text: "",
+        error: error instanceof Error ? error.message : "Không đọc được doc.",
+      });
+    }
+  }
+  const combinedText = documents
+    .filter((item) => item.text)
+    .map((item) => `# ${item.title}\nSource: ${item.url}\n${item.text}`)
+    .join("\n\n---\n\n")
+    .slice(0, 30000);
+  return { documents, combinedText };
 }
 
 function normalizeProject(raw = {}, fallback = {}) {
@@ -872,6 +1018,15 @@ function normalizeCredentials(raw = {}) {
     user: asText(raw.user || raw.jiraUser),
     password: asText(raw.password || raw.jiraPassword),
     token: asText(raw.token || raw.jiraToken),
+  };
+}
+
+function normalizeConfluenceCredentials(raw = {}) {
+  return {
+    baseUrl: asText(raw.baseUrl || raw.confluenceBaseUrl),
+    user: asText(raw.user || raw.confluenceUser),
+    password: asText(raw.password || raw.confluencePassword),
+    token: asText(raw.token || raw.confluenceToken),
   };
 }
 
@@ -1086,164 +1241,192 @@ function buildCases(issue, archetypeKey, notes = "", aiCustomization = null) {
   const archetype = ARCHETYPES[archetypeKey] || ARCHETYPES.general;
   const key = issue.key || "JIRA-TASK";
   const summary = issue.summary || issue.title || "Phạm vi task";
-  const scopeLines = compactLines(`${issue.description}\n${notes}`, 6);
+  const scopeLines = compactLines(`${issue.description}\n${notes}`, 16);
+  const guidanceLines = compactLines(aiGuidanceText(aiCustomization), 6);
+  const contextLines = [...scopeLines, ...archetype.dimensions, ...guidanceLines].filter(Boolean);
+  const pick = (index, fallback) => contextLines[index % Math.max(contextLines.length, 1)] || fallback;
   const mainRule = scopeLines[0] || summary;
   const secondRule = scopeLines[1] || archetype.dimensions[0];
+  const isToolOrChatbot =
+    ["tool_api", "chatbot"].includes(archetypeKey) ||
+    /\b(tool|bot|chat|agent|conversation|bus|route|trip|endpoint|callback|api)\b/i.test(`${summary} ${issue.description}`);
   const precondition = [
     `Task ${key} đã có build hoặc môi trường test sẵn sàng.`,
     "QA có dữ liệu test phù hợp với scope trong Jira.",
     "Các dependency liên quan đã được cấu hình đúng trên môi trường test.",
   ].join("\n");
 
+  const quoteLines = (messages) =>
+    messages
+      .filter(Boolean)
+      .map((message, index) => `${index + 1}. "${message.replace(/"/g, '\\"')}"`)
+      .join("\n");
+  const unitName = (index) => (isToolOrChatbot ? `Tool ${Math.max(1, Math.ceil(index / 5))}` : "Feature");
+  const userMessages = (index, intent) => {
+    if (isToolOrChatbot) {
+      return [
+        `${intent} cho ${summary}`,
+        "Em liệt kê giúp anh các lựa chọn phù hợp và giải thích ngắn gọn nhé.",
+      ];
+    }
+    return [
+      `Mở chức năng ${summary}`,
+      `Thực hiện kiểm tra: ${intent}`,
+    ];
+  };
+  const makeStructuredSteps = (item) => [
+    step(
+      isToolOrChatbot ? "Mở một conversation mới với bot/agent." : "Chuẩn bị dữ liệu và mở màn hình/chức năng cần kiểm thử.",
+      quoteLines(item.messages),
+      "",
+    ),
+    step(item.action, item.stepData || "", ""),
+    step("Kiểm tra kết quả hiển thị, dữ liệu trả về và side effect liên quan.", "", expectation(...item.checks)),
+  ];
+
   const seed = [
     {
-      title: `Xác nhận luồng chính của ${summary}`,
+      title: `${unitName(1)} xử lý đúng luồng chính của ${summary}`,
       objective: `Chứng minh business rule chính: ${mainRule}`,
       priority: "High",
       technique: archetype.primary[0],
       risk: "Sai rule chính làm task không đạt acceptance intent.",
       tags: ["happy_path", "business_rule"],
       scenario: "happy_path",
-      steps: [
-        step(
-          "Chuẩn bị dữ liệu đúng điều kiện của luồng chính.",
-          `Task: ${key}\nRule: ${mainRule}`,
-          expectation("Dữ liệu test phản ánh đúng acceptance intent của Jira task."),
-        ),
-        step(
-          "Thực hiện luồng nghiệp vụ chính từ đầu đến cuối.",
-          `Scope: ${summary}`,
-          expectation("Hệ thống xử lý thành công.", "Kết quả cuối cùng đúng với mô tả Jira.", "Không phát sinh lỗi ngoài scope."),
-        ),
-      ],
+      messages: userMessages(1, mainRule),
+      action: "Thực hiện luồng chính từ đầu đến cuối theo mô tả Jira/Confluence.",
+      stepData: `Task: ${key}\nRule: ${mainRule}`,
+      checks: ["Hệ thống xử lý thành công.", "Kết quả cuối cùng đúng với mô tả Jira/Confluence.", "Không phát sinh lỗi ngoài scope."],
     },
     {
-      title: `Kiểm tra decision table cho các nhánh xử lý của ${summary}`,
+      title: `${unitName(1)} chỉ xử lý khi đủ điều kiện bắt buộc của ${summary}`,
       objective: "Bao phủ các nhánh điều kiện quan trọng thay vì chỉ test happy path.",
       priority: "High",
       technique: archetype.primary[1] || "Decision table",
       risk: "Một nhánh điều kiện phụ xử lý sai nhưng không bị phát hiện bởi happy path.",
       tags: ["decision_table", "branching"],
       scenario: "validation",
-      steps: [
-        step(
-          "Liệt kê các điều kiện input hoặc state có thể làm thay đổi kết quả.",
-          `Điều kiện tham chiếu: ${secondRule}`,
-          expectation("Các nhánh chính, nhánh phụ và nhánh default được xác định rõ."),
-        ),
-        step(
-          "Chạy từng tổ hợp điều kiện quan trọng.",
-          archetype.dimensions.map((item, index) => `${index + 1}. ${item}`).join("\n"),
-          expectation("Mỗi tổ hợp trả đúng outcome mong đợi.", "Không có tổ hợp bị rơi vào default sai."),
-        ),
-      ],
+      messages: userMessages(2, secondRule),
+      action: "Thử các tổ hợp điều kiện chính và điều kiện phụ có thể làm đổi kết quả.",
+      stepData: archetype.dimensions.map((item, index) => `${index + 1}. ${item}`).join("\n"),
+      checks: ["Các nhánh chính, nhánh phụ và nhánh default được xác định rõ.", "Mỗi tổ hợp trả đúng outcome mong đợi.", "Không có tổ hợp bị rơi vào default sai."],
     },
     {
-      title: `Validate trường bắt buộc và dữ liệu thiếu cho ${summary}`,
+      title: `${unitName(1)} không được xử lý khi thiếu dữ liệu bắt buộc`,
       objective: "Đảm bảo hệ thống không xử lý sai khi input thiếu hoặc không hợp lệ.",
       priority: "High",
       technique: archetype.supporting[0] || "Boundary value analysis",
       risk: "Thiếu dữ liệu làm sai mapping, sai hiển thị hoặc sai trạng thái.",
       tags: ["validation", "missing_data"],
       scenario: "negative_path",
-      steps: [
-        step(
-          "Gửi hoặc tạo dữ liệu thiếu một trường bắt buộc.",
-          `Required/critical data: ${archetype.dimensions.slice(0, 3).join(", ")}`,
-          expectation("Hệ thống hiển thị hoặc ghi nhận lỗi rõ ràng.", "Không tạo dữ liệu sai ở downstream hoặc UI."),
-        ),
-        step(
-          "Thử dữ liệu sai format, null hoặc rỗng.",
-          "Giá trị rỗng, null, sai định dạng, hoặc giá trị ngoài danh mục.",
-          expectation("Hệ thống xử lý theo rule fallback/validation.", "Không crash, không lưu trạng thái không nhất quán."),
-        ),
-      ],
+      messages: userMessages(3, `thiếu ${pick(2, "dữ liệu bắt buộc")}`),
+      action: "Gửi/tạo dữ liệu thiếu required field, null hoặc rỗng.",
+      stepData: `Required/critical data: ${archetype.dimensions.slice(0, 3).join(", ")}`,
+      checks: ["Hệ thống hiển thị hoặc ghi nhận lỗi rõ ràng.", "Không gọi downstream hoặc lưu dữ liệu sai.", "Không crash, không lưu trạng thái không nhất quán."],
     },
     {
-      title: `Kiểm tra edge case và boundary quanh ${summary}`,
-      objective: "Bao phủ các giá trị sát biên và dữ liệu ít gặp.",
-      priority: "Normal",
-      technique: "Boundary value analysis",
-      risk: "Boundary case gây sai kết quả dù case thông thường pass.",
-      tags: ["edge_case", "boundary"],
-      scenario: "edge_case",
-      steps: [
-        step(
-          "Chuẩn bị dữ liệu ở ngưỡng nhỏ nhất, lớn nhất và sát ngưỡng.",
-          `Boundary dimensions: ${archetype.dimensions.slice(0, 4).join(", ")}`,
-          expectation("Kết quả tại biên vẫn đúng rule.", "Không bị lệch điều kiện hoặc sai sort/mapping/state."),
-        ),
-      ],
-    },
-    {
-      title: `Kiểm tra retry hoặc duplicate action cho ${summary}`,
-      objective: "Đảm bảo thao tác lặp không tạo side effect ngoài ý muốn.",
-      priority: "Normal",
-      technique: "Retry / idempotency / duplicate event",
-      risk: "Retry hoặc duplicate tạo dữ liệu trùng, sai trạng thái hoặc sai attachment.",
-      tags: ["retry", "idempotency"],
-      scenario: "fail_safe",
-      steps: [
-        step(
-          "Thực hiện cùng một action hoặc event hai lần liên tiếp.",
-          "Cùng payload/cùng trạng thái/cùng người dùng trong thời gian ngắn.",
-          expectation("Hệ thống không tạo duplicate ngoài rule.", "Trạng thái cuối cùng nhất quán.", "Log hoặc phản hồi thể hiện kết quả rõ ràng."),
-        ),
-      ],
-    },
-    {
-      title: `Kiểm tra fallback khi dependency lỗi hoặc trả rỗng cho ${summary}`,
-      objective: "Đảm bảo hệ thống fail-safe khi dữ liệu downstream không đầy đủ.",
+      title: `${unitName(1)} trả nearest match hoặc fallback đúng khi không có dữ liệu khớp hoàn toàn`,
+      objective: "Đảm bảo hệ thống xử lý đúng khi dữ liệu gần đúng hoặc thiếu match trực tiếp.",
       priority: "High",
       technique: "Fallback / partial failure / recovery",
-      risk: "Dependency lỗi làm mất dữ liệu, treo luồng hoặc trả thông tin sai.",
-      tags: ["fallback", "partial_failure"],
-      scenario: "negative_path",
-      steps: [
-        step(
-          "Giả lập dependency timeout, lỗi hoặc trả response rỗng.",
-          "Downstream timeout/5xx/empty response/missing field.",
-          expectation("Hệ thống trả fallback đúng scope.", "Không ghi dữ liệu sai.", "Người dùng hoặc vận hành nhận được thông tin đủ để xử lý tiếp."),
-        ),
-      ],
+      risk: "Không có match trực tiếp nhưng hệ thống trả sai dữ liệu hoặc im lặng.",
+      tags: ["fallback", "nearest_match"],
+      scenario: "edge_case",
+      messages: userMessages(4, `không có dữ liệu khớp hoàn toàn cho ${pick(3, "điều kiện lọc")}`),
+      action: "Tạo request có dữ liệu gần đúng, thiếu match hoặc kết quả rỗng.",
+      stepData: `Fallback dimension: ${pick(3, "empty downstream response")}`,
+      checks: ["Hệ thống trả fallback/nearest match theo rule.", "Không tự bịa dữ liệu ngoài source of truth.", "Thông báo đủ rõ để user biết cần bổ sung điều kiện."],
     },
     {
-      title: `Kiểm tra state carry-forward sau khi xử lý ${summary}`,
-      objective: "Đảm bảo dữ liệu và trạng thái sau xử lý được giữ đúng ở bước kế tiếp.",
+      title: `${unitName(1)} không reuse stale context khi user đổi điều kiện`,
+      objective: "Đảm bảo context mới ghi đè context cũ đúng rule.",
       priority: "Normal",
       technique: "State transition",
-      risk: "Trạng thái trung gian đúng nhưng bước sau dùng sai context hoặc sai data.",
-      tags: ["state_transition", "carry_forward"],
+      risk: "Bot hoặc flow dùng lại context cũ khiến kết quả sai.",
+      tags: ["state_transition", "stale_context"],
       scenario: "workflow",
-      steps: [
-        step(
-          "Hoàn tất bước chính rồi tiếp tục sang bước nghiệp vụ kế tiếp.",
-          `Context cần giữ: ${archetype.dimensions.slice(0, 3).join(", ")}`,
-          expectation("State mới được lưu đúng.", "Bước tiếp theo đọc đúng context.", "Không bị lẫn dữ liệu của task/user/entity khác."),
-        ),
-      ],
+      messages: ["Tạo điều kiện ban đầu cho task.", "Đổi sang điều kiện khác trước khi hệ thống trả kết quả cuối."],
+      action: "Thực hiện multi-turn flow có thay đổi input quan trọng giữa chừng.",
+      stepData: `Context cần reset/carry-forward: ${pick(4, "state carry-forward")}`,
+      checks: ["Context mới được ưu tiên đúng rule.", "Không reuse dữ liệu cũ khi user đã đổi điều kiện.", "Trace/log thể hiện input cuối cùng được dùng."],
     },
     {
-      title: `Regression quanh vùng thay đổi của ${summary}`,
-      objective: "Xác nhận các hành vi gần kề không bị ảnh hưởng bởi thay đổi mới.",
+      title: `${unitName(2)} gọi đúng endpoint hoặc downstream key mặc định`,
+      objective: "Kiểm tra integration contract và key mapping tới downstream.",
+      priority: "High",
+      technique: "Integration contract / field mapping",
+      risk: "Sai endpoint/key làm downstream trả sai dữ liệu dù UI nhìn có vẻ hợp lệ.",
+      tags: ["integration_contract", "mapping"],
+      scenario: "integration",
+      messages: userMessages(6, `mapping ${pick(5, "endpoint/key")}`),
+      action: "Theo dõi request tới downstream/tool và response trả về.",
+      stepData: `Expected mapping: ${pick(5, "required fields / endpoint")}`,
+      checks: ["Bot/service gọi đúng tool hoặc endpoint cần dùng.", "Payload không thiếu field bắt buộc.", "Không dùng field nội bộ hoặc key không thuộc scope user."],
+    },
+    {
+      title: `${unitName(2)} trả đúng catalog hoặc danh sách dữ liệu theo group`,
+      objective: "Đảm bảo danh sách trả về được group/sort đúng với source.",
       priority: "Normal",
-      technique: "Regression",
-      risk: "Task mới pass nhưng phá luồng cũ hoặc rule lân cận.",
-      tags: ["regression", "nearby_surface"],
-      scenario: "regression",
-      steps: [
-        step(
-          "Chạy lại một luồng cũ có cùng module hoặc cùng dependency.",
-          `Nearby surface: ${scopeLines.slice(0, 3).join(" | ") || summary}`,
-          expectation("Luồng cũ vẫn giữ behavior trước đó.", "Không thay đổi label, trạng thái, hiển thị hoặc side effect ngoài scope."),
-        ),
-      ],
+      technique: "Decision table",
+      risk: "Danh sách/group sai làm user chọn nhầm option.",
+      tags: ["catalog", "grouping"],
+      scenario: "validation",
+      messages: userMessages(7, `group/sort theo ${pick(6, "business rule")}`),
+      action: "Đối chiếu output với source data sau khi tool trả danh sách.",
+      stepData: `Grouping/sort rule: ${pick(6, "grouping / ordering rule")}`,
+      checks: ["Danh sách trả về được group đúng rule.", "Không trộn dữ liệu giữa các group.", "Các field hiển thị đủ để user phân biệt option."],
+    },
+    {
+      title: `${unitName(2)} bám source of truth khi user nhập dữ liệu mơ hồ`,
+      objective: "Kiểm tra ambiguity handling và không xác nhận sai dữ liệu.",
+      priority: "Normal",
+      technique: "Equivalence partitioning",
+      risk: "Input mơ hồ bị hiểu thành dữ liệu cụ thể không đúng.",
+      tags: ["ambiguous_input", "source_of_truth"],
+      scenario: "negative_path",
+      messages: userMessages(8, `input mơ hồ quanh ${pick(7, "selection")}`),
+      action: "Gửi input thiếu định danh hoặc có nhiều khả năng match.",
+      stepData: `Ambiguous field: ${pick(7, "ambiguous user input")}`,
+      checks: ["Bot/service không tự xác nhận option chưa đủ bằng chứng.", "Hệ thống hỏi lại hoặc trả danh sách lựa chọn phù hợp.", "Không ghi nhận state cuối khi chưa chốt."],
     },
   ];
 
+  seed.push(
+    ...[
+      ["không xác nhận dữ liệu ngoài phạm vi hợp lệ", "Boundary value analysis", "invalid_data", "Dữ liệu ngoài danh mục/ngoài route/ngoài rule không được chấp nhận."],
+      ["giữ đúng lựa chọn user ở bước trước khi chuyển sang bước sau", "State transition", "carry_forward", "Selection key/state được carry-forward đúng qua multi-turn."],
+      ["chuẩn hóa price/options hoặc output format trước khi trả user", "Integration contract / field mapping", "output_mapping", "Output được chuẩn hóa đúng format và không mất field quan trọng."],
+      ["xử lý phụ phí, điều kiện bổ sung hoặc metadata đi kèm", "Decision table", "metadata", "Metadata/điều kiện phụ không bị bỏ sót khi tạo kết quả cuối."],
+      ["trả nhiều nhóm dữ liệu nhưng vẫn giữ applicable option rõ ràng", "Pairwise / combinatorial", "multi_group", "Nhiều group/option vẫn phân biệt rõ và không lẫn điều kiện áp dụng."],
+      ["resolve lại selection key qua bước trước khi user chọn option", "State transition", "selection_key", "Key lựa chọn được resolve lại từ source, không dựa vào text hiển thị đơn thuần."],
+      ["hỏi lại khi user chưa chốt đủ thông tin", "Use-case / scenario flow", "clarification", "Luồng hỏi lại đủ ngắn gọn và không gọi tool quá sớm."],
+      ["fallback đúng khi downstream timeout hoặc trả lỗi", "Fallback / partial failure / recovery", "downstream_failure", "Timeout/5xx/empty response được xử lý fail-safe."],
+      ["không tạo duplicate khi retry cùng request", "Retry / idempotency / duplicate event", "retry", "Retry không tạo dữ liệu/trạng thái trùng ngoài rule."],
+      ["không rò rỉ context giữa conversation hoặc user khác", "Risk-based regression", "cross_context", "Context không bị lẫn giữa user/session/entity khác."],
+      ["regression luồng cũ cùng module vẫn hoạt động", "Regression", "regression", "Luồng cũ gần vùng thay đổi vẫn giữ behavior trước đó."],
+      ["ghi nhận out-of-scope hoặc unsupported request đúng cách", "Error guessing / bug-history based", "out_of_scope", "Unsupported/out-of-scope được từ chối hoặc hướng dẫn rõ ràng."],
+    ].map(([title, technique, tag, check], offset) => {
+      const index = offset + 9;
+      return {
+        title: `${unitName(index)} ${title} cho ${summary}`,
+        objective: `Bao phủ ${title}.`,
+        priority: index === 16 ? "High" : "Normal",
+        technique,
+        risk: check,
+        tags: [tag, "omni_v2_coverage"],
+        scenario: tag,
+        messages: userMessages(index, pick(index, title)),
+        action: `Thực hiện biến thể kiểm thử: ${title}.`,
+        stepData: `Coverage reference: ${pick(index, check)}`,
+        checks: [check, "Kết quả bám đúng Jira/Confluence và source of truth.", "Không phát sinh side effect ngoài scope."],
+      };
+    }),
+  );
+
   return seed.map((item, index) => {
-    const testData = item.steps.map((itemStep, stepIndex) => `${stepIndex + 1}. "${itemStep.test_data.replace(/\n/g, " | ")}"`).join("\n");
-    const expectedResult = item.steps
+    const steps = makeStructuredSteps(item);
+    const testData = quoteLines(item.messages);
+    const expectedResult = steps
       .flatMap((itemStep) => itemStep.expected_result.split("\n"))
       .filter(Boolean)
       .join("\n");
@@ -1259,7 +1442,7 @@ function buildCases(issue, archetypeKey, notes = "", aiCustomization = null) {
       precondition,
       test_data: testData,
       expected_result: expectedResult,
-      structured_steps: item.steps,
+      structured_steps: steps,
     };
   });
 }
@@ -1386,6 +1569,16 @@ app.post("/api/parse-jira", (req, res) => {
   res.json(parseIssueReference(req.body?.jiraUrl || req.body?.value || ""));
 });
 
+app.post("/api/confluence-docs", async (req, res) => {
+  try {
+    const confluenceCredentials = normalizeConfluenceCredentials(req.body?.confluenceCredentials);
+    const result = await fetchConfluenceDocuments(req.body?.links, confluenceCredentials);
+    res.json(result);
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
 app.post("/api/issue", async (req, res) => {
   try {
     const parsed = parseIssueReference(req.body?.jiraUrl || "");
@@ -1421,7 +1614,18 @@ app.post("/api/draft", async (req, res) => {
       throw Object.assign(new Error("Cần summary hoặc description của Jira task để tạo bản nháp."), { status: 400 });
     }
     const archetypeKey = chooseArchetype(issue, req.body?.archetype);
-    const notes = asText(req.body?.notes);
+    let docContext = asText(req.body?.docContext);
+    let referenceDocs = null;
+    if (!docContext && asText(req.body?.confluenceLinks)) {
+      referenceDocs = await fetchConfluenceDocuments(
+        req.body?.confluenceLinks,
+        normalizeConfluenceCredentials(req.body?.confluenceCredentials),
+      );
+      docContext = referenceDocs.combinedText;
+    }
+    const notes = [asText(req.body?.notes), docContext ? `Confluence/reference docs:\n${docContext}` : ""]
+      .filter(Boolean)
+      .join("\n\n");
     const aiCustomization = aiCustomizationFromSettings(req.body?.aiSettings);
     const testCases = buildCases(issue, archetypeKey, notes, aiCustomization);
     const outline = buildOutline(issue, archetypeKey, testCases, notes, aiCustomization);
@@ -1429,6 +1633,7 @@ app.post("/api/draft", async (req, res) => {
       archetypeKey,
       archetype: ARCHETYPES[archetypeKey],
       aiCustomizationApplied: Boolean(aiCustomization),
+      referenceDocsFetched: referenceDocs,
       testCases,
       outline,
     });

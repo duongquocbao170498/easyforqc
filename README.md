@@ -116,7 +116,11 @@ Nếu Render cấp URL khác, dùng URL thật đó thay cho `easyforqc.onrender
 
 ### 5. Lưu ý của bản miễn phí
 
-Render Free có thể sleep khi không có người dùng, lần mở đầu tiên sẽ chậm hơn. File output local như `.qa-runs/` và `qa/xmind-test-design/` trên Render có thể mất khi app restart hoặc redeploy, nên bản public nên dùng flow tạo và attach trực tiếp lên Jira. Database, account, mật khẩu, config Jira auth, Project config và AI Settings sẽ được lưu trong Neon.
+Render Free có thể sleep khi không có người dùng, lần mở đầu tiên sẽ chậm hơn. File output local như `.qa-runs/` và `qa/xmind-test-design/` trên Render có thể mất khi app restart hoặc redeploy, nên bản public nên dùng flow tạo và attach trực tiếp lên Jira. Database, account, mật khẩu, config Jira auth, Confluence auth, Project config và AI Settings sẽ được lưu trong Neon.
+
+### Confluence docs theo từng account
+
+Mỗi user có thể lưu Confluence auth riêng rồi dán link tài liệu vào Task context. App sẽ fetch nội dung doc qua Confluence REST API khi link có `pageId` hoặc `/pages/<id>`, sau đó đưa nội dung đó vào context generate test case/test design. Nếu Render không truy cập được Confluence nội bộ, QA vẫn có thể paste nội dung doc thủ công vào ô `Nội dung doc đã fetch / paste thêm`.
 
 ### AI Settings theo từng account
 
@@ -288,11 +292,12 @@ Khi deploy lên internet, nên đặt app sau reverse proxy HTTPS như Caddy/Ngi
 
 1. Dán Jira URL hoặc nhập issue key.
 2. Nhấn `Parse` để lấy issue key hoặc `Fetch` để đọc Jira task bằng credential đã nhập.
-3. Bổ sung summary, description, acceptance criteria hoặc ghi chú QA nếu cần.
-4. Chọn archetype thủ công hoặc để `Auto archetype`.
-5. Nhấn `Generate draft`.
-6. Sửa test cases và XMind outline trực tiếp trên UI.
-7. Vào tab `Run`:
+3. Nếu task có Confluence/doc, dán link vào `Confluence / doc links`, nhấn `Fetch docs`, hoặc paste nội dung doc vào ô doc context.
+4. Bổ sung summary, description, acceptance criteria hoặc ghi chú QA nếu cần.
+5. Chọn archetype thủ công hoặc để `Auto archetype`.
+6. Nhấn `Generate draft`.
+7. Sửa test cases và XMind outline trực tiếp trên UI.
+8. Vào tab `Run`:
    - `Build local`: tạo `.xmind` và `.png` local.
    - `Build and attach`: tạo file và attach lên Jira.
    - `Create suite`: tạo Zephyr test cases.
