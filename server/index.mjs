@@ -1614,12 +1614,14 @@ app.post("/api/draft", async (req, res) => {
       throw Object.assign(new Error("Cần summary hoặc description của Jira task để tạo bản nháp."), { status: 400 });
     }
     const archetypeKey = chooseArchetype(issue, req.body?.archetype);
-    let docContext = asText(req.body?.docContext);
+    const confluenceCredentials = normalizeConfluenceCredentials(req.body?.confluenceCredentials);
+    const allowConfluenceDocs = Boolean(asText(confluenceCredentials.baseUrl));
+    let docContext = allowConfluenceDocs ? asText(req.body?.docContext) : "";
     let referenceDocs = null;
-    if (!docContext && asText(req.body?.confluenceLinks)) {
+    if (allowConfluenceDocs && !docContext && asText(req.body?.confluenceLinks)) {
       referenceDocs = await fetchConfluenceDocuments(
         req.body?.confluenceLinks,
-        normalizeConfluenceCredentials(req.body?.confluenceCredentials),
+        confluenceCredentials,
       );
       docContext = referenceDocs.combinedText;
     }

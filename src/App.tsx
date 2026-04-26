@@ -368,6 +368,7 @@ function App() {
   const [notes, setNotes] = useState("");
   const [confluenceLinks, setConfluenceLinks] = useState("");
   const [docContext, setDocContext] = useState("");
+  const [docIssueKey, setDocIssueKey] = useState("");
   const [archetypeKey, setArchetypeKey] = useState("auto");
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [outline, setOutline] = useState<TestDesignOutline>(emptyOutline(emptyIssue));
@@ -452,7 +453,7 @@ function App() {
     credentials,
     confluenceCredentials,
     confluenceLinks,
-    docContext,
+    docContext: confluenceCredentials.baseUrl.trim() && docIssueKey === issue.key ? docContext : "",
     aiSettings,
     notes,
     archetype: archetypeKey === "auto" ? undefined : archetypeKey,
@@ -487,6 +488,7 @@ function App() {
     setNotes("");
     setConfluenceLinks("");
     setDocContext("");
+    setDocIssueKey("");
   }
 
   function handleJiraUrlChange(value: string) {
@@ -657,6 +659,7 @@ function App() {
         },
       );
       setDocContext(payload.combinedText);
+      setDocIssueKey(issueKeyFromText(jiraUrl) || issue.key);
       setOutput(JSON.stringify(payload.documents, null, 2));
       const failed = payload.documents.filter((item) => item.error).length;
       setMessage(
@@ -671,6 +674,7 @@ function App() {
     setBusyRun("draft", async () => {
       const effectiveIssueKey = issueKeyFromText(jiraUrl) || issue.key;
       const effectiveIssue = { ...issue, key: effectiveIssueKey };
+      const shouldUseConfluenceDocs = Boolean(confluenceCredentials.baseUrl.trim() && docIssueKey === effectiveIssueKey);
       const payload = await apiPost<{
         archetypeKey: string;
         testCases: TestCase[];
@@ -678,6 +682,8 @@ function App() {
       }>("/api/draft", {
         ...requestBody,
         issue: effectiveIssue,
+        confluenceLinks: shouldUseConfluenceDocs ? confluenceLinks : "",
+        docContext: shouldUseConfluenceDocs ? docContext : "",
       });
       setArchetypeKey(payload.archetypeKey);
       setTestCases(payload.testCases);
@@ -1120,7 +1126,11 @@ function App() {
             <Field
               label="Confluence / doc links"
               value={confluenceLinks}
-              onChange={setConfluenceLinks}
+              onChange={(value) => {
+                setConfluenceLinks(value);
+                setDocContext("");
+                setDocIssueKey("");
+              }}
               textarea
               rows={3}
               placeholder="Mỗi dòng một link Confluence hoặc tài liệu liên quan"
@@ -1137,7 +1147,10 @@ function App() {
             <Field
               label="Nội dung doc đã fetch / paste thêm"
               value={docContext}
-              onChange={setDocContext}
+              onChange={(value) => {
+                setDocContext(value);
+                setDocIssueKey(issue.key);
+              }}
               textarea
               rows={5}
               placeholder="Nội dung Confluence sẽ tự đổ vào đây, hoặc QA có thể paste thủ công nếu link không truy cập được"
