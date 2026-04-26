@@ -816,10 +816,146 @@ function asText(value) {
 
 function compactLines(text, limit = 8) {
   return asText(text)
-    .split(/\r?\n/)
+    .replace(/\r/g, "\n")
+    .split(/\n|[•●▪◦]/)
     .map((line) => line.replace(/^[-*#\s]+/, "").trim())
     .filter((line) => line.length >= 8)
     .slice(0, limit);
+}
+
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function normalizeSearchText(value) {
+  return asText(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+const CONTEXT_STOP_WORDS = new Set([
+  "about",
+  "after",
+  "base",
+  "case",
+  "confluence",
+  "data",
+  "description",
+  "display",
+  "docs",
+  "field",
+  "from",
+  "jira",
+  "link",
+  "page",
+  "task",
+  "technical",
+  "test",
+  "that",
+  "this",
+  "tool",
+  "user",
+  "value",
+  "with",
+  "bang",
+  "cac",
+  "cho",
+  "cua",
+  "duoc",
+  "hien",
+  "khong",
+  "khi",
+  "nguoi",
+  "nhung",
+  "testcase",
+  "trong",
+  "tren",
+  "voi",
+]);
+
+function keywordsFrom(value, limit = 32) {
+  const seen = new Set();
+  const tokens = normalizeSearchText(value).match(/[a-z0-9]{4,}/g) || [];
+  const keywords = [];
+  for (const token of tokens) {
+    if (CONTEXT_STOP_WORDS.has(token) || seen.has(token)) continue;
+    seen.add(token);
+    keywords.push(token);
+    if (keywords.length >= limit) break;
+  }
+  return keywords;
+}
+
+function uniqueLines(lines, limit = 12) {
+  const seen = new Set();
+  const result = [];
+  for (const line of lines.map(asText).filter(Boolean)) {
+    const key = normalizeSearchText(line).replace(/\s+/g, " ");
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(line);
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+
+function selectRelevantDocLines(docContext, anchorText, limit = 5) {
+  const lines = uniqueLines(compactLines(docContext, 40), 40);
+  if (!lines.length) return [];
+  const keywords = keywordsFrom(anchorText, 40);
+  if (!keywords.length) return lines.slice(0, Math.min(limit, 3));
+  return lines
+    .map((line) => {
+      const normalized = normalizeSearchText(line);
+      const score = keywords.reduce((total, keyword) => total + (normalized.includes(keyword) ? 1 : 0), 0);
+      return { line, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map((item) => item.line)
+    .slice(0, limit);
+}
+
+function sourceContextFrom(issue, sourceInput = {}) {
+  const structured = sourceInput && typeof sourceInput === "object" && !Array.isArray(sourceInput);
+  const rawNotes = structured ? asText(sourceInput.qaNotes || sourceInput.notes) : asText(sourceInput);
+  const rawDoc = structured ? asText(sourceInput.docContext) : "";
+  const summary = asText(issue.summary || issue.title);
+  const description = asText(issue.description);
+  const issueLines = uniqueLines(compactLines(description || summary, 12), 12);
+  const qaNoteLines = uniqueLines(compactLines(rawNotes, 4), 4);
+  const anchorText = [summary, description, rawNotes].filter(Boolean).join("\n");
+  const docLines = selectRelevantDocLines(rawDoc, anchorText, 6);
+  const primaryLines = uniqueLines([...issueLines, ...qaNoteLines], 14);
+  return {
+    summary,
+    description,
+    issueLines,
+    qaNoteLines,
+    docLines,
+    primaryLines: primaryLines.length ? primaryLines : [summary || "Phạm vi task"],
+    docContextApplied: Boolean(docLines.length),
+    docContextIgnored: Boolean(rawDoc && !docLines.length),
+  };
+}
+
+function workflowMode(issue, archetypeKey) {
+  const text = normalizeSearchText(`${issue.summary} ${issue.description} ${issue.issue_type}`);
+  const isConversation = archetypeKey === "chatbot" || /\b(chatbot|conversation|multi\s*turn|message|tin\s*nhan|agent|handoff|ce)\b/.test(text);
+  const isIntegration =
+    archetypeKey === "tool_api" ||
+    /\b(api|callback|endpoint|payload|webhook|mapping|downstream|bms|vcms|contract)\b/.test(text);
+  return {
+    isConversation,
+    isIntegration,
+    unit: isConversation ? "Conversation" : isIntegration ? "Integration" : "Feature",
+  };
+}
+
+function shortText(value, limit = 96) {
+  const text = asText(value).replace(/\s+/g, " ");
+  return text.length > limit ? `${text.slice(0, limit - 1).trim()}...` : text;
 }
 
 function parseIssueReference(input) {
@@ -1211,9 +1347,15 @@ function chooseArchetype(issue, forced) {
   let best = "general";
   let bestScore = 0;
   for (const [key, archetype] of Object.entries(ARCHETYPES)) {
-    const score = archetype.keywords.reduce((total, keyword) => {
+    let score = archetype.keywords.reduce((total, keyword) => {
       return total + (haystack.includes(keyword.toLowerCase()) ? 1 : 0);
     }, 0);
+    if (key === "tool_api") {
+      const hasStrongIntegrationTerm = /\b(api|callback|endpoint|payload|webhook|mapping|bms|vcms|downstream|contract)\b/i.test(haystack);
+      if (!hasStrongIntegrationTerm && score < 2) {
+        score = 0;
+      }
+    }
     if (score > bestScore) {
       best = key;
       bestScore = score;
@@ -1237,195 +1379,195 @@ function step(description, testData, expectedResult) {
   };
 }
 
-function buildCases(issue, archetypeKey, notes = "", aiCustomization = null) {
+function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = null) {
   const archetype = ARCHETYPES[archetypeKey] || ARCHETYPES.general;
   const key = issue.key || "JIRA-TASK";
-  const summary = issue.summary || issue.title || "Phạm vi task";
-  const scopeLines = compactLines(`${issue.description}\n${notes}`, 16);
-  const guidanceLines = compactLines(aiGuidanceText(aiCustomization), 6);
-  const contextLines = [...scopeLines, ...archetype.dimensions, ...guidanceLines].filter(Boolean);
-  const pick = (index, fallback) => contextLines[index % Math.max(contextLines.length, 1)] || fallback;
-  const mainRule = scopeLines[0] || summary;
-  const secondRule = scopeLines[1] || archetype.dimensions[0];
-  const isToolOrChatbot =
-    ["tool_api", "chatbot"].includes(archetypeKey) ||
-    /\b(tool|bot|chat|agent|conversation|bus|route|trip|endpoint|callback|api)\b/i.test(`${summary} ${issue.description}`);
+  const context = sourceContextFrom(issue, sourceInput);
+  const summary = context.summary || issue.title || "Phạm vi task";
+  const mode = workflowMode(issue, archetypeKey);
+  const guidanceLines = compactLines(aiGuidanceText(aiCustomization), 4);
+  const coverageLines = uniqueLines([...context.primaryLines, ...guidanceLines], 16);
+  const pick = (index, fallback) => coverageLines[index % Math.max(coverageLines.length, 1)] || fallback;
+  const targetCount = clampNumber(
+    4 +
+      Math.min(context.issueLines.length || 1, 10) +
+      Math.min(context.qaNoteLines.length, 2) +
+      Math.min(context.docLines.length, 5) +
+      (mode.isConversation || mode.isIntegration || archetypeKey === "workflow" ? 2 : 0) +
+      (context.description.length > 1800 ? 2 : 0),
+    6,
+    22,
+  );
   const precondition = [
-    `Task ${key} đã có build hoặc môi trường test sẵn sàng.`,
-    "QA có dữ liệu test phù hợp với scope trong Jira.",
-    "Các dependency liên quan đã được cấu hình đúng trên môi trường test.",
+    `Task ${key} đã được fetch đúng Jira summary, description và status mới nhất.`,
+    "QA có môi trường test và dữ liệu test phù hợp với scope trong Jira.",
+    context.docContextApplied
+      ? "Doc Confluence được dùng như tài liệu tham chiếu bổ sung, không thay thế acceptance criteria trong Jira."
+      : "Không dùng Confluence doc nếu task hiện tại không nhập Base URL/doc link hoặc doc không liên quan tới Jira description.",
   ].join("\n");
 
-  const quoteLines = (messages) =>
-    messages
+  const quoteLines = (items) =>
+    items
       .filter(Boolean)
-      .map((message, index) => `${index + 1}. "${message.replace(/"/g, '\\"')}"`)
+      .map((message, index) => `${index + 1}. "${asText(message).replace(/"/g, '\\"')}"`)
       .join("\n");
-  const unitName = (index) => (isToolOrChatbot ? `Tool ${Math.max(1, Math.ceil(index / 5))}` : "Feature");
-  const userMessages = (index, intent) => {
-    if (isToolOrChatbot) {
-      return [
-        `${intent} cho ${summary}`,
-        "Em liệt kê giúp anh các lựa chọn phù hợp và giải thích ngắn gọn nhé.",
-      ];
+  const testInputsFor = (intent) => {
+    if (mode.isConversation) {
+      return [`Tin nhắn/flow user thể hiện nhu cầu: ${intent}`, "Dữ liệu hội thoại đủ để kiểm tra expected behavior trong Jira."];
     }
-    return [
-      `Mở chức năng ${summary}`,
-      `Thực hiện kiểm tra: ${intent}`,
-    ];
+    if (mode.isIntegration) {
+      return [`Payload/request/data setup cho requirement: ${intent}`, "Dữ liệu downstream hoặc mock response đúng với scope task."];
+    }
+    return [`Màn hình/chức năng liên quan tới: ${summary}`, `Dữ liệu test cho requirement: ${intent}`];
   };
   const makeStructuredSteps = (item) => [
     step(
-      isToolOrChatbot ? "Mở một conversation mới với bot/agent." : "Chuẩn bị dữ liệu và mở màn hình/chức năng cần kiểm thử.",
-      quoteLines(item.messages),
+      mode.isConversation
+        ? "Chuẩn bị conversation hoặc message state đúng theo Jira task."
+        : mode.isIntegration
+          ? "Chuẩn bị request, payload, dữ liệu nguồn và dependency liên quan."
+          : "Chuẩn bị dữ liệu và mở màn hình/chức năng cần kiểm thử.",
+      quoteLines(item.inputs),
       "",
     ),
     step(item.action, item.stepData || "", ""),
-    step("Kiểm tra kết quả hiển thị, dữ liệu trả về và side effect liên quan.", "", expectation(...item.checks)),
+    step("Đối chiếu kết quả với Jira description/acceptance criteria và tài liệu tham chiếu liên quan.", "", expectation(...item.checks)),
   ];
 
-  const seed = [
-    {
-      title: `${unitName(1)} xử lý đúng luồng chính của ${summary}`,
-      objective: `Chứng minh business rule chính: ${mainRule}`,
-      priority: "High",
+  const candidates = [];
+  const addCandidate = (item) => {
+    candidates.push({
+      priority: "Normal",
       technique: archetype.primary[0],
-      risk: "Sai rule chính làm task không đạt acceptance intent.",
-      tags: ["happy_path", "business_rule"],
-      scenario: "happy_path",
-      messages: userMessages(1, mainRule),
-      action: "Thực hiện luồng chính từ đầu đến cuối theo mô tả Jira/Confluence.",
-      stepData: `Task: ${key}\nRule: ${mainRule}`,
-      checks: ["Hệ thống xử lý thành công.", "Kết quả cuối cùng đúng với mô tả Jira/Confluence.", "Không phát sinh lỗi ngoài scope."],
-    },
+      tags: [],
+      scenario: "coverage",
+      ...item,
+    });
+  };
+
+  context.primaryLines.slice(0, 10).forEach((line, index) => {
+    const isMain = index === 0;
+    addCandidate({
+      title: `${mode.unit} ${isMain ? "bao phủ luồng chính" : "bao phủ yêu cầu"}: ${shortText(line, 76)}`,
+      objective: `Xác nhận requirement trong Jira: ${line}`,
+      priority: isMain ? "High" : index <= 3 ? "High" : "Normal",
+      technique: isMain ? archetype.primary[0] : archetype.primary[index % archetype.primary.length] || "Use-case / scenario flow",
+      risk: "Nếu requirement này bị hiểu sai, draft test case sẽ pass nhưng task vẫn không đạt acceptance intent.",
+      tags: [isMain ? "happy_path" : "jira_requirement", "jira_description"],
+      scenario: isMain ? "happy_path" : "requirement_coverage",
+      inputs: testInputsFor(line),
+      action: `Thực hiện luồng hoặc biến thể kiểm thử bám trực tiếp requirement: ${line}`,
+      stepData: `Jira source: ${line}`,
+      checks: [
+        "Kết quả thực tế khớp đúng wording/intent trong Jira description.",
+        "Không lấy rule từ tài liệu khác nếu Jira task không yêu cầu.",
+        "Không phát sinh side effect ngoài phạm vi task này.",
+      ],
+    });
+  });
+
+  context.docLines.slice(0, 6).forEach((line, index) => {
+    addCandidate({
+      title: `${mode.unit} kiểm tra rule tham chiếu từ doc: ${shortText(line, 72)}`,
+      objective: `Đối chiếu doc liên quan với Jira scope, chỉ áp dụng phần có keyword khớp task: ${line}`,
+      priority: index <= 1 ? "High" : "Normal",
+      technique: "Reference doc validation",
+      risk: "Doc hỗ trợ bị bỏ qua hoặc áp dụng sai phần không thuộc scope task.",
+      tags: ["confluence_reference", "doc_grounding"],
+      scenario: "reference_doc",
+      inputs: testInputsFor(line),
+      action: "Thực hiện biến thể có dữ liệu/điều kiện được mô tả trong doc tham chiếu và liên quan trực tiếp tới Jira task.",
+      stepData: `Confluence related line: ${line}`,
+      checks: [
+        "Chỉ rule trong doc có liên quan tới Jira description được áp dụng.",
+        "Nếu Jira và doc lệch nhau, Jira description/AC được ưu tiên.",
+        "Output không kéo thêm tool/flow ngoài phạm vi task hiện tại.",
+      ],
+    });
+  });
+
+  const guardrails = [
     {
-      title: `${unitName(1)} chỉ xử lý khi đủ điều kiện bắt buộc của ${summary}`,
-      objective: "Bao phủ các nhánh điều kiện quan trọng thay vì chỉ test happy path.",
-      priority: "High",
-      technique: archetype.primary[1] || "Decision table",
-      risk: "Một nhánh điều kiện phụ xử lý sai nhưng không bị phát hiện bởi happy path.",
-      tags: ["decision_table", "branching"],
-      scenario: "validation",
-      messages: userMessages(2, secondRule),
-      action: "Thử các tổ hợp điều kiện chính và điều kiện phụ có thể làm đổi kết quả.",
-      stepData: archetype.dimensions.map((item, index) => `${index + 1}. ${item}`).join("\n"),
-      checks: ["Các nhánh chính, nhánh phụ và nhánh default được xác định rõ.", "Mỗi tổ hợp trả đúng outcome mong đợi.", "Không có tổ hợp bị rơi vào default sai."],
-    },
-    {
-      title: `${unitName(1)} không được xử lý khi thiếu dữ liệu bắt buộc`,
-      objective: "Đảm bảo hệ thống không xử lý sai khi input thiếu hoặc không hợp lệ.",
-      priority: "High",
+      title: `${mode.unit} không xử lý sai khi thiếu dữ liệu bắt buộc`,
       technique: archetype.supporting[0] || "Boundary value analysis",
-      risk: "Thiếu dữ liệu làm sai mapping, sai hiển thị hoặc sai trạng thái.",
-      tags: ["validation", "missing_data"],
-      scenario: "negative_path",
-      messages: userMessages(3, `thiếu ${pick(2, "dữ liệu bắt buộc")}`),
-      action: "Gửi/tạo dữ liệu thiếu required field, null hoặc rỗng.",
-      stepData: `Required/critical data: ${archetype.dimensions.slice(0, 3).join(", ")}`,
-      checks: ["Hệ thống hiển thị hoặc ghi nhận lỗi rõ ràng.", "Không gọi downstream hoặc lưu dữ liệu sai.", "Không crash, không lưu trạng thái không nhất quán."],
+      tag: "missing_data",
+      applies: true,
+      check: "Thiếu required data/null/empty được xử lý rõ ràng, không tạo trạng thái hoặc kết quả sai.",
     },
     {
-      title: `${unitName(1)} trả nearest match hoặc fallback đúng khi không có dữ liệu khớp hoàn toàn`,
-      objective: "Đảm bảo hệ thống xử lý đúng khi dữ liệu gần đúng hoặc thiếu match trực tiếp.",
-      priority: "High",
-      technique: "Fallback / partial failure / recovery",
-      risk: "Không có match trực tiếp nhưng hệ thống trả sai dữ liệu hoặc im lặng.",
-      tags: ["fallback", "nearest_match"],
-      scenario: "edge_case",
-      messages: userMessages(4, `không có dữ liệu khớp hoàn toàn cho ${pick(3, "điều kiện lọc")}`),
-      action: "Tạo request có dữ liệu gần đúng, thiếu match hoặc kết quả rỗng.",
-      stepData: `Fallback dimension: ${pick(3, "empty downstream response")}`,
-      checks: ["Hệ thống trả fallback/nearest match theo rule.", "Không tự bịa dữ liệu ngoài source of truth.", "Thông báo đủ rõ để user biết cần bổ sung điều kiện."],
+      title: `${mode.unit} từ chối hoặc hướng dẫn đúng khi input ngoài scope`,
+      technique: "Negative path / out-of-scope",
+      tag: "out_of_scope",
+      applies: true,
+      check: "Request ngoài mô tả Jira task không được tự mở rộng sang doc/tool khác.",
     },
     {
-      title: `${unitName(1)} không reuse stale context khi user đổi điều kiện`,
-      objective: "Đảm bảo context mới ghi đè context cũ đúng rule.",
-      priority: "Normal",
+      title: `${mode.unit} giữ đúng context mới nhất khi user đổi điều kiện`,
       technique: "State transition",
-      risk: "Bot hoặc flow dùng lại context cũ khiến kết quả sai.",
-      tags: ["state_transition", "stale_context"],
-      scenario: "workflow",
-      messages: ["Tạo điều kiện ban đầu cho task.", "Đổi sang điều kiện khác trước khi hệ thống trả kết quả cuối."],
-      action: "Thực hiện multi-turn flow có thay đổi input quan trọng giữa chừng.",
-      stepData: `Context cần reset/carry-forward: ${pick(4, "state carry-forward")}`,
-      checks: ["Context mới được ưu tiên đúng rule.", "Không reuse dữ liệu cũ khi user đã đổi điều kiện.", "Trace/log thể hiện input cuối cùng được dùng."],
+      tag: "state_transition",
+      applies: mode.isConversation || archetypeKey === "workflow",
+      check: "Context mới nhất được ưu tiên, không reuse dữ liệu hoặc doc của task/turn trước.",
     },
     {
-      title: `${unitName(2)} gọi đúng endpoint hoặc downstream key mặc định`,
-      objective: "Kiểm tra integration contract và key mapping tới downstream.",
-      priority: "High",
+      title: `${mode.unit} mapping đúng request/response và field hiển thị`,
       technique: "Integration contract / field mapping",
-      risk: "Sai endpoint/key làm downstream trả sai dữ liệu dù UI nhìn có vẻ hợp lệ.",
-      tags: ["integration_contract", "mapping"],
-      scenario: "integration",
-      messages: userMessages(6, `mapping ${pick(5, "endpoint/key")}`),
-      action: "Theo dõi request tới downstream/tool và response trả về.",
-      stepData: `Expected mapping: ${pick(5, "required fields / endpoint")}`,
-      checks: ["Bot/service gọi đúng tool hoặc endpoint cần dùng.", "Payload không thiếu field bắt buộc.", "Không dùng field nội bộ hoặc key không thuộc scope user."],
+      tag: "mapping",
+      applies: mode.isIntegration || mode.isConversation,
+      check: "Payload, field hiển thị và response mapping đúng source of truth của task.",
     },
     {
-      title: `${unitName(2)} trả đúng catalog hoặc danh sách dữ liệu theo group`,
-      objective: "Đảm bảo danh sách trả về được group/sort đúng với source.",
-      priority: "Normal",
-      technique: "Decision table",
-      risk: "Danh sách/group sai làm user chọn nhầm option.",
-      tags: ["catalog", "grouping"],
-      scenario: "validation",
-      messages: userMessages(7, `group/sort theo ${pick(6, "business rule")}`),
-      action: "Đối chiếu output với source data sau khi tool trả danh sách.",
-      stepData: `Grouping/sort rule: ${pick(6, "grouping / ordering rule")}`,
-      checks: ["Danh sách trả về được group đúng rule.", "Không trộn dữ liệu giữa các group.", "Các field hiển thị đủ để user phân biệt option."],
+      title: `${mode.unit} fallback đúng khi dependency lỗi hoặc trả rỗng`,
+      technique: "Fallback / partial failure / recovery",
+      tag: "fallback",
+      applies: mode.isIntegration || mode.isConversation || archetypeKey === "workflow",
+      check: "Timeout/empty/error response được xử lý fail-safe và có thông báo phù hợp.",
     },
     {
-      title: `${unitName(2)} bám source of truth khi user nhập dữ liệu mơ hồ`,
-      objective: "Kiểm tra ambiguity handling và không xác nhận sai dữ liệu.",
-      priority: "Normal",
-      technique: "Equivalence partitioning",
-      risk: "Input mơ hồ bị hiểu thành dữ liệu cụ thể không đúng.",
-      tags: ["ambiguous_input", "source_of_truth"],
-      scenario: "negative_path",
-      messages: userMessages(8, `input mơ hồ quanh ${pick(7, "selection")}`),
-      action: "Gửi input thiếu định danh hoặc có nhiều khả năng match.",
-      stepData: `Ambiguous field: ${pick(7, "ambiguous user input")}`,
-      checks: ["Bot/service không tự xác nhận option chưa đủ bằng chứng.", "Hệ thống hỏi lại hoặc trả danh sách lựa chọn phù hợp.", "Không ghi nhận state cuối khi chưa chốt."],
+      title: `${mode.unit} không tạo duplicate khi retry cùng thao tác`,
+      technique: "Retry / idempotency / duplicate event",
+      tag: "retry",
+      applies: mode.isIntegration || archetypeKey === "workflow",
+      check: "Retry không tạo kết quả/trạng thái trùng hoặc ghi nhận sai.",
+    },
+    {
+      title: `${mode.unit} hiển thị dữ liệu đúng sau reload hoặc refresh`,
+      technique: "Regression",
+      tag: "ui_regression",
+      applies: archetypeKey === "reporting" || /\b(hiển thị|highlight|display|screen|ui|message)\b/i.test(`${issue.summary} ${issue.description}`),
+      check: "Dữ liệu vẫn đúng sau reload/refresh và không bị mất binding.",
+    },
+    {
+      title: `${mode.unit} regression các luồng cũ gần vùng thay đổi`,
+      technique: "Risk-based regression",
+      tag: "regression",
+      applies: true,
+      check: "Luồng cũ cùng module vẫn giữ behavior trước khi task được triển khai.",
     },
   ];
 
-  seed.push(
-    ...[
-      ["không xác nhận dữ liệu ngoài phạm vi hợp lệ", "Boundary value analysis", "invalid_data", "Dữ liệu ngoài danh mục/ngoài route/ngoài rule không được chấp nhận."],
-      ["giữ đúng lựa chọn user ở bước trước khi chuyển sang bước sau", "State transition", "carry_forward", "Selection key/state được carry-forward đúng qua multi-turn."],
-      ["chuẩn hóa price/options hoặc output format trước khi trả user", "Integration contract / field mapping", "output_mapping", "Output được chuẩn hóa đúng format và không mất field quan trọng."],
-      ["xử lý phụ phí, điều kiện bổ sung hoặc metadata đi kèm", "Decision table", "metadata", "Metadata/điều kiện phụ không bị bỏ sót khi tạo kết quả cuối."],
-      ["trả nhiều nhóm dữ liệu nhưng vẫn giữ applicable option rõ ràng", "Pairwise / combinatorial", "multi_group", "Nhiều group/option vẫn phân biệt rõ và không lẫn điều kiện áp dụng."],
-      ["resolve lại selection key qua bước trước khi user chọn option", "State transition", "selection_key", "Key lựa chọn được resolve lại từ source, không dựa vào text hiển thị đơn thuần."],
-      ["hỏi lại khi user chưa chốt đủ thông tin", "Use-case / scenario flow", "clarification", "Luồng hỏi lại đủ ngắn gọn và không gọi tool quá sớm."],
-      ["fallback đúng khi downstream timeout hoặc trả lỗi", "Fallback / partial failure / recovery", "downstream_failure", "Timeout/5xx/empty response được xử lý fail-safe."],
-      ["không tạo duplicate khi retry cùng request", "Retry / idempotency / duplicate event", "retry", "Retry không tạo dữ liệu/trạng thái trùng ngoài rule."],
-      ["không rò rỉ context giữa conversation hoặc user khác", "Risk-based regression", "cross_context", "Context không bị lẫn giữa user/session/entity khác."],
-      ["regression luồng cũ cùng module vẫn hoạt động", "Regression", "regression", "Luồng cũ gần vùng thay đổi vẫn giữ behavior trước đó."],
-      ["ghi nhận out-of-scope hoặc unsupported request đúng cách", "Error guessing / bug-history based", "out_of_scope", "Unsupported/out-of-scope được từ chối hoặc hướng dẫn rõ ràng."],
-    ].map(([title, technique, tag, check], offset) => {
-      const index = offset + 9;
-      return {
-        title: `${unitName(index)} ${title} cho ${summary}`,
-        objective: `Bao phủ ${title}.`,
-        priority: index === 16 ? "High" : "Normal",
-        technique,
-        risk: check,
-        tags: [tag, "omni_v2_coverage"],
-        scenario: tag,
-        messages: userMessages(index, pick(index, title)),
-        action: `Thực hiện biến thể kiểm thử: ${title}.`,
-        stepData: `Coverage reference: ${pick(index, check)}`,
-        checks: [check, "Kết quả bám đúng Jira/Confluence và source of truth.", "Không phát sinh side effect ngoài scope."],
-      };
-    }),
-  );
+  guardrails
+    .filter((item) => item.applies)
+    .forEach((item, index) => {
+      const reference = pick(index, item.check);
+      addCandidate({
+        title: item.title,
+        objective: `Bao phủ rủi ro: ${item.check}`,
+        priority: index <= 1 ? "High" : "Normal",
+        technique: item.technique,
+        risk: item.check,
+        tags: [item.tag, "risk_based"],
+        scenario: item.tag,
+        inputs: testInputsFor(reference),
+        action: `Thực hiện biến thể kiểm thử rủi ro: ${item.title}.`,
+        stepData: `Reference from Jira/doc: ${reference}`,
+        checks: [item.check, "Kết quả vẫn bám Jira description/AC.", "Không phát sinh side effect ngoài scope."],
+      });
+    });
 
-  return seed.map((item, index) => {
+  const selected = candidates.slice(0, targetCount);
+  return selected.map((item, index) => {
     const steps = makeStructuredSteps(item);
-    const testData = quoteLines(item.messages);
+    const testData = quoteLines(item.inputs);
     const expectedResult = steps
       .flatMap((itemStep) => itemStep.expected_result.split("\n"))
       .filter(Boolean)
@@ -1447,10 +1589,12 @@ function buildCases(issue, archetypeKey, notes = "", aiCustomization = null) {
   });
 }
 
-function buildOutline(issue, archetypeKey, cases = [], notes = "", aiCustomization = null) {
+function buildOutline(issue, archetypeKey, cases = [], sourceInput = {}, aiCustomization = null) {
   const archetype = ARCHETYPES[archetypeKey] || ARCHETYPES.general;
   const title = issue.title || `[${issue.key || "JIRA-TASK"}] ${issue.summary || "Test design"}`;
-  const scopeLines = compactLines(`${issue.description}\n${notes}`, 8);
+  const context = sourceContextFrom(issue, sourceInput);
+  const scopeLines = context.primaryLines.slice(0, 8);
+  const docLines = context.docLines.slice(0, 4);
   const caseTitles = Array.isArray(cases)
     ? cases
         .map((testCase) => asText(testCase.title).replace(/^\[TC[_-]\d{4}\]\s*/, ""))
@@ -1462,27 +1606,27 @@ function buildOutline(issue, archetypeKey, cases = [], notes = "", aiCustomizati
     [
       `Xác nhận business rule chính: ${scopeLines[0] || issue.summary || "đúng scope Jira"}`,
       `Bao phủ luồng thành công cho ${issue.key || "task"}`,
-      "Kết quả cuối cùng khớp mô tả và acceptance intent",
+      "Kết quả cuối cùng khớp mô tả và acceptance intent trong Jira",
     ],
     [
-      `Kiểm tra ${archetype.dimensions[0]}`,
-      `Kiểm tra ${archetype.dimensions[1]}`,
-      `Kiểm tra ${archetype.dimensions[2] || "các biến thể dữ liệu quan trọng"}`,
+      `Kiểm tra ${scopeLines[1] || archetype.dimensions[0]}`,
+      `Kiểm tra ${scopeLines[2] || archetype.dimensions[1]}`,
+      `Kiểm tra ${scopeLines[3] || archetype.dimensions[2] || "các biến thể dữ liệu quan trọng"}`,
     ],
     [
-      `Không xử lý sai khi ${archetype.dimensions[3] || "dữ liệu không đầy đủ"}`,
+      `Không xử lý sai khi ${scopeLines[4] || archetype.dimensions[3] || "dữ liệu không đầy đủ"}`,
       `Không mất context khi chuyển state hoặc reload`,
       `Không tạo side effect ngoài scope của ${issue.key || "task"}`,
     ],
     [
       `Regression từ case: ${caseTitles[0] || "luồng cũ cùng module"}`,
-      `Retry/duplicate vẫn nhất quán với rule mới`,
-      "Fallback rõ ràng khi dependency lỗi, timeout hoặc trả rỗng",
+      docLines[0] ? `Đối chiếu doc liên quan: ${shortText(docLines[0], 120)}` : "Retry/duplicate vẫn nhất quán với rule mới",
+      docLines[1] ? `Không áp dụng nhầm doc ngoài scope: ${shortText(docLines[1], 120)}` : "Fallback rõ ràng khi dependency lỗi, timeout hoặc trả rỗng",
     ],
     [
       "Không kiểm thử thay đổi ngoài mô tả Jira task này",
+      context.docContextIgnored ? "Không dùng Confluence doc không có keyword liên quan tới Jira description" : "Không để tài liệu tham chiếu lấn át Jira description/AC",
       "Không xác nhận performance/load test nếu Jira không yêu cầu",
-      "Không thay đổi dữ liệu production hoặc cấu hình thật ngoài môi trường test",
     ],
   ];
 
@@ -1496,6 +1640,9 @@ function buildOutline(issue, archetypeKey, cases = [], notes = "", aiCustomizati
       status: issue.status,
       issue_type: issue.issue_type,
       description_excerpt: asText(issue.description).slice(0, 1600),
+      jira_scope_lines: scopeLines,
+      confluence_doc_lines_used: docLines,
+      confluence_doc_ignored_as_unrelated: context.docContextIgnored,
       ai_customization_applied: Boolean(aiCustomization),
       ai_customization_guidance: aiGuidanceText(aiCustomization) || undefined,
       ai_customization: aiCustomization || undefined,
@@ -1628,16 +1775,18 @@ app.post("/api/draft", async (req, res) => {
       );
       docContext = referenceDocs.combinedText;
     }
-    const notes = [asText(req.body?.notes), docContext ? `Confluence/reference docs:\n${docContext}` : ""]
-      .filter(Boolean)
-      .join("\n\n");
+    const sourceContext = {
+      qaNotes: asText(req.body?.notes),
+      docContext,
+    };
     const aiCustomization = aiCustomizationFromSettings(req.body?.aiSettings);
-    const testCases = buildCases(issue, archetypeKey, notes, aiCustomization);
-    const outline = buildOutline(issue, archetypeKey, testCases, notes, aiCustomization);
+    const testCases = buildCases(issue, archetypeKey, sourceContext, aiCustomization);
+    const outline = buildOutline(issue, archetypeKey, testCases, sourceContext, aiCustomization);
     res.json({
       archetypeKey,
       archetype: ARCHETYPES[archetypeKey],
       aiCustomizationApplied: Boolean(aiCustomization),
+      sourceContext: outline.source_context,
       referenceDocsFetched: referenceDocs,
       testCases,
       outline,
