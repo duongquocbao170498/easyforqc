@@ -365,6 +365,7 @@ function App() {
   const [aiSettings, setAiSettings] = useState<AiSettings>(emptyAiSettings);
   const [jiraUrl, setJiraUrl] = useState("");
   const [issue, setIssue] = useState<IssueSummary>(emptyIssue);
+  const [confluenceBaseUrl, setConfluenceBaseUrl] = useState("");
   const [notes, setNotes] = useState("");
   const [confluenceLinks, setConfluenceLinks] = useState("");
   const [docContext, setDocContext] = useState("");
@@ -409,7 +410,8 @@ function App() {
         nextCredentials = { ...nextCredentials, ...settings.credentials };
       }
       if (settings.confluenceCredentials) {
-        nextConfluenceCredentials = { ...nextConfluenceCredentials, ...settings.confluenceCredentials };
+        const { baseUrl: _taskBaseUrl, ...savedAuth } = settings.confluenceCredentials;
+        nextConfluenceCredentials = { ...nextConfluenceCredentials, ...savedAuth, baseUrl: "" };
       }
       if (settings.aiSettings) {
         nextAiSettings = { ...nextAiSettings, ...settings.aiSettings };
@@ -446,14 +448,19 @@ function App() {
     return defaults.archetypes[archetypeKey] || null;
   }, [defaults, archetypeKey]);
 
+  const taskConfluenceCredentials = {
+    ...confluenceCredentials,
+    baseUrl: confluenceBaseUrl.trim(),
+  };
+
   const requestBody = {
     jiraUrl,
     issue,
     project,
     credentials,
-    confluenceCredentials,
+    confluenceCredentials: taskConfluenceCredentials,
     confluenceLinks,
-    docContext: confluenceCredentials.baseUrl.trim() && docIssueKey === issue.key ? docContext : "",
+    docContext: confluenceBaseUrl.trim() && docIssueKey === issue.key ? docContext : "",
     aiSettings,
     notes,
     archetype: archetypeKey === "auto" ? undefined : archetypeKey,
@@ -485,6 +492,7 @@ function App() {
   }
 
   function clearTaskSpecificContext() {
+    setConfluenceBaseUrl("");
     setNotes("");
     setConfluenceLinks("");
     setDocContext("");
@@ -577,13 +585,14 @@ function App() {
   }
 
   async function saveUserSettings(section: SettingsSection) {
+    const savedConfluenceCredentials = { ...confluenceCredentials, baseUrl: "" };
     const body =
       section === "project"
         ? { project }
         : section === "credentials"
           ? { credentials }
           : section === "confluence"
-            ? { confluenceCredentials }
+            ? { confluenceCredentials: savedConfluenceCredentials }
             : { aiSettings };
     const label =
       section === "project"
@@ -651,11 +660,14 @@ function App() {
 
   function fetchConfluenceDocs() {
     setBusyRun("docs", async () => {
+      if (!confluenceBaseUrl.trim()) {
+        throw new Error("Nhập Confluence Base URL cho task này trước khi Fetch docs.");
+      }
       const payload = await apiPost<{ documents: { title: string; url: string; text: string; error?: string }[]; combinedText: string }>(
         "/api/confluence-docs",
         {
           links: confluenceLinks,
-          confluenceCredentials,
+          confluenceCredentials: taskConfluenceCredentials,
         },
       );
       setDocContext(payload.combinedText);
@@ -674,7 +686,7 @@ function App() {
     setBusyRun("draft", async () => {
       const effectiveIssueKey = issueKeyFromText(jiraUrl) || issue.key;
       const effectiveIssue = { ...issue, key: effectiveIssueKey };
-      const shouldUseConfluenceDocs = Boolean(confluenceCredentials.baseUrl.trim() && docIssueKey === effectiveIssueKey);
+      const shouldUseConfluenceDocs = Boolean(confluenceBaseUrl.trim() && docIssueKey === effectiveIssueKey);
       const payload = await apiPost<{
         archetypeKey: string;
         testCases: TestCase[];
@@ -832,6 +844,17 @@ function App() {
             <h2>Jira task</h2>
           </div>
           <Field label="Jira URL hoặc issue key" value={jiraUrl} onChange={handleJiraUrlChange} placeholder="https://jira.vexere.net/browse/AI-707" />
+          <Field
+            label="Confluence Base URL cho task này"
+            value={confluenceBaseUrl}
+            onChange={(value) => {
+              setConfluenceBaseUrl(value);
+              setDocContext("");
+              setDocIssueKey(value.trim() && confluenceLinks.trim() ? issueKeyFromText(jiraUrl) || issue.key : "");
+            }}
+            placeholder="Optional, ví dụ https://confluence.vexere.net"
+          />
+          <div className="mini-note">Bỏ trống nếu task này không cần đọc doc Confluence.</div>
           <div className="button-row">
             <IconButton icon={<RefreshCw size={16} />} onClick={parseJiraLink} disabled={isWorking} title="Đọc issue key từ link">
               Parse
@@ -938,12 +961,6 @@ function App() {
             <FileText size={18} />
             <h2>Confluence auth</h2>
           </div>
-          <Field
-            label="Base URL"
-            value={confluenceCredentials.baseUrl}
-            onChange={(value) => setConfluenceCredentialValue("baseUrl", value)}
-            placeholder="https://confluence.vexere.net"
-          />
           <Field label="User" value={confluenceCredentials.user} onChange={(value) => setConfluenceCredentialValue("user", value)} placeholder="name@example.com" />
           <Field label="Password" value={confluenceCredentials.password} type="password" onChange={(value) => setConfluenceCredentialValue("password", value)} />
           <Field label="Token" value={confluenceCredentials.token} type="password" onChange={(value) => setConfluenceCredentialValue("token", value)} />
@@ -959,7 +976,7 @@ function App() {
           </div>
           {settingsStatus.confluence ? <div className="mini-note">{settingsStatus.confluence}</div> : null}
           <div className="mini-note">
-            Dùng để đọc doc Confluence khi task Jira có tài liệu mô tả flow/AC riêng.
+            Chỉ lưu thông tin đăng nhập. Base URL nhập riêng theo từng task ở mục Jira task.
           </div>
         </section>
 
@@ -1129,7 +1146,7 @@ function App() {
               onChange={(value) => {
                 setConfluenceLinks(value);
                 setDocContext("");
-                setDocIssueKey("");
+                setDocIssueKey(value.trim() && confluenceBaseUrl.trim() ? issueKeyFromText(jiraUrl) || issue.key : "");
               }}
               textarea
               rows={3}
@@ -1139,7 +1156,7 @@ function App() {
               <IconButton
                 icon={busy === "docs" ? <Loader2 className="spin" size={16} /> : <FileText size={16} />}
                 onClick={fetchConfluenceDocs}
-                disabled={isWorking || !confluenceLinks.trim()}
+                disabled={isWorking || !confluenceBaseUrl.trim() || !confluenceLinks.trim()}
               >
                 Fetch docs
               </IconButton>

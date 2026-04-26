@@ -1572,6 +1572,9 @@ app.post("/api/parse-jira", (req, res) => {
 app.post("/api/confluence-docs", async (req, res) => {
   try {
     const confluenceCredentials = normalizeConfluenceCredentials(req.body?.confluenceCredentials);
+    if (!asText(confluenceCredentials.baseUrl)) {
+      throw Object.assign(new Error("Nhập Confluence Base URL cho task này trước khi Fetch docs."), { status: 400 });
+    }
     const result = await fetchConfluenceDocuments(req.body?.links, confluenceCredentials);
     res.json(result);
   } catch (error) {
