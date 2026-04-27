@@ -1567,7 +1567,7 @@ function localTestCaseStyleExamples(issueKey = "") {
             (payload.purpose ? `Purpose: ${payload.purpose}\n` : "") +
             (Array.isArray(payload.rules) ? `Rules:\n${payload.rules.map((item) => `- ${item}`).join("\n")}\n` : "") +
             JSON.stringify(
-              cases.slice(0, 2).map((item) => ({
+              cases.slice(0, issueNumber && name.includes(`ai_${issueNumber}`) ? 8 : 2).map((item) => ({
                 title: stripTestCasePrefix(item.title),
                 precondition: item.precondition,
                 objective: item.objective,
@@ -1933,23 +1933,131 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
     mode.isConversation
       ? bulletList([`Conversation/state: ${titleFromIntent(item.objective || item.title)}`, `Task Jira: ${key}`])
       : bulletList(item.inputs);
+  const scenarioHints = (item) => {
+    const text = normalizeSearchText(`${item.title} ${item.objective} ${item.risk} ${(item.tags || []).join(" ")} ${item.scenario}`);
+    return {
+      ui: /\b(ui|popup|modal|screen|button|form|field|textarea|tag|chon|hien thi|highlight|message|reload|refresh)\b/.test(text),
+      multiSelect: /\b(multi|multiple|nhieu|tag|combination|select|deselect|bo chon)\b/.test(text),
+      boundary: /\b(boundary|limit|counter|400|empty|null|missing|thieu|rong|ki tu|ky tu)\b/.test(text),
+      submit: /\b(submit|gui|record|langfuse|score|event|telemetry|feedback)\b/.test(text),
+      toolchain: /\b(tool|trace|langfuse|payload|api|response|mapping|trip|price|schedule|stop|seat)\b/.test(text),
+      state: /\b(state|transition|reload|refresh|doi|stale|reuse|context)\b/.test(text),
+    };
+  };
   const defaultStepsFor = (item) => {
     const scenario = titleFromIntent(item.title || item.objective);
     const scope = shortText(summary, 90);
+    const hints = scenarioHints(item);
+    if (item.scenario === "missing_data" || item.tags?.includes("missing_data")) {
+      return [
+        `Mở đúng flow/chức năng liên quan đến ${scope}.`,
+        `Thực hiện scenario thiếu dữ liệu: ${scenario}.`,
+        "Bỏ trống, xoá hoặc nhập giá trị rỗng cho dữ liệu bắt buộc cần kiểm tra.",
+        "Quan sát validation, fallback message và trạng thái dữ liệu sau thao tác.",
+      ];
+    }
+    if (item.scenario === "out_of_scope" || item.tags?.includes("out_of_scope")) {
+      return [
+        `Mở flow/chức năng trong phạm vi task ${key}.`,
+        `Nhập hoặc thực hiện biến thể ngoài scope: ${scenario}.`,
+        "Quan sát hệ thống có từ chối, hỏi lại hoặc giữ nguyên phạm vi xử lý hay không.",
+        "Đối chiếu log/UI/output để bảo đảm không mở rộng sang flow hoặc tài liệu không thuộc task.",
+      ];
+    }
+    if (item.scenario === "state_transition" || item.tags?.includes("state_transition")) {
+      return [
+        `Thiết lập state ban đầu đúng với precondition của ${scenario}.`,
+        "Thực hiện thao tác làm thay đổi state hoặc context hiện tại.",
+        "Lặp lại thao tác chuyển state theo biến thể ngược hoặc state kế tiếp nếu có.",
+        "Đối chiếu dữ liệu sau cùng để bảo đảm không reuse state cũ hoặc mất context mới nhất.",
+      ];
+    }
+    if (item.scenario === "mapping" || item.tags?.includes("mapping")) {
+      return [
+        "Chuẩn bị dữ liệu nguồn, trace hoặc payload chuẩn để đối chiếu mapping.",
+        `Thực hiện scenario cần kiểm tra mapping: ${scenario}.`,
+        "Mở UI/log/API response liên quan sau khi thao tác hoàn tất.",
+        "Đối chiếu từng field quan trọng giữa source of truth và dữ liệu hệ thống hiển thị hoặc gửi đi.",
+      ];
+    }
+    if (item.scenario === "fallback" || item.tags?.includes("fallback")) {
+      return [
+        `Chuẩn bị điều kiện lỗi, dữ liệu rỗng hoặc dependency không trả kết quả cho ${scenario}.`,
+        "Thực hiện thao tác chính khi điều kiện fallback đang xảy ra.",
+        "Quan sát thông báo, retry behavior và trạng thái UI/output sau fallback.",
+        "Đối chiếu để bảo đảm hệ thống không tạo dữ liệu sai, không crash và không tự bịa kết quả.",
+      ];
+    }
+    if (item.scenario === "retry" || item.tags?.includes("retry")) {
+      return [
+        "Chuẩn bị một request/action có thể retry hoặc bị gửi lại.",
+        `Thực hiện lần đầu scenario: ${scenario}.`,
+        "Gửi lại cùng request/action hoặc trigger retry theo cơ chế hiện tại.",
+        "Kiểm tra dữ liệu sau retry để bảo đảm không duplicate, không ghi đè sai và không đổi trạng thái ngoài mong đợi.",
+      ];
+    }
+    if (item.scenario === "ui_regression" || item.tags?.includes("ui_regression")) {
+      return [
+        `Mở màn hình hoặc popup liên quan đến ${scope}.`,
+        `Thực hiện đúng biến thể UI: ${scenario}.`,
+        "Refresh/reload hoặc đóng mở lại màn hình để kiểm tra tính ổn định.",
+        "Đối chiếu layout, dữ liệu hiển thị và binding sau reload với trạng thái trước đó.",
+      ];
+    }
+    if (item.scenario === "reference_doc" || item.tags?.includes("confluence_reference")) {
+      return [
+        "Đọc rule hoặc flow liên quan trong doc đã fetch cho task hiện tại.",
+        `Chuẩn bị dữ liệu/điều kiện đại diện cho rule: ${scenario}.`,
+        "Thực hiện scenario trên môi trường test và ghi nhận output thực tế.",
+        "Đối chiếu output với Jira description trước, sau đó mới đối chiếu phần doc liên quan.",
+      ];
+    }
+    if (hints.multiSelect) {
+      return [
+        `Mở đúng UI/flow chứa lựa chọn cho scenario: ${scenario}.`,
+        "Chọn một giá trị hợp lệ trước để xác nhận trạng thái ban đầu.",
+        "Chọn thêm hoặc bỏ bớt nhiều giá trị theo tổ hợp cần kiểm thử.",
+        "Quan sát số lượng control, dữ liệu đã nhập và trạng thái cuối sau khi thay đổi tổ hợp.",
+      ];
+    }
+    if (hints.boundary) {
+      return [
+        `Mở field/control cần kiểm thử boundary cho ${scenario}.`,
+        "Nhập dữ liệu ở ngưỡng hợp lệ thấp nhất hoặc trạng thái rỗng/null.",
+        "Nhập dữ liệu ở đúng ngưỡng tối đa hoặc vượt ngưỡng một đơn vị.",
+        "Quan sát validation, counter, lưu dữ liệu và thông báo lỗi nếu có.",
+      ];
+    }
+    if (hints.submit) {
+      return [
+        `Mở flow submit liên quan đến ${scenario}.`,
+        "Nhập đầy đủ dữ liệu hợp lệ cho scenario này.",
+        "Nhấn nút gửi/lưu/xác nhận đúng một lần và quan sát trạng thái ngay sau submit.",
+        "Mở log, bảng dữ liệu hoặc hệ thống downstream để đối chiếu record/event vừa tạo.",
+      ];
+    }
+    if (hints.toolchain) {
+      return [
+        `Mở conversation/trace hoặc chuẩn bị payload cho scenario: ${scenario}.`,
+        "Thực hiện input đầu tiên để trigger tool/API đầu chuỗi.",
+        "Đi tiếp các bước cần thiết để trigger tool/API kế tiếp theo đúng thứ tự.",
+        "Đối chiếu trace, tool input/output và câu trả lời cuối với dữ liệu live.",
+      ];
+    }
     if (mode.isConversation) {
       return [
-        "Mở conversation mới hoặc conversation có state đúng với precondition của testcase.",
-        "Gửi lần lượt từng message user trong bộ dữ liệu kiểm tra.",
-        `Quan sát phản hồi, tool call hoặc handoff cho scenario: ${scenario}.`,
-        "Kiểm tra context mới nhất, nguồn dữ liệu và side effect sau lượt hội thoại.",
+        `Mở conversation mới hoặc conversation có state phù hợp cho ${scenario}.`,
+        "Gửi message đầu tiên trong bộ test data và chờ bot phản hồi.",
+        "Gửi tiếp các message bổ sung của scenario nếu test data có nhiều turn.",
+        "Đối chiếu phản hồi, trace/tool call và context cuối cùng với expected result.",
       ];
     }
     if (mode.isIntegration) {
       return [
-        "Chuẩn bị payload/request và dependency đúng với precondition của testcase.",
+        `Chuẩn bị payload/request và dependency cho ${scenario}.`,
         `Gửi request/callback/event cho scenario: ${scenario}.`,
-        "Kiểm tra response, mapping field và trạng thái được ghi nhận sau xử lý.",
-        "Retry hoặc đối chiếu log/dữ liệu downstream để bảo đảm không phát sinh duplicate hoặc side effect ngoài scope.",
+        "Kiểm tra response chính và trạng thái hệ thống ngay sau xử lý.",
+        "Đối chiếu log/dữ liệu downstream để bảo đảm mapping đúng và không phát sinh side effect ngoài scope.",
       ];
     }
     if (archetypeKey === "reporting") {
@@ -2695,7 +2803,9 @@ app.post("/api/draft", async (req, res) => {
     let aiGenerationError = "";
     let aiUsage = null;
     if (aiSettings.enabled && !aiProviderReady(aiSettings)) {
-      aiGenerationError = "AI Settings đang bật nhưng thiếu API key hoặc model, nên app dùng fallback local.";
+      throw Object.assign(new Error("AI Settings đang bật nhưng thiếu API key hoặc model. Hãy nhập đủ API key/model hoặc tắt AI Settings để dùng fallback local."), {
+        status: 400,
+      });
     } else if (aiProviderReady(aiSettings)) {
       try {
         const aiDraft = await generateAiDraft({
@@ -2713,7 +2823,12 @@ app.post("/api/draft", async (req, res) => {
         aiGenerationUsed = true;
         aiUsage = aiDraft.usage;
       } catch (error) {
-        aiGenerationError = `AI provider lỗi, app dùng fallback local: ${error instanceof Error ? error.message : "Không tạo được AI draft."}`;
+        throw Object.assign(
+          new Error(`AI provider lỗi nên không generate fallback local: ${error instanceof Error ? error.message : "Không tạo được AI draft."}`),
+          {
+            status: error.status || 502,
+          },
+        );
       }
     }
     res.json({

@@ -1158,7 +1158,7 @@ function App() {
           </div>
           {settingsStatus.ai ? <div className="mini-note">{settingsStatus.ai}</div> : null}
           <div className="mini-note">
-            API key và guideline được lưu mã hoá theo account. Nếu bỏ tích, các thông tin này vẫn được lưu nhưng không áp dụng khi generate.
+            API key và guideline được lưu mã hoá theo account. Khi bật AI Settings, app bắt buộc gọi AI provider thành công; nếu lỗi sẽ báo lỗi thay vì dùng fallback local.
           </div>
         </section>
       </aside>

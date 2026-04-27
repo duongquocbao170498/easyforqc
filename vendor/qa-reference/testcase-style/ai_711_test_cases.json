@@ -1,0 +1,154 @@
+{
+  "purpose": "Reference style for UI feedback/detail reason tasks. Use as writing and step-variation example only; derive final content from current Jira/doc.",
+  "rules": [
+    "Each testcase must have scenario-specific steps, not a shared template.",
+    "Steps should mirror the real QA workflow: open target UI, perform the exact variant, observe UI/state, then verify persistence/log/integration when relevant.",
+    "For multi-select, boundary, submit, and regression cases, steps must differ according to the risk being tested.",
+    "Use concrete UI labels and backend/event names when they are known."
+  ],
+  "test_cases": [
+    {
+      "title": "[TC_0001] Chọn 1 tag bất kỳ khác `Khác` vẫn hiển thị area nhập Chi tiết lý do",
+      "precondition": "Đăng nhập vào Chatwoot/OmniAgent UAT; mở một conversation có AI message đã hiện action dislike; popup dislike đang ở trạng thái ban đầu chưa chọn tag nào.",
+      "objective": "Khóa lỗi gốc của ticket: area `Chi tiết lý do` không còn phụ thuộc riêng vào tag `Khác`.",
+      "priority": "High",
+      "technique": "Error guessing / bug-history based",
+      "risk": "UI vẫn giữ logic cũ, chỉ bấm `Khác` mới hiện textbox nên feedback mất dữ liệu chi tiết cho các tag còn lại.",
+      "requirement_ref": "AI-711 summary + user clarification ngày 2026-04-24",
+      "coverage_tags": [
+        "single-select",
+        "non-other-tag",
+        "visibility-rule",
+        "ui-regression"
+      ],
+      "scenario_type": "ui-feedback-popup",
+      "steps": [
+        "Mở popup dislike từ một AI message.",
+        "Chọn lần lượt một tag không phải `Khác`, ví dụ `Sai hướng dẫn/quy trình` hoặc `Sai thông tin kiến thức`.",
+        "Quan sát khu vực bên dưới nhóm tag ngay sau khi chọn."
+      ],
+      "test_data": "Popup dislike có các tag lý do như screenshot UAT ngày 2026-04-24.",
+      "expected_result": "- Ngay khi chọn 1 tag bất kỳ khác `Khác`, area `Chi tiết lý do` xuất hiện bên dưới danh sách tag<br />- Placeholder nhập chi tiết và bộ đếm ký tự được render đúng trong area này<br />- Không cần chọn tag `Khác` mới thấy textbox như hành vi cũ<br />- Popup không bị vỡ layout hoặc nhảy vị trí bất thường khi area được bật lên"
+    },
+    {
+      "title": "[TC_0002] Chọn nhiều tag chỉ hiển thị đúng 1 area nhập Chi tiết lý do dùng chung",
+      "precondition": "Đã mở popup dislike; chưa submit feedback; có thể chọn nhiều tag lý do trong cùng popup.",
+      "objective": "Xác nhận rule mới áp dụng ổn định khi multi-select và không nhân đôi vùng nhập chi tiết.",
+      "priority": "High",
+      "technique": "Decision table",
+      "risk": "Mỗi tag tạo ra một textbox riêng hoặc textbox bị mất khi chuyển từ 1 tag sang nhiều tag.",
+      "requirement_ref": "User clarification: chọn 1 tag bất kỳ hay nhiều tag cũng hiển thị 1 chỗ nhập chi tiết",
+      "coverage_tags": [
+        "multi-select",
+        "shared-textarea",
+        "selection-combination"
+      ],
+      "scenario_type": "ui-feedback-popup",
+      "steps": [
+        "Mở popup dislike từ một AI message.",
+        "Chọn 2-3 tag khác nhau, bao gồm case chỉ tag thường và case có cả tag `Khác` trong cùng lần chọn.",
+        "Nhập một đoạn nội dung ngắn vào area `Chi tiết lý do`.",
+        "Bật thêm hoặc bỏ bớt một tag nhưng vẫn giữ ít nhất 1 tag đang được chọn.",
+        "Quan sát số lượng textbox và nội dung đã nhập."
+      ],
+      "test_data": "Ví dụ chọn `Sai hướng dẫn/quy trình` + `Sai thông tin kiến thức` + `Khác`; nhập `Bot trả lời thiếu bối cảnh ở turn cuối`.",
+      "expected_result": "- Khi chọn nhiều tag, popup chỉ hiển thị đúng 1 area `Chi tiết lý do` dùng chung<br />- Không xuất hiện textbox trùng lặp theo số tag được chọn<br />- Nội dung đã nhập không bị mất khi thêm hoặc bỏ bớt tag, miễn là vẫn còn ít nhất 1 tag đang được chọn<br />- Có thể giữ đồng thời tag `Khác` với tag khác mà không làm thay đổi rule 1 textbox dùng chung"
+    },
+    {
+      "title": "[TC_0003] Rule hiển thị area nhập chi tiết vẫn đúng khi chỉ chọn `Khác` hoặc khi bỏ hết tag đã chọn",
+      "precondition": "Popup dislike đang mở và chưa submit.",
+      "objective": "Bao phủ regression của hành vi cũ và trạng thái rỗng sau khi bỏ lựa chọn.",
+      "priority": "Normal",
+      "technique": "Regression",
+      "risk": "Fix mới vô tình làm hỏng đường đi cũ của tag `Khác` hoặc để textbox treo khi không còn tag nào được chọn.",
+      "requirement_ref": "Regression from previous behavior before AI-711",
+      "coverage_tags": [
+        "other-tag",
+        "deselect-all",
+        "state-transition"
+      ],
+      "scenario_type": "ui-feedback-popup",
+      "steps": [
+        "Mở popup dislike và chỉ chọn riêng tag `Khác`.",
+        "Quan sát area `Chi tiết lý do`.",
+        "Sau đó bỏ chọn `Khác` hoặc bỏ hết toàn bộ tag đang chọn trong popup.",
+        "Quan sát lại phần area nhập chi tiết."
+      ],
+      "test_data": "Tag `Khác` trong popup dislike.",
+      "expected_result": "- Khi chỉ chọn riêng tag `Khác`, area `Chi tiết lý do` vẫn hiển thị bình thường như trước đây<br />- Khi bỏ hết toàn bộ tag đã chọn, area `Chi tiết lý do` không còn hiển thị treo trên popup<br />- Popup quay về trạng thái không chọn lý do mà không để lại textbox rỗng hoặc layout lỗi<br />- Fix mới không làm regress nhánh cũ vốn chỉ dựa vào tag `Khác`"
+    },
+    {
+      "title": "[TC_0004] Area Chi tiết lý do giữ đúng giới hạn 400 ký tự cho mọi tổ hợp tag",
+      "precondition": "Popup dislike đang mở; đã chọn ít nhất 1 tag để area `Chi tiết lý do` hiển thị.",
+      "objective": "Kiểm tra boundary của field mới được mở rộng phạm vi sử dụng.",
+      "priority": "Normal",
+      "technique": "Boundary value analysis",
+      "risk": "Field mới hiển thị cho nhiều case hơn nhưng bộ đếm hoặc giới hạn 400 ký tự hoạt động sai.",
+      "requirement_ref": "Screenshot popup dislike hiển thị counter `0/400`",
+      "coverage_tags": [
+        "character-limit",
+        "boundary",
+        "textarea"
+      ],
+      "scenario_type": "ui-feedback-popup",
+      "steps": [
+        "Chọn ít nhất 1 tag để mở area `Chi tiết lý do`.",
+        "Nhập nội dung đến đúng 400 ký tự và quan sát counter.",
+        "Tiếp tục thử nhập vượt quá 400 ký tự hoặc paste một chuỗi dài hơn giới hạn.",
+        "Lặp lại nhanh với case multi-select để chắc chắn cùng một rule được áp dụng."
+      ],
+      "test_data": "Chuỗi kiểm thử có độ dài 400 ký tự và chuỗi vượt ngưỡng 400 ký tự.",
+      "expected_result": "- Bộ đếm ký tự phản ánh đúng số ký tự đã nhập trong area `Chi tiết lý do`<br />- Hệ thống không cho lưu nội dung vượt quá 400 ký tự hoặc chặn vượt ngưỡng theo đúng rule hiện tại của field<br />- Khi đổi từ single-select sang multi-select, giới hạn 400 ký tự vẫn giữ nguyên và không reset sai<br />- Không phát sinh lỗi render, lag hoặc mất nội dung khi paste text dài sát ngưỡng"
+    },
+    {
+      "title": "[TC_0005] Submit feedback với 1 tag thường và nội dung chi tiết tạo được record `user_feedback` trên Langfuse",
+      "precondition": "Có AI message có thể bấm dislike; popup dislike mở được; có quyền xem Langfuse project `vexere/chatbot`; đang lọc được bảng Scores theo event name `user_feedback`.",
+      "objective": "Xác nhận end-to-end từ UI submit đến telemetry trên Langfuse cho case 1 tag không phải `Khác`.",
+      "priority": "High",
+      "technique": "Use-case / scenario flow",
+      "risk": "UI đã hiện textbox nhưng submit không gửi được hoặc không tạo record theo dõi sau submit.",
+      "requirement_ref": "User clarification ngày 2026-04-24: check ở Langfuse > Scores với event `user_feedback`",
+      "coverage_tags": [
+        "submit",
+        "single-select",
+        "langfuse",
+        "user_feedback"
+      ],
+      "scenario_type": "ui-feedback-popup",
+      "steps": [
+        "Mở popup dislike từ một AI message cụ thể.",
+        "Chọn 1 tag không phải `Khác`, ví dụ `Sai hướng dẫn/quy trình`.",
+        "Nhập nội dung chi tiết hợp lệ vào area `Chi tiết lý do`.",
+        "Nhấn `Gửi` và quan sát trạng thái popup ngay sau submit.",
+        "Mở Langfuse > Scores, lọc event name `user_feedback`, rồi đối chiếu trace mới nhất với thời điểm vừa submit."
+      ],
+      "test_data": "Tag: `Sai hướng dẫn/quy trình`\nChi tiết: `Bot hướng dẫn lệch flow ở bước cuối nên cần góp ý thêm.`",
+      "expected_result": "- Sau khi bấm `Gửi`, feedback được submit thành công, popup không treo loading vô hạn và không hiện lỗi frontend bất thường<br />- Ở Langfuse > Scores xuất hiện record mới với event name `user_feedback` tương ứng thời điểm vừa submit<br />- Record `user_feedback` gắn với trace `on_message` của AI message vừa bị dislike, không lệch sang trace khác<br />- Có thể đối chiếu tối thiểu bằng timestamp, trace name và message context để xác nhận đúng case vừa test"
+    },
+    {
+      "title": "[TC_0006] Submit feedback với nhiều tag vẫn chỉ tạo 1 lần gửi hợp lệ và 1 record `user_feedback` tương ứng trên Langfuse",
+      "precondition": "Có AI message có thể bấm dislike; popup dislike cho phép chọn nhiều tag; có quyền xem Langfuse Scores với filter `user_feedback`.",
+      "objective": "Khóa regression của multi-select ở lớp telemetry, tránh gửi lặp hoặc log sai do dùng chung một area nhập chi tiết.",
+      "priority": "High",
+      "technique": "Decision table",
+      "risk": "Multi-select làm UI gửi trùng nhiều request hoặc Langfuse sinh nhiều record `user_feedback` cho cùng một thao tác.",
+      "requirement_ref": "AI-711 summary + user clarification multi-tag",
+      "coverage_tags": [
+        "submit",
+        "multi-select",
+        "langfuse",
+        "duplicate-guard"
+      ],
+      "scenario_type": "ui-feedback-popup",
+      "steps": [
+        "Mở popup dislike từ một AI message.",
+        "Chọn từ 2 tag trở lên, gồm ít nhất 1 tag thường; có thể thêm `Khác` nếu muốn.",
+        "Nhập một đoạn chi tiết chung vào area `Chi tiết lý do`.",
+        "Nhấn `Gửi` đúng 1 lần.",
+        "Mở Langfuse > Scores và tìm record `user_feedback` mới nhất vừa phát sinh cho trace liên quan."
+      ],
+      "test_data": "Tag: `Sai hướng dẫn/quy trình` + `Sai thông tin kiến thức`\nChi tiết: `Câu trả lời vừa sai flow vừa thiếu context nên cần ghi nhận chung trong một feedback.`",
+      "expected_result": "- UI gửi feedback thành công cho tổ hợp nhiều tag mà vẫn dùng chung 1 nội dung chi tiết<br />- Không có hiện tượng gửi lặp, disable sai nút `Gửi` hoặc tạo nhiều modal success/error chồng nhau từ một lần bấm<br />- Ở Langfuse > Scores chỉ có 1 record `user_feedback` mới tương ứng cho lần submit đó, không tạo nhiều record trùng cùng timestamp do multi-select<br />- Trace được gắn với đúng `on_message` vừa bị dislike để người kiểm thử có thể đối chiếu lại"
+    }
+  ]
+}
