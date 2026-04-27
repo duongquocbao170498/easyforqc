@@ -49,6 +49,8 @@ if (DATABASE_URL) {
 }
 
 const HOME_DIR = process.env.HOME || "";
+const LOCAL_OMNIAGENT_ROOT = path.join(HOME_DIR, "Vexere", "knowledge_base", "omniagent");
+const LOCAL_QA_REFERENCE_DIR = path.join(HOME_DIR, "Vexere", "qa");
 const VENDOR_DIR = path.join(ROOT_DIR, "vendor");
 const VENDOR_JIRA_WRAPPER = path.join(
   VENDOR_DIR,
@@ -90,6 +92,43 @@ const VENDOR_SOURCE_ROOT = path.join(VENDOR_DIR, "qa-source");
 const DEFAULT_SOURCE_ROOT = fsSync.existsSync(VENDOR_SOURCE_ROOT)
   ? VENDOR_SOURCE_ROOT
   : "/Users/gumball.bi/Vexere/knowledge_base/omniagent/.agent/skills";
+const DEFAULT_REPO_INCLUDE_PATHS = [
+  ".agent/skills",
+  "AGENTS.md",
+  "README.md",
+  "docs",
+  "guides",
+  "sops",
+  "system-prompts",
+  "references",
+  "scripts",
+  "config",
+  "src",
+  "app",
+  "tests",
+  "packages",
+  "articles",
+  "researchs",
+].join("\n");
+const DEFAULT_REPO_EXCLUDE_PATHS = [
+  "node_modules",
+  ".git",
+  ".idea",
+  ".obsidian",
+  ".venv",
+  "dist",
+  "build",
+  "coverage",
+  "backtests_v2",
+  "docs/_generated",
+  ".DS_Store",
+  ".env",
+  ".env.*",
+  "*.pem",
+  "*.key",
+  "*secret*",
+  "*token*",
+].join("\n");
 
 const DEFAULTS = {
   sourceRoot: process.env.QA_SOURCE_ROOT || DEFAULT_SOURCE_ROOT,
@@ -100,11 +139,11 @@ const DEFAULTS = {
   outputDir: path.join(ROOT_DIR, "qa", "xmind-test-design"),
   repoContext: {
     enabled: process.env.QA_REPO_CONTEXT_ENABLED === "true",
-    productRepoRoot: process.env.QA_PRODUCT_REPO_ROOT || "",
-    qaReferenceDir: process.env.QA_REFERENCE_DIR || "",
-    includePaths: process.env.QA_REPO_INCLUDE_PATHS || "src\napp\ntests\nqa\n.agent/skills",
-    excludePaths: process.env.QA_REPO_EXCLUDE_PATHS || "node_modules\n.git\ndist\nbuild\n.env\n.env.*\n*.pem\n*.key\n*secret*\n*token*",
-    maxSnippets: process.env.QA_REPO_MAX_SNIPPETS || "10",
+    productRepoRoot: process.env.QA_PRODUCT_REPO_ROOT || (fsSync.existsSync(LOCAL_OMNIAGENT_ROOT) ? LOCAL_OMNIAGENT_ROOT : ""),
+    qaReferenceDir: process.env.QA_REFERENCE_DIR || (fsSync.existsSync(LOCAL_QA_REFERENCE_DIR) ? LOCAL_QA_REFERENCE_DIR : ""),
+    includePaths: process.env.QA_REPO_INCLUDE_PATHS || DEFAULT_REPO_INCLUDE_PATHS,
+    excludePaths: process.env.QA_REPO_EXCLUDE_PATHS || DEFAULT_REPO_EXCLUDE_PATHS,
+    maxSnippets: process.env.QA_REPO_MAX_SNIPPETS || "12",
   },
   labelPolicy: {
     mode: "custom",
@@ -936,6 +975,7 @@ function normalizeSearchText(value) {
   return asText(value)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[đĐ]/g, "d")
     .toLowerCase();
 }
 
@@ -981,7 +1021,7 @@ const CONTEXT_STOP_WORDS = new Set([
 
 function keywordsFrom(value, limit = 32) {
   const seen = new Set();
-  const tokens = normalizeSearchText(value).match(/[a-z0-9]{4,}/g) || [];
+  const tokens = normalizeSearchText(value).match(/[a-z0-9]{3,}/g) || [];
   const keywords = [];
   for (const token of tokens) {
     if (CONTEXT_STOP_WORDS.has(token) || seen.has(token)) continue;
@@ -1430,6 +1470,30 @@ function pathList(value) {
     .filter(Boolean);
 }
 
+function mergePathRules(...values) {
+  return dedupeStrings(values.flatMap((value) => pathList(value))).join("\n");
+}
+
+function isPathInside(parent, child) {
+  if (!parent || !child) return false;
+  const relative = path.relative(path.resolve(parent), path.resolve(child));
+  return Boolean(relative && !relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function inferOmniAgentRoot(rootDir) {
+  const root = asText(rootDir);
+  if (!root) return "";
+  const resolved = path.resolve(root);
+  if (path.basename(resolved).toLowerCase() === "omniagent") {
+    return resolved;
+  }
+  const nested = path.join(resolved, "knowledge_base", "omniagent");
+  if (fsSync.existsSync(nested)) {
+    return nested;
+  }
+  return "";
+}
+
 function wildcardToRegExp(pattern) {
   const escaped = escapeRegExp(pattern).replace(/\\\*/g, ".*");
   return new RegExp(`(^|/)${escaped}($|/)`, "i");
@@ -1511,6 +1575,17 @@ async function readFileHead(filePath, limit = QA_EVIDENCE_FILE_BYTES) {
 }
 
 function evidenceSnippetsFromText(text, keywords, limit = 3) {
+  const priorityTerms = [
+    "amr",
+    "score",
+    "low_amr",
+    "on_message",
+    "on_ce_message",
+    "chatwoot",
+    "conversation",
+    "message",
+    "highlight",
+  ];
   const lines = asText(text)
     .split(/\r?\n/)
     .map((line, index) => ({ index: index + 1, text: line.trim() }))
@@ -1519,10 +1594,20 @@ function evidenceSnippetsFromText(text, keywords, limit = 3) {
   for (const line of lines) {
     const normalized = normalizeSearchText(line.text);
     const keywordHits = keywords.filter((keyword) => normalized.includes(keyword));
+    const priorityScore = priorityTerms.reduce((total, term) => {
+      if (!normalized.includes(normalizeSearchText(term))) return total;
+      if (["amr", "low_amr", "on_message", "on_ce_message", "score"].includes(term)) return total + 18;
+      return total + 7;
+    }, 0);
+    const keywordScore = keywordHits.reduce((total, keyword) => {
+      if (["thi", "muc", "tieu", "ngay", "sau", "tin", "gui", "gia", "danh"].includes(keyword)) return total + 0.25;
+      if (keyword.length >= 5) return total + 2;
+      return total + 1;
+    }, 0);
     const markerScore = /\b(test|spec|describe|it\(|expect|component|service|controller|tool|api|message|score|amr|highlight)\b/i.test(line.text)
       ? 2
       : 0;
-    const score = keywordHits.length + markerScore;
+    const score = keywordScore + priorityScore + markerScore;
     if (score > 0) {
       scored.push({ line: line.index, text: line.text, score });
     }
@@ -1530,17 +1615,122 @@ function evidenceSnippetsFromText(text, keywords, limit = 3) {
   return scored.sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
-function evidenceRoots(repoContext = {}) {
+function evidenceRootDescriptors(repoContext = {}) {
   if (!repoContext.enabled) return [];
-  return dedupeStrings(
-    [
-      process.env.QA_EVIDENCE_ROOT,
-      repoContext.productRepoRoot,
-      repoContext.qaReferenceDir,
-    ]
-      .map(asText)
-      .filter(Boolean),
-  );
+  const descriptors = [];
+  const seen = new Set();
+  const addDescriptor = (descriptor) => {
+    const root = asText(descriptor.root);
+    if (!root) return;
+    const resolved = path.resolve(root);
+    if (seen.has(resolved)) return;
+    seen.add(resolved);
+    descriptors.push({ ...descriptor, root: resolved });
+  };
+
+  const envRoot = asText(process.env.QA_EVIDENCE_ROOT);
+  if (envRoot) {
+    addDescriptor({
+      root: inferOmniAgentRoot(envRoot) || envRoot,
+      source_type: inferOmniAgentRoot(envRoot) ? "product_omniagent" : "product_repo",
+      configured_root: envRoot,
+    });
+  }
+
+  const productRoot = asText(repoContext.productRepoRoot);
+  if (productRoot) {
+    const omniAgentRoot = inferOmniAgentRoot(productRoot);
+    addDescriptor({
+      root: omniAgentRoot || productRoot,
+      source_type: omniAgentRoot ? "product_omniagent" : "product_repo",
+      configured_root: productRoot,
+    });
+  }
+
+  const qaReferenceDir = asText(repoContext.qaReferenceDir);
+  if (qaReferenceDir) {
+    addDescriptor({
+      root: qaReferenceDir,
+      source_type: "qa_reference",
+      configured_root: qaReferenceDir,
+    });
+  }
+  return descriptors;
+}
+
+function evidenceIncludePathsFor(descriptor, settings) {
+  if (descriptor.source_type === "qa_reference") {
+    return "";
+  }
+  return mergePathRules(settings.includePaths, DEFAULT_REPO_INCLUDE_PATHS);
+}
+
+function evidenceExcludePathsFor(descriptor, settings) {
+  const excludes = pathList(settings.excludePaths);
+  if (descriptor.source_type !== "qa_reference") {
+    const qaReferenceDir = asText(settings.qaReferenceDir);
+    if (qaReferenceDir && isPathInside(descriptor.root, qaReferenceDir)) {
+      excludes.push(path.relative(descriptor.root, qaReferenceDir).split(path.sep).join("/"));
+    }
+    const nestedQaDir = path.join(descriptor.root, "qa");
+    if (fsSync.existsSync(nestedQaDir)) {
+      excludes.push("qa");
+    }
+  }
+  return dedupeStrings(excludes).join("\n");
+}
+
+function evidencePathSignalScore(relativePath, sourceType) {
+  const normalizedPath = relativePath.split(path.sep).join("/");
+  const lowerPath = normalizeSearchText(normalizedPath);
+  let score = sourceType === "product_omniagent" ? 90 : sourceType === "product_repo" ? 55 : -20;
+  const productSignals = [
+    [".agent/skills", 24],
+    ["bot-quality-audits", 36],
+    ["ai-agent-daily-improvement-loop", 34],
+    ["audit-conversation", 28],
+    ["query-omniagent-conversations", 26],
+    ["backfill-langfuse-scores", 24],
+    ["system-prompts", 20],
+    ["references", 18],
+    ["docs", 16],
+    ["guides", 16],
+    ["sops", 16],
+    ["scripts", 12],
+    ["config", 12],
+    ["src", 10],
+    ["app", 10],
+    ["tests", 8],
+  ];
+  for (const [marker, markerScore] of productSignals) {
+    if (lowerPath.includes(normalizeSearchText(marker))) score += markerScore;
+  }
+  if (sourceType !== "qa_reference" && /(^|\/)qa(\/|$)/i.test(normalizedPath)) {
+    score -= 120;
+  }
+  if (sourceType === "qa_reference") {
+    if (/(^|\/)jira(\/|$)/i.test(normalizedPath)) score += 8;
+    if (/test_cases|test-design|xmind/i.test(normalizedPath)) score += 6;
+  }
+  return score;
+}
+
+function selectEvidenceSnippets(candidates, maxSnippets) {
+  const sorted = [...candidates].sort((a, b) => b.score - a.score);
+  const product = sorted.filter((item) => item.source_type !== "qa_reference");
+  const reference = sorted.filter((item) => item.source_type === "qa_reference");
+  const referenceCap = product.length ? Math.min(2, Math.max(1, Math.floor(maxSnippets * 0.2))) : maxSnippets;
+  const productTarget = Math.max(0, maxSnippets - referenceCap);
+  const selected = [];
+  selected.push(...product.slice(0, productTarget));
+  selected.push(...reference.slice(0, Math.max(0, maxSnippets - selected.length)));
+  if (selected.length < maxSnippets) {
+    selected.push(...product.slice(productTarget, productTarget + (maxSnippets - selected.length)));
+  }
+  if (selected.length < maxSnippets) {
+    selected.push(...reference.slice(referenceCap, referenceCap + (maxSnippets - selected.length)));
+  }
+  return selected.slice(0, maxSnippets);
 }
 
 async function buildRepoEvidencePack(issue, repoContext, context) {
@@ -1566,41 +1756,64 @@ async function buildRepoEvidencePack(issue, repoContext, context) {
   const scannedRoots = [];
   const rootStatus = [];
   const maxSnippets = clampNumber(Number(settings.maxSnippets || QA_EVIDENCE_SNIPPET_LIMIT) || QA_EVIDENCE_SNIPPET_LIMIT, 1, 30);
-  for (const root of evidenceRoots(settings)) {
-    if (snippets.length >= maxSnippets) break;
+  const descriptors = evidenceRootDescriptors(settings);
+  for (const descriptor of descriptors) {
+    const root = descriptor.root;
     try {
       const stat = await fs.stat(root);
       if (!stat.isDirectory()) {
-        rootStatus.push({ root, exists: false, reason: "not_a_directory" });
+        rootStatus.push({
+          root,
+          configured_root: descriptor.configured_root,
+          source_type: descriptor.source_type,
+          exists: false,
+          reason: "not_a_directory",
+        });
         continue;
       }
     } catch {
-      rootStatus.push({ root, exists: false, reason: "not_found_or_inaccessible" });
+      rootStatus.push({
+        root,
+        configured_root: descriptor.configured_root,
+        source_type: descriptor.source_type,
+        exists: false,
+        reason: "not_found_or_inaccessible",
+      });
       continue;
     }
-    rootStatus.push({ root, exists: true, reason: "" });
+    rootStatus.push({
+      root,
+      configured_root: descriptor.configured_root,
+      source_type: descriptor.source_type,
+      exists: true,
+      reason: "",
+    });
     scannedRoots.push(root);
     const files = await listEvidenceFiles(root, QA_EVIDENCE_FILE_LIMIT, {
-      ...settings,
-      includePaths: path.resolve(root) === path.resolve(settings.qaReferenceDir || "") ? "" : settings.includePaths,
+      includePaths: evidenceIncludePathsFor(descriptor, settings),
+      excludePaths: evidenceExcludePathsFor(descriptor, settings),
     });
     for (const filePath of files) {
-      if (snippets.length >= maxSnippets) break;
       const relativePath = path.relative(root, filePath);
       const pathScore = keywords.reduce((total, keyword) => total + (normalizeSearchText(relativePath).includes(keyword) ? 2 : 0), 0);
       const text = await readFileHead(filePath);
       const lineSnippets = evidenceSnippetsFromText(text, keywords, 3);
-      const score = pathScore + lineSnippets.reduce((total, item) => total + item.score, 0);
-      if (score <= 0) continue;
+      if (!lineSnippets.length) continue;
+      const score =
+        evidencePathSignalScore(relativePath, descriptor.source_type) +
+        pathScore +
+        lineSnippets.reduce((total, item) => total + item.score, 0);
       snippets.push({
         root,
+        configured_root: descriptor.configured_root,
+        source_type: descriptor.source_type,
         path: relativePath,
         score,
         snippets: lineSnippets.map((item) => ({ line: item.line, text: item.text })),
       });
     }
   }
-  snippets.sort((a, b) => b.score - a.score);
+  const selectedSnippets = selectEvidenceSnippets(snippets, maxSnippets);
   return {
     enabled: true,
     roots: scannedRoots,
@@ -1608,7 +1821,11 @@ async function buildRepoEvidencePack(issue, repoContext, context) {
     keywords: keywords.slice(0, 20),
     include_paths: pathList(settings.includePaths),
     exclude_paths: pathList(settings.excludePaths),
-    snippets: snippets.slice(0, maxSnippets),
+    source_mix: selectedSnippets.reduce((counts, item) => {
+      counts[item.source_type] = (counts[item.source_type] || 0) + 1;
+      return counts;
+    }, {}),
+    snippets: selectedSnippets,
   };
 }
 
@@ -1665,8 +1882,9 @@ async function buildQaPlan({ issue, archetypeKey, sourceInput = {}, aiCustomizat
     source_priority: [
       "Jira summary/description/Acceptance Criteria",
       "Doc context đã fetch hoặc nội dung người dùng paste, chỉ khi liên quan rõ scope",
+      "Repo evidence loại product_omniagent/product_repo để hiểu domain, UI/API, system prompt và rule trong codebase",
       "QA notes và AI Settings guidance",
-      "Repo/local evidence snippets nếu tìm thấy keyword liên quan",
+      "QA reference snippets chỉ dùng để học style/cấu trúc testcase, không dùng làm scope thay Jira/repo",
     ],
     precondition_guidelines: buildPreconditionGuidelines(archetypeKey, signals, issue),
     source_context_summary: {
@@ -3788,7 +4006,9 @@ function buildAiDraftMessages({
     "## Source priority",
     "1. Jira summary and description are the primary source of scope.",
     "2. Confluence/doc context is supporting evidence only. Use it only when it clearly relates to the Jira task.",
-    "3. QA notes and AI Settings refine style/coverage; they must not override explicit Jira scope.",
+    "3. Repo evidence with `source_type=product_omniagent` or `product_repo` is domain/code grounding. Prefer it over old QA examples when deciding concrete behavior, data, and nearby regression.",
+    "4. Repo evidence with `source_type=qa_reference` and Local reference testcase style examples are writing/structure references only. Do not copy their scenario content unless it matches the current Jira.",
+    "5. QA notes and AI Settings refine style/coverage; they must not override explicit Jira scope.",
     "",
     "## Output rules",
     "- Do not create a fixed number of cases. Create as many as needed to cover the task well.",
@@ -3801,6 +4021,7 @@ function buildAiDraftMessages({
     "- Match the style of the existing OmniAgent QA suites such as `ai_703_test_cases.json` and `ai_707_test_cases_v2.json`: one testcase = one focused scenario, strong title, concrete precondition, realistic data, and 3-4 tester action steps.",
     "- If a current-issue reference style exists, use it as the closest writing and coverage example while still deriving the final output from the current Jira/doc context.",
     "- Do not copy the AI-703/AI-707 content unless the current Jira task is actually about that behavior. Use those suites only as writing/structure examples.",
+    "- When Repo/local evidence snippets include OmniAgent docs, skills, SOPs, system prompts, references, scripts, or config, use those snippets to make the cases less generic and closer to the actual product behavior.",
     "- For bus booking toolchain tasks, cover each named tool independently and the full inter-tool chain. Use exact tool names from the Jira/doc such as `bus_trip_schedule_catalog_tool`, `bus_trip_stop_catalog_tool`, `bus_trip_price_options_tool`, and `bus_trip_seat_map_tool` when applicable.",
     "- Do not write vague labels like `Tool 1`, `Tool 2`, or `Tool 3` when explicit tool names are available.",
     "- `test_data` must contain realistic test data. For chatbot/conversation flows, use numbered quoted user messages: `1. \"...\"`.",

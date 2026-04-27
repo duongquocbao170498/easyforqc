@@ -85,9 +85,9 @@ const emptyRepoContext: RepoContextSettings = {
   enabled: false,
   productRepoRoot: "",
   qaReferenceDir: "",
-  includePaths: "src\napp\ntests\nqa\n.agent/skills",
-  excludePaths: "node_modules\n.git\ndist\nbuild\n.env\n.env.*\n*.pem\n*.key\n*secret*\n*token*",
-  maxSnippets: "10",
+  includePaths: ".agent/skills\nAGENTS.md\nREADME.md\ndocs\nguides\nsops\nsystem-prompts\nreferences\nscripts\nconfig\nsrc\napp\ntests\npackages\narticles\nresearchs",
+  excludePaths: "node_modules\n.git\n.idea\n.obsidian\n.venv\ndist\nbuild\ncoverage\nbacktests_v2\ndocs/_generated\n.DS_Store\n.env\n.env.*\n*.pem\n*.key\n*secret*\n*token*",
+  maxSnippets: "12",
 };
 
 function projectFromDefaults(payload: DefaultsResponse): ProjectConfig {
@@ -1102,7 +1102,7 @@ function App() {
                 onChange={(value) => setRepoContextValue("includePaths", value)}
                 textarea
                 rows={4}
-                placeholder={"src\ntests\nqa"}
+                placeholder={".agent/skills\ndocs\nguides\nsops\nsystem-prompts\nreferences"}
               />
               <Field
                 label="Exclude paths"
