@@ -950,15 +950,44 @@ function uniqueLines(lines, limit = 12) {
   return result;
 }
 
-function selectRelevantDocLines(docContext, anchorText, limit = 5) {
-  const lines = uniqueLines(compactLines(docContext, 40), 40);
+function documentSignalScore(line, keywords = []) {
+  const normalized = normalizeSearchText(line);
+  const keywordScore = keywords.reduce((total, keyword) => total + (normalized.includes(keyword) ? 1 : 0), 0);
+  const toolScore = (line.match(/\b[a-z][a-z0-9_]*_tool\b/g) || []).length * 4;
+  const contractScore = [
+    "origin_selection_key",
+    "destination_selection_key",
+    "price_options",
+    "surcharge",
+    "meal_info",
+    "discount_type",
+    "resource_id",
+    "SeatTemplateId",
+    "route_stop",
+    "Synthetic",
+    "Hành trình ngược chiều",
+    "passenger_count",
+    "num_tickets",
+    "ticket_quantity",
+    "seat_group",
+    "bus_stop_id",
+  ].reduce((total, marker) => total + (line.includes(marker) || normalized.includes(normalizeSearchText(marker)) ? 3 : 0), 0);
+  const exampleScore = /\b(ví dụ|example|sample|contract|runtime|source-of-truth|fallback|validation)\b/i.test(line) ? 2 : 0;
+  return keywordScore + toolScore + contractScore + exampleScore;
+}
+
+function extractDocToolNames(docContext, limit = 10) {
+  return dedupeStrings(asText(docContext).match(/\b[a-z][a-z0-9_]*_tool\b/g) || []).slice(0, limit);
+}
+
+function selectRelevantDocLines(docContext, anchorText, limit = 10) {
+  const lines = uniqueLines(compactLines(docContext, 260), 160);
   if (!lines.length) return [];
   const keywords = keywordsFrom(anchorText, 40);
   if (!keywords.length) return lines.slice(0, Math.min(limit, 3));
   const ranked = lines
     .map((line) => {
-      const normalized = normalizeSearchText(line);
-      const score = keywords.reduce((total, keyword) => total + (normalized.includes(keyword) ? 1 : 0), 0);
+      const score = documentSignalScore(line, keywords);
       return { line, score };
     })
     .filter((item) => item.score > 0)
@@ -977,7 +1006,8 @@ function sourceContextFrom(issue, sourceInput = {}) {
   const issueLines = uniqueLines(compactLines(description || summary, 12), 12);
   const qaNoteLines = uniqueLines(compactLines(rawNotes, 4), 4);
   const anchorText = [summary, description, rawNotes].filter(Boolean).join("\n");
-  const docLines = selectRelevantDocLines(rawDoc, anchorText, 6);
+  const docLines = selectRelevantDocLines(rawDoc, anchorText, 12);
+  const docToolNames = extractDocToolNames(rawDoc);
   const primaryLines = uniqueLines([...issueLines, ...qaNoteLines], 14);
   return {
     summary,
@@ -985,6 +1015,8 @@ function sourceContextFrom(issue, sourceInput = {}) {
     issueLines,
     qaNoteLines,
     docLines,
+    docToolNames,
+    docContextLength: rawDoc.length,
     primaryLines: primaryLines.length ? primaryLines : [summary || "Phạm vi task"],
     docContextApplied: Boolean(docLines.length),
     docContextIgnored: Boolean(rawDoc && !docLines.length),
@@ -1503,6 +1535,10 @@ function aiProviderReady(settings = {}) {
   return Boolean(settings.enabled && settings.apiKey && settings.model);
 }
 
+function aiProviderConfigured(settings = {}) {
+  return Boolean(settings.apiKey && settings.model);
+}
+
 function truncateForPrompt(value, limit = 12000) {
   const text = asText(value);
   if (text.length <= limit) return text;
@@ -1696,65 +1732,12 @@ async function readAiProviderResponse(response, settings, url) {
 }
 
 function responseInputFromMessages(messages = []) {
-  return messages.map((message) => ({
-    role: message.role === "system" || message.role === "assistant" ? message.role : "user",
-    content: [{ type: "input_text", text: asText(message.content) }],
-  }));
-}
-
-function easyForQcDraftJsonSchema() {
-  return {
-    type: "object",
-    additionalProperties: true,
-    required: ["test_cases", "outline"],
-    properties: {
-      test_cases: {
-        type: "array",
-        items: {
-          type: "object",
-          additionalProperties: true,
-          required: ["title", "precondition", "objective", "steps", "test_data", "expected_result"],
-          properties: {
-            title: { type: "string" },
-            precondition: { type: "string" },
-            objective: { type: "string" },
-            priority: { type: "string" },
-            technique: { type: "string" },
-            risk: { type: "string" },
-            requirement_ref: { type: "string" },
-            coverage_tags: { type: "array", items: { type: "string" } },
-            scenario_type: { type: "string" },
-            steps: { type: "array", items: { type: "string" } },
-            test_data: { type: "string" },
-            expected_result: { type: "string" },
-          },
-        },
-      },
-      outline: {
-        type: "object",
-        additionalProperties: true,
-        properties: {
-          issue_key: { type: "string" },
-          title: { type: "string" },
-          sheet_title: { type: "string" },
-          template: { type: "string" },
-          source_context: { type: "object", additionalProperties: true },
-          design_rationale: { type: "object", additionalProperties: true },
-          branches: {
-            type: "array",
-            items: {
-              type: "object",
-              additionalProperties: true,
-              properties: {
-                title: { type: "string" },
-                items: { type: "array", items: { type: "string" } },
-              },
-            },
-          },
-        },
-      },
-    },
-  };
+  return messages
+    .filter((message) => message.role !== "system")
+    .map((message) => ({
+      role: message.role === "assistant" ? "assistant" : "user",
+      content: [{ type: "input_text", text: asText(message.content) }],
+    }));
 }
 
 function extractResponsesOutputText(payload) {
@@ -1795,15 +1778,11 @@ async function callOpenAiResponses(settings, messages) {
   };
   const body = {
     model: settings.model,
+    instructions: messages.find((message) => message.role === "system")?.content || undefined,
     input: responseInputFromMessages(messages),
     max_output_tokens: 12000,
     text: {
-      format: {
-        type: "json_schema",
-        name: "easyforqc_draft",
-        strict: false,
-        schema: easyForQcDraftJsonSchema(),
-      },
+      format: { type: "json_object" },
     },
   };
   try {
@@ -2151,6 +2130,8 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
   const key = issue.key || "JIRA-TASK";
   const context = sourceContextFrom(issue, sourceInput);
   const summary = context.summary || issue.title || "Phạm vi task";
+  const rawDocText = asText(sourceInput?.docContext);
+  const normalizedDocText = normalizeSearchText(rawDocText);
   const mode = workflowMode(issue, archetypeKey);
   const guidanceLines = compactLines(aiGuidanceText(aiCustomization), 4);
   const coverageLines = uniqueLines([...context.primaryLines, ...guidanceLines], 16);
@@ -2169,7 +2150,7 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
     `Task ${key} đã được fetch đúng Jira summary, description và status mới nhất.`,
     "QA có môi trường test và dữ liệu test phù hợp với scope trong Jira.",
     context.docContextApplied
-      ? "Doc Confluence được dùng như tài liệu tham chiếu bổ sung, không thay thế acceptance criteria trong Jira."
+      ? `Doc Confluence đã fetch (${context.docContextLength.toLocaleString()} ký tự) được dùng như tài liệu tham chiếu bổ sung, không thay thế acceptance criteria trong Jira.`
       : "Không dùng Confluence doc nếu task hiện tại không nhập Base URL/doc link hoặc doc không liên quan tới Jira description.",
   ].join("\n");
 
@@ -2380,6 +2361,147 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
     });
   });
 
+  const hasDocTool = (name) => context.docToolNames.includes(name);
+  if (context.docContextApplied && context.docToolNames.length) {
+    const knownTools = context.docToolNames.join(" -> ");
+    addCandidate({
+      title: "Luồng bus discovery gọi đúng chuỗi tool theo doc kỹ thuật",
+      objective: `Xác minh test case dùng đúng tool name từ doc thay vì gọi chung chung Tool 1/Tool 2/Tool 3: ${knownTools}`,
+      priority: "High",
+      technique: "Use-case / scenario flow",
+      risk: "Draft hoặc bot bỏ qua doc nên không kiểm thử đúng chuỗi tool runtime đang chạy.",
+      tags: ["confluence_reference", "doc_tool_contract", "tool_chain"],
+      scenario: "reference_doc",
+      inputs: [
+        'User hỏi: "tối mai bmt đi sg còn vé giường dưới không"',
+        `Tool names trong doc: ${knownTools}`,
+        "Expected chain: resolve company/date -> schedule catalog -> stop catalog -> price options.",
+      ],
+      steps: [
+        "Mở conversation mới và gửi câu hỏi có route/date/operator ở giai đoạn discovery.",
+        "Kiểm tra trace đầu tiên có gọi `bus_trip_schedule_catalog_tool` với `company_id` và `departure_date`.",
+        "Sau khi chọn đúng chuyến/base trip, kiểm tra trace gọi `bus_trip_stop_catalog_tool` để lấy `origin_options` và `destination_options`.",
+        "Khi đã có điểm đón/trả, kiểm tra trace gọi `bus_trip_price_options_tool` bằng `origin_selection_key` và `destination_selection_key`.",
+      ],
+      checks: [
+        "`bus_trip_schedule_catalog_tool`, `bus_trip_stop_catalog_tool` và `bus_trip_price_options_tool` được gọi theo đúng thứ tự khi doc mô tả 3 tool riêng.",
+        "Không ghi generic `Tool 1`, `Tool 2`, `Tool 3` trong testcase hoặc expected result.",
+        "Câu trả lời cuối dùng dữ liệu từ tool output, không tự bịa giá/còn chỗ/điểm đón trả.",
+      ],
+    });
+  }
+
+  if (context.docContextApplied && hasDocTool("bus_trip_schedule_catalog_tool")) {
+    addCandidate({
+      title: "bus_trip_schedule_catalog_tool trả catalog chuyến theo company_id và departure_date",
+      objective: "Xác minh tool lịch chạy dùng đúng contract trong doc: liệt kê chuyến thực tế theo ngày, grouped theo base_trip_id.",
+      priority: "High",
+      technique: "Integration contract / field mapping",
+      risk: "Tool discovery không chốt được trip_id/base_trip_id đúng nên các bước stop/price phía sau sai.",
+      tags: ["confluence_reference", "schedule_catalog", "field_mapping"],
+      scenario: "mapping",
+      inputs: [
+        "company_id hợp lệ của nhà xe có chuyến trong ngày test.",
+        "departure_date có dữ liệu chuyến chạy thực tế.",
+        "User chưa nói giờ cụ thể hoặc hỏi một giờ không có chuyến.",
+      ],
+      steps: [
+        "Gửi câu hỏi discovery chỉ có route/date/operator và chưa chốt giờ cụ thể.",
+        "Kiểm tra trace gọi `bus_trip_schedule_catalog_tool` trước các tool stop/price.",
+        "Đối chiếu output có `routes[].base_trip_id`, `routes[].route_name`, `trip_schedules[].trip_id` và `trip_schedules[].time`.",
+        "Kiểm tra bot hỏi lại giờ hoặc trả danh sách giờ đang có khi user chưa nói giờ/chọn giờ không tồn tại.",
+      ],
+      checks: [
+        "Tool schedule không trả nhầm format single-tool cũ.",
+        "Bot chốt được `trip_id` và `base_trip_id` từ output trước khi gọi tool kế tiếp.",
+        "Không gọi pricing/availability dư thừa khi chưa có chuyến cụ thể.",
+      ],
+    });
+  }
+
+  if (context.docContextApplied && hasDocTool("bus_trip_stop_catalog_tool")) {
+    addCandidate({
+      title: "bus_trip_stop_catalog_tool map điểm đón trả thành selection_key đúng contract",
+      objective: "Xác minh stop catalog trả đủ origin/destination options để LLM map pickup, dropoff, transfer theo base_trip_id đã chốt.",
+      priority: "High",
+      technique: "Integration contract / field mapping",
+      risk: "Sai `origin_selection_key` hoặc `destination_selection_key` làm tính giá/đặt vé sai điểm.",
+      tags: ["confluence_reference", "stop_catalog", "selection_key"],
+      scenario: "mapping",
+      inputs: [
+        "`company_id`, `base_trip_id`, `departure_date` và `trip_id` đã chốt từ schedule catalog.",
+        'User nói điểm đón/trả cụ thể, ví dụ "đón Ngã Tư Sở Sao, trả Hồ Tây Đắk Mil".',
+      ],
+      steps: [
+        "Sau khi chốt chuyến, gọi/quan sát trace `bus_trip_stop_catalog_tool` với `company_id` và `base_trip_id`.",
+        "Nếu có `trip_id` và `departure_date`, kiểm tra tool lọc đúng config theo chuyến thực tế.",
+        "Đối chiếu output có `origin_options`, `destination_options`, endpoint, pickup/dropoff/transfer options.",
+        "Kiểm tra LLM chọn đúng `origin_selection_key` và `destination_selection_key` từ options thay vì tự dựng key.",
+      ],
+      checks: [
+        "`origin_options` và `destination_options` luôn có endpoint để chọn thống nhất hai phía.",
+        "Selection key dùng đúng format `origin:pickup...`, `destination:dropoff...` hoặc transfer tương ứng.",
+        "Nếu điểm mơ hồ, bot hỏi lại/gợi ý từ catalog thay vì tự chọn sai.",
+      ],
+    });
+  }
+
+  if (context.docContextApplied && hasDocTool("bus_trip_price_options_tool")) {
+    addCandidate({
+      title: "bus_trip_price_options_tool trả price_options source-of-truth và không tự nhân số vé",
+      objective: "Xác minh pricing tool bám contract doc: chỉ nhận selection_key đã chốt và trả price_options theo ticket_unit.",
+      priority: "High",
+      technique: "Decision table",
+      risk: "Tool hoặc bot dùng field legacy như passenger_count/num_tickets làm sai tổng tiền và surcharge.",
+      tags: ["confluence_reference", "price_options", "legacy_guardrail"],
+      scenario: "reference_doc",
+      inputs: [
+        "`company_id`, `departure_date`, `trip_id`, `base_trip_id` đã có từ hai tool trước.",
+        "`origin_selection_key` và `destination_selection_key` đã chốt.",
+        "Biến thể: user hỏi 1 vé, 3 vé, hoặc 3 người.",
+      ],
+      steps: [
+        "Gọi/quan sát trace `bus_trip_price_options_tool` sau khi đã có selection key hai phía.",
+        "Kiểm tra input không truyền `passenger_count`, `num_tickets` hoặc `ticket_quantity`.",
+        "Đối chiếu output `price_options[]`, `final_price_before_surcharge`, `origin_selection.surcharge_rule` và `destination_selection.surcharge_rule`.",
+        "Kiểm tra bot tự tính tổng ngoài tool khi user hỏi nhiều vé hoặc cần cộng surcharge.",
+      ],
+      checks: [
+        "`price_options` luôn là array và là source-of-truth cho giá theo một ticket_unit.",
+        "Surcharge không bị cộng trực tiếp sai vào từng option nếu doc quy định caller/LLM tự cộng ngoài tool.",
+        "Legacy single-tool fields không xuất hiện trong testcase như contract chính.",
+      ],
+    });
+  }
+
+  if (context.docContextApplied && /route_stop|synthetic|hanh trinh nguoc chieu|hành trình ngược chiều/.test(normalizedDocText)) {
+    addCandidate({
+      title: "Route stop synthetic option và validation hành trình ngược chiều",
+      objective: "Xác minh rule doc về synthetic route_stop, bypass API 404 và chặn hành trình đi ngược chiều.",
+      priority: "Normal",
+      technique: "Boundary / negative path",
+      risk: "Điểm dừng trung gian bị ẩn hoặc chọn ngược chiều vẫn tính giá như endpoint, gây sai fare segment.",
+      tags: ["confluence_reference", "route_stop", "negative"],
+      scenario: "fallback",
+      inputs: [
+        "Điểm đón/trả dọc tuyến có `selection_key` dạng `origin:pickup:route_stop:<area_id>`.",
+        "Biến thể hợp lệ: điểm đón trước điểm trả theo route_stop_ids.",
+        "Biến thể lỗi: điểm đón có index >= điểm trả.",
+      ],
+      steps: [
+        "Mở stop catalog của tuyến có route stops dọc đường theo doc.",
+        "Chọn synthetic route_stop hợp lệ và gọi `bus_trip_price_options_tool`.",
+        "Lặp lại với tổ hợp điểm đón/trả đi ngược chiều.",
+        "Đối chiếu trace không gọi API pickup detail cho `list_id=route_stop` và response lỗi đúng khi ngược chiều.",
+      ],
+      checks: [
+        "Synthetic route_stop được hiển thị như option hợp lệ với surcharge 0.",
+        "Tool pricing dùng đúng fare segment của area_id route stop thay vì fallback sai về endpoint.",
+        "Trường hợp ngược chiều bị block với validation error `Hành trình ngược chiều`.",
+      ],
+    });
+  }
+
   context.docLines.slice(0, 6).forEach((line, index) => {
     addCandidate({
       title: `${titleFromIntent(line, "Rule trong doc được áp dụng đúng")} theo doc`,
@@ -2480,12 +2602,13 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
 
   const docCandidates = candidates.filter((item) => item.tags?.includes("confluence_reference"));
   const nonDocCandidates = candidates.filter((item) => !item.tags?.includes("confluence_reference"));
-  const docQuota = context.docContextApplied ? Math.min(docCandidates.length, Math.max(2, Math.ceil(targetCount * 0.25))) : 0;
+  const docQuota = context.docContextApplied ? Math.min(docCandidates.length, Math.max(4, Math.ceil(targetCount * 0.4))) : 0;
   const coreCandidates = nonDocCandidates.slice(0, Math.max(0, targetCount - docQuota));
+  const coreLeadCount = context.docContextApplied ? Math.min(2, coreCandidates.length) : Math.min(3, coreCandidates.length);
   const selected = [
-    ...coreCandidates.slice(0, Math.min(3, coreCandidates.length)),
+    ...coreCandidates.slice(0, coreLeadCount),
     ...docCandidates.slice(0, docQuota),
-    ...coreCandidates.slice(Math.min(3, coreCandidates.length)),
+    ...coreCandidates.slice(coreLeadCount),
   ];
   for (const candidate of nonDocCandidates.slice(Math.max(0, targetCount - docQuota))) {
     if (selected.length >= targetCount) break;
@@ -2569,6 +2692,8 @@ function buildOutline(issue, archetypeKey, cases = [], sourceInput = {}, aiCusto
       description_excerpt: asText(issue.description).slice(0, 1600),
       jira_scope_lines: scopeLines,
       confluence_doc_lines_used: docLines,
+      confluence_doc_context_length: context.docContextLength,
+      confluence_doc_tool_names: context.docToolNames,
       confluence_doc_ignored_as_unrelated: context.docContextIgnored,
       ai_customization_applied: Boolean(aiCustomization),
       ai_customization_guidance: aiGuidanceText(aiCustomization) || undefined,
@@ -3073,6 +3198,8 @@ app.post("/api/draft", async (req, res) => {
       throw Object.assign(new Error("AI Settings đang bật nhưng thiếu API key hoặc model. Hãy nhập đủ API key/model hoặc tắt AI Settings để dùng fallback local."), {
         status: 400,
       });
+    } else if (!aiSettings.enabled && aiProviderConfigured(aiSettings)) {
+      aiGenerationError = "AI Settings có API key/model nhưng checkbox đang tắt, nên request này dùng fallback local.";
     } else if (aiProviderReady(aiSettings)) {
       try {
         const aiDraft = await generateAiDraft({
