@@ -12,6 +12,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..");
 const RUNS_DIR = path.join(ROOT_DIR, ".qa-runs");
 const DIST_DIR = path.join(ROOT_DIR, "dist");
+const PURGE_GENERATED_OUTPUTS_ON_START = process.env.PURGE_GENERATED_OUTPUTS_ON_START === "true";
+const OUTPUT_PURGE_MARKER = path.join(ROOT_DIR, ".qa-cleanup", "generated-output-purged-v1");
 const PORT = Number(process.env.PORT || 5173);
 const HOST = process.env.HOST || "0.0.0.0";
 const DISPLAY_HOST = process.env.DISPLAY_HOST || "easyforqc.com";
@@ -1703,6 +1705,38 @@ async function makeRunDir(issueKey = "QA") {
   return runDir;
 }
 
+async function purgeGeneratedOutputsOnce() {
+  if (!PURGE_GENERATED_OUTPUTS_ON_START) {
+    return;
+  }
+  try {
+    await fs.access(OUTPUT_PURGE_MARKER);
+    return;
+  } catch {
+    // Continue and create the marker after the purge.
+  }
+  const dirs = [
+    RUNS_DIR,
+    path.join(ROOT_DIR, "qa", "jira"),
+    path.join(ROOT_DIR, "qa", "xmind-test-design"),
+  ];
+  for (const dir of dirs) {
+    try {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      await Promise.all(
+        entries.map((entry) => fs.rm(path.join(dir, entry.name), { recursive: true, force: true })),
+      );
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        throw error;
+      }
+    }
+  }
+  await fs.mkdir(path.dirname(OUTPUT_PURGE_MARKER), { recursive: true });
+  await fs.writeFile(OUTPUT_PURGE_MARKER, new Date().toISOString(), "utf8");
+  console.log("Generated QA output folders purged once on startup.");
+}
+
 async function writeConfig(runDir, project, options = {}) {
   const outputDir = path.isAbsolute(project.outputDir)
     ? project.outputDir
@@ -3004,6 +3038,7 @@ if (process.env.NODE_ENV === "production") {
   app.use(vite.middlewares);
 }
 
+await purgeGeneratedOutputsOnce();
 await initializeDatabase();
 
 app.listen(PORT, HOST, () => {

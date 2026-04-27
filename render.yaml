@@ -24,6 +24,8 @@ services:
         value: ""
       - key: QA_SOURCE_ROOT
         value: /app/vendor/qa-source
+      - key: PURGE_GENERATED_OUTPUTS_ON_START
+        value: "true"
       - key: DATABASE_URL
         sync: false
       - key: APP_SESSION_SECRET
