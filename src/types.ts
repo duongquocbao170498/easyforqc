@@ -94,6 +94,35 @@ export type ArchetypeInfo = {
   dimensions: string[];
 };
 
+export type QaPlan = {
+  version: string;
+  issue_key: string;
+  archetype_key: string;
+  archetype_label: string;
+  signals: { id: string; label: string; reason: string; strength?: number }[];
+  selected_techniques: {
+    primary: string[];
+    supporting: string[];
+    fail_safe: string[];
+    all?: string[];
+  };
+  coverage_axes: {
+    id: string;
+    title: string;
+    technique: string;
+    risk: string;
+    scenario_type: string;
+    checks?: string[];
+    inputs?: string[];
+  }[];
+  repo_evidence?: {
+    enabled?: boolean;
+    roots?: string[];
+    snippets?: { root: string; path: string; score: number; snippets: { line: number; text: string }[] }[];
+  };
+  open_questions?: string[];
+};
+
 export type DefaultsResponse = {
   defaults: {
     sourceRoot: string;

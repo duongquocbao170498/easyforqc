@@ -337,6 +337,71 @@ select:focus {
   line-height: 1.45;
 }
 
+.qa-plan {
+  border-top: 1px solid var(--border);
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
+.qa-plan h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.qa-plan p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.qa-plan ul {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.qa-plan li {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  padding: 9px 10px;
+}
+
+.qa-plan li strong,
+.qa-plan li small {
+  display: block;
+}
+
+.qa-plan li strong {
+  font-size: 13px;
+}
+
+.qa-plan li small {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.pill-row span {
+  border: 1px solid #bad5c8;
+  border-radius: 999px;
+  background: #f2faf5;
+  color: #1e5c39;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 8px;
+}
+
 .metric-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

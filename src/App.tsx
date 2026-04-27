@@ -30,6 +30,7 @@ import type {
   IssueSummary,
   OutlineBranch,
   ProjectConfig,
+  QaPlan,
   StructuredStep,
   TestCase,
   TestDesignOutline,
@@ -402,6 +403,7 @@ function App() {
   const [docStatus, setDocStatus] = useState("");
   const [docSources, setDocSources] = useState<ConfluenceDocument[]>([]);
   const [archetypeKey, setArchetypeKey] = useState("auto");
+  const [qaPlan, setQaPlan] = useState<QaPlan | null>(null);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [outline, setOutline] = useState<TestDesignOutline>(emptyOutline(emptyIssue));
   const [activeTab, setActiveTab] = useState<TabKey>("cases");
@@ -521,6 +523,7 @@ function App() {
     setCaseKeys("");
     setOutput("");
     setSavedFiles(null);
+    setQaPlan(null);
     setActiveTab("cases");
   }
 
@@ -752,9 +755,11 @@ function App() {
       setCaseKeys("");
       setSavedFiles(null);
       setOutput("");
+      setQaPlan(null);
       setActiveTab("cases");
       const payload = await apiPost<{
         archetypeKey: string;
+        qaPlan?: QaPlan;
         testCases: TestCase[];
         outline: TestDesignOutline;
         aiGenerationUsed?: boolean;
@@ -766,6 +771,7 @@ function App() {
         docContext: shouldUseConfluenceDocs ? docContext : "",
       });
       setArchetypeKey(payload.archetypeKey);
+      setQaPlan(payload.qaPlan || null);
       setTestCases(payload.testCases);
       setOutline(payload.outline);
       setActiveTab("cases");
@@ -1302,6 +1308,33 @@ function App() {
                 <p>QA vẫn có thể đổi archetype trước khi generate lại draft.</p>
               </div>
             )}
+            {qaPlan ? (
+              <div className="qa-plan">
+                <h3>Adaptive QA plan</h3>
+                <p>{qaPlan.archetype_label}</p>
+                <div className="pill-row">
+                  {[
+                    ...qaPlan.selected_techniques.primary,
+                    ...qaPlan.selected_techniques.supporting.slice(0, 2),
+                    ...qaPlan.selected_techniques.fail_safe.slice(0, 1),
+                  ].map((technique) => (
+                    <span key={technique}>{technique}</span>
+                  ))}
+                </div>
+                <ul>
+                  {qaPlan.coverage_axes.slice(0, 4).map((axis) => (
+                    <li key={axis.id}>
+                      <strong>{axis.title}</strong>
+                      <small>{axis.technique}</small>
+                    </li>
+                  ))}
+                </ul>
+                {qaPlan.repo_evidence?.snippets?.length ? (
+                  <p>{qaPlan.repo_evidence.snippets.length} repo/local evidence snippet được dùng để định hướng draft.</p>
+                ) : null}
+                {qaPlan.open_questions?.length ? <p>Open question: {qaPlan.open_questions[0]}</p> : null}
+              </div>
+            ) : null}
             <div className="metric-row">
               <div>
                 <strong>{testCases.length}</strong>
