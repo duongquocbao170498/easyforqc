@@ -25,6 +25,10 @@ const SESSION_COOKIE = "qa_studio_session";
 const SESSION_MAX_AGE_SECONDS = Number(process.env.APP_SESSION_MAX_AGE_SECONDS || 60 * 60 * 24 * 7);
 const DATABASE_URL = process.env.DATABASE_URL || "";
 const SETTINGS_CIPHER_VERSION = "v1";
+const CONFLUENCE_DOC_TEXT_LIMIT = Number(process.env.CONFLUENCE_DOC_TEXT_LIMIT || 80000);
+const CONFLUENCE_COMBINED_TEXT_LIMIT = Number(process.env.CONFLUENCE_COMBINED_TEXT_LIMIT || 200000);
+const AI_DOC_CONTEXT_PROMPT_LIMIT = Number(process.env.AI_DOC_CONTEXT_PROMPT_LIMIT || 90000);
+const AI_REFERENCE_PROMPT_LIMIT = Number(process.env.AI_REFERENCE_PROMPT_LIMIT || 30000);
 const GOOGLE_OAUTH_STATE_COOKIE = "qa_google_oauth_state";
 const GOOGLE_CLIENT_ID = String(process.env.GOOGLE_CLIENT_ID || "").trim();
 const GOOGLE_CLIENT_SECRET = String(process.env.GOOGLE_CLIENT_SECRET || "").trim();
@@ -1079,10 +1083,68 @@ function htmlToText(html) {
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_match, code) => {
+      try {
+        return String.fromCodePoint(Number(code));
+      } catch {
+        return " ";
+      }
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_match, code) => {
+      try {
+        return String.fromCodePoint(parseInt(code, 16));
+      } catch {
+        return " ";
+      }
+    })
+    .replace(/&([a-zA-Z]+);/g, (match, entity) => HTML_ENTITIES[entity] || match)
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]{2,}/g, " ")
     .trim();
 }
+
+const HTML_ENTITIES = {
+  apos: "'",
+  nbsp: " ",
+  ndash: "-",
+  mdash: "-",
+  lsquo: "'",
+  rsquo: "'",
+  ldquo: '"',
+  rdquo: '"',
+  aacute: "á",
+  agrave: "à",
+  acirc: "â",
+  atilde: "ã",
+  eacute: "é",
+  egrave: "è",
+  ecirc: "ê",
+  iacute: "í",
+  igrave: "ì",
+  oacute: "ó",
+  ograve: "ò",
+  ocirc: "ô",
+  otilde: "õ",
+  uacute: "ú",
+  ugrave: "ù",
+  yacute: "ý",
+  Aacute: "Á",
+  Agrave: "À",
+  Acirc: "Â",
+  Atilde: "Ã",
+  Eacute: "É",
+  Egrave: "È",
+  Ecirc: "Ê",
+  Iacute: "Í",
+  Igrave: "Ì",
+  Oacute: "Ó",
+  Ograve: "Ò",
+  Ocirc: "Ô",
+  Otilde: "Õ",
+  Uacute: "Ú",
+  Ugrave: "Ù",
+  Yacute: "Ý",
+};
 
 function confluenceAuthHeaders(credentials = {}) {
   const headers = { Accept: "application/json, text/html;q=0.8" };
@@ -1124,26 +1186,46 @@ function confluenceDisplayPageFromUrl(url) {
   };
 }
 
+function confluenceRootFromUrl(url) {
+  if (url.pathname.startsWith("/wiki/")) {
+    return `${url.origin}/wiki`;
+  }
+  for (const marker of ["/spaces/", "/pages/", "/display/", "/plugins/", "/secure/", "/content/"]) {
+    const index = url.pathname.indexOf(marker);
+    if (index > 0) {
+      return `${url.origin}${url.pathname.slice(0, index)}`.replace(/\/+$/, "");
+    }
+    if (index === 0) {
+      return url.origin;
+    }
+  }
+  return url.origin;
+}
+
+function looksLikeConfluencePageUrl(url) {
+  return Boolean(
+    url.searchParams.get("pageId") ||
+      /\/pages\/viewpage\.action/i.test(url.pathname) ||
+      /\/pages\/\d+/i.test(url.pathname) ||
+      /\/display\/[^/]+\/[^/]+/i.test(url.pathname) ||
+      /\/content\/\d+/i.test(url.pathname),
+  );
+}
+
 function confluenceBaseUrlFrom(url, credentials = {}) {
   const configured = asText(credentials.baseUrl);
   if (configured) {
     try {
       const parsed = new URL(configured);
+      if (looksLikeConfluencePageUrl(parsed)) {
+        return confluenceRootFromUrl(parsed);
+      }
       return `${parsed.origin}${parsed.pathname.replace(/\/+$/, "")}`;
     } catch {
-      return configured.replace(/\/+$/, "");
+      return configured.replace(/\/(pages|display|content|plugins|secure)\/.*$/i, "").replace(/\/+$/, "");
     }
   }
-  if (url.pathname.startsWith("/wiki/")) {
-    return `${url.origin}/wiki`;
-  }
-  for (const marker of ["/spaces/", "/pages/", "/display/", "/plugins/", "/secure/"]) {
-    const index = url.pathname.indexOf(marker);
-    if (index > 0) {
-      return `${url.origin}${url.pathname.slice(0, index)}`.replace(/\/+$/, "");
-    }
-  }
-  return url.origin;
+  return confluenceRootFromUrl(url);
 }
 
 async function fetchConfluenceDocument(link, credentials = {}) {
@@ -1166,7 +1248,7 @@ async function fetchConfluenceDocument(link, credentials = {}) {
     return {
       title: asText(page.title) || link,
       url: link,
-      text: htmlToText(html).slice(0, 12000),
+      text: htmlToText(html).slice(0, CONFLUENCE_DOC_TEXT_LIMIT),
     };
   };
   if (pageId) {
@@ -1222,7 +1304,7 @@ async function fetchConfluenceDocuments(linksText, credentials = {}) {
     .filter((item) => item.text)
     .map((item) => `# ${item.title}\nSource: ${item.url}\n${item.text}`)
     .join("\n\n---\n\n")
-    .slice(0, 30000);
+    .slice(0, CONFLUENCE_COMBINED_TEXT_LIMIT);
   return { documents, combinedText };
 }
 
@@ -1450,15 +1532,24 @@ function omniSkillReference(sourceRoot) {
     .join("\n\n---\n\n");
 }
 
-function localTestCaseStyleExamples() {
+function localTestCaseStyleExamples(issueKey = "") {
   const dirs = [
     process.env.QA_REFERENCE_CASES_DIR,
+    path.join(ROOT_DIR, "vendor", "qa-reference", "testcase-style"),
     "/Users/gumball.bi/Vexere/qa/jira",
     path.join(ROOT_DIR, "qa", "jira"),
   ].filter(Boolean);
+  const issueNumber = asText(issueKey).match(/\d+/)?.[0] || "";
+  const issueSpecificNames = issueNumber
+    ? [
+        `ai_${issueNumber}_bus_trip_tool_style.json`,
+        `ai_${issueNumber}_test_cases.json`,
+        `ai_${issueNumber}_test_cases_v2.json`,
+      ]
+    : [];
   const names = [
+    ...issueSpecificNames,
     "ai_703_test_cases.json",
-    "ai_704_test_cases.json",
     "ai_707_test_cases_v2.json",
     "ai_707_test_cases.json",
   ];
@@ -1473,6 +1564,8 @@ function localTestCaseStyleExamples() {
         if (!cases.length) continue;
         sections.push(
           `### ${name}\n` +
+            (payload.purpose ? `Purpose: ${payload.purpose}\n` : "") +
+            (Array.isArray(payload.rules) ? `Rules:\n${payload.rules.map((item) => `- ${item}`).join("\n")}\n` : "") +
             JSON.stringify(
               cases.slice(0, 2).map((item) => ({
                 title: stripTestCasePrefix(item.title),
@@ -1491,13 +1584,13 @@ function localTestCaseStyleExamples() {
               2,
             ),
         );
-        if (sections.length >= 3) return truncateForPrompt(sections.join("\n\n"), 16000);
+        if (sections.length >= 4) return truncateForPrompt(sections.join("\n\n"), AI_REFERENCE_PROMPT_LIMIT);
       } catch {
         continue;
       }
     }
   }
-  return "";
+  return truncateForPrompt(sections.join("\n\n"), AI_REFERENCE_PROMPT_LIMIT);
 }
 
 function jsonForPrompt(value, limit = 14000) {
@@ -2321,7 +2414,10 @@ function buildAiDraftMessages({
     "- Always generate a fresh suite from the current Jira issue, current doc context, QA notes, and current AI Settings. Do not reuse old/generated/saved test cases as source content.",
     "- Use QC techniques deliberately: decision table, state transition, equivalence partitioning, boundary/null handling, regression, fallback/recovery, retry/idempotency, field mapping when relevant.",
     "- Match the style of the existing OmniAgent QA suites such as `ai_703_test_cases.json` and `ai_707_test_cases_v2.json`: one testcase = one focused scenario, strong title, concrete precondition, realistic data, and 3-4 tester action steps.",
+    "- If a current-issue reference style exists, use it as the closest writing and coverage example while still deriving the final output from the current Jira/doc context.",
     "- Do not copy the AI-703/AI-707 content unless the current Jira task is actually about that behavior. Use those suites only as writing/structure examples.",
+    "- For bus booking toolchain tasks, cover each named tool independently and the full inter-tool chain. Use exact tool names from the Jira/doc such as `bus_trip_schedule_catalog_tool`, `bus_trip_stop_catalog_tool`, `bus_trip_price_options_tool`, and `bus_trip_seat_map_tool` when applicable.",
+    "- Do not write vague labels like `Tool 1`, `Tool 2`, or `Tool 3` when explicit tool names are available.",
     "- `test_data` must contain realistic test data. For chatbot/conversation flows, use numbered quoted user messages: `1. \"...\"`.",
     "- `expected_result` must be multiline bullet points beginning with `- `.",
     "- `steps` must be an array of clear tester actions like the sample suites. Each item is one Zephyr Test Player row, not a paragraph.",
@@ -2371,7 +2467,7 @@ function buildAiDraftMessages({
     truncateForPrompt(omniSkillReference(sourceRoot), 22000),
     "",
     "## Local reference testcase style examples",
-    truncateForPrompt(localTestCaseStyleExamples(), 16000),
+    truncateForPrompt(localTestCaseStyleExamples(issue.key), AI_REFERENCE_PROMPT_LIMIT),
     "",
     "## Jira issue",
     jsonForPrompt(issue, 18000),
@@ -2383,7 +2479,7 @@ function buildAiDraftMessages({
     truncateForPrompt(sourceInput.qaNotes || "", 4000),
     "",
     "## Confluence/doc context for this task only",
-    truncateForPrompt(sourceInput.docContext || "", 26000),
+    truncateForPrompt(sourceInput.docContext || "", AI_DOC_CONTEXT_PROMPT_LIMIT),
     "",
     "## User AI Settings guidance",
     truncateForPrompt(aiGuidanceText(aiCustomization), 6000),

@@ -1,0 +1,95 @@
+{
+  "purpose": "Reference style for AI-547 bus trip toolchain drafts. Use as writing and coverage example only; derive final content from current Jira/doc.",
+  "rules": [
+    "Use exact tool names instead of Tool 1/Tool 2 when names are known.",
+    "Cover each tool independently and cover the inter-tool chain.",
+    "Use strong scenario titles, concrete preconditions, realistic user messages, and bullet expected results.",
+    "Explicit tool names: bus_trip_schedule_catalog_tool, bus_trip_stop_catalog_tool, bus_trip_price_options_tool, bus_trip_seat_map_tool when applicable."
+  ],
+  "test_cases": [
+    {
+      "title": "bus_trip_schedule_catalog_tool liệt kê lịch chạy theo ngày và group đúng theo base trip mà không gọi tool sau quá sớm",
+      "precondition": "AI-547 đã deploy trên môi trường test; route kiểm thử có ít nhất 2 chuyến thực chạy trong ngày mai; có thể xem trace Langfuse hoặc log tool input output để xác nhận thứ tự gọi tool.",
+      "priority": "High",
+      "steps": [
+        "Mở một conversation mới với bus agent.",
+        "Hỏi lịch chạy theo route và ngày đi nhưng chưa chốt giờ cụ thể.",
+        "Kiểm tra câu trả lời của bot và trace tool."
+      ],
+      "test_data": "1. \"Ngày mai Sài Gòn đi Tuy Hòa có những chuyến nào vậy em?\"<br />2. \"Em liệt kê giúp anh các giờ chạy nhé.\"",
+      "expected_result": "- Bot gọi `bus_trip_schedule_catalog_tool` để lấy catalog chuyến thực chạy theo ngày<br />- Danh sách trả về được group đúng theo `base_trip_id` thay vì trộn nhiều tuyến khác nhau<br />- Bot chỉ diễn giải giờ chạy, tuyến và loại xe nếu tool có trả, không gọi `bus_trip_stop_catalog_tool` hoặc `bus_trip_price_options_tool` quá sớm<br />- Bot không lộ `trip_id`, `base_trip_id`, `company_id` hoặc field nội bộ khác cho user"
+    },
+    {
+      "title": "bus_trip_schedule_catalog_tool chỉ nhận company_id và departure_date; các filter discovery còn lại phải được áp sau khi lấy catalog ngày",
+      "precondition": "AI-547 đã deploy; backend có route phù hợp với ít nhất một chuyến thuộc nhà xe Liên Hưng trong khung giờ tối; có thể xem input thực tế của `bus_trip_schedule_catalog_tool` và cách bot lọc candidate sau khi lấy catalog ngày.",
+      "priority": "High",
+      "steps": [
+        "Mở conversation mới.",
+        "Gửi câu hỏi discovery có nhiều filter cùng lúc.",
+        "Đối chiếu input tool và danh sách candidate được bot diễn giải."
+      ],
+      "test_data": "1. \"Tối mai nhà xe Liên Hưng từ Sài Gòn đi Tuy Hòa còn chuyến nào sau 18 giờ không em?\"<br />2. \"Anh cần xe giường nằm và đi 2 người.\"",
+      "expected_result": "- Khi đã biết ngày đi, bot vẫn bắt đầu bằng `bus_trip_schedule_catalog_tool` để lấy catalog tất cả chuyến thực chạy trong ngày<br />- Input của `bus_trip_schedule_catalog_tool` chỉ gồm `company_id` và `departure_date`; bot không nhét trực tiếp route, operator, time window, vehicle type, seat type hoặc passenger count vào payload Tool 1<br />- Sau khi có catalog ngày, bot mới lọc candidate phù hợp theo route, nhà xe, khung giờ, loại xe, loại ghế và số khách bằng state + dữ liệu live đang có<br />- Bot không tự suy diễn một chuyến ngoài filter user vừa nêu và không bịa giá ở bước này nếu catalog chưa có giá usable"
+    },
+    {
+      "title": "bus_trip_stop_catalog_tool resolve endpoint đến endpoint đúng key mặc định sau khi trip đã được chốt",
+      "precondition": "AI-547 đã deploy; route kiểm thử có ít nhất một chuyến ngày mai; có thể xem output của `bus_trip_stop_catalog_tool` sau khi bot chốt trip.",
+      "priority": "High",
+      "steps": [
+        "Mở conversation mới và chọn một chuyến cụ thể từ Tool 1.",
+        "Xác nhận đi từ đầu tuyến đến cuối tuyến.",
+        "Kiểm tra trace của Tool 2 và state được giữ lại."
+      ],
+      "test_data": "1. \"Ngày mai Sài Gòn đi Tuy Hòa có những chuyến nào vậy em?\"<br />2. \"Anh lấy chuyến 19 giờ nhé.\"<br />3. \"Anh đi từ đầu tuyến đến cuối tuyến luôn.\"",
+      "expected_result": "- Sau khi trip đã lock, bot gọi `bus_trip_stop_catalog_tool` với đúng `base_trip_id` và `trip_id` của chuyến 19 giờ<br />- Bot resolve đúng cặp endpoint cho điểm đi và điểm đến của chuyến đã chọn<br />- State nội bộ khóa đúng `origin_selection_key = origin:endpoint` và `destination_selection_key = destination:endpoint`<br />- Bot không lộ các từ nội bộ như `endpoint` hoặc `selection_key` ra câu trả lời cho khách<br />- Bot không hỏi lại route hoặc giờ khi ngữ cảnh hiện tại đã đủ"
+    },
+    {
+      "title": "bus_trip_price_options_tool báo giá endpoint theo price options chuẩn hóa và mỗi option chỉ đại diện cho một ticket unit",
+      "precondition": "AI-547 đã deploy; đã resolve endpoint cho một chuyến cụ thể; backend có fare config active cho ngày kiểm thử; có thể xem raw output `price_options[]`.",
+      "priority": "High",
+      "steps": [
+        "Mở conversation mới và đi tới trạng thái đã chốt chuyến cùng endpoint đi đến.",
+        "Yêu cầu bot báo giá.",
+        "Đối chiếu raw output của Tool 3 và phần diễn giải ra user."
+      ],
+      "test_data": "1. \"Ngày mai Sài Gòn đi Tuy Hòa có những chuyến nào vậy em?\"<br />2. \"Anh lấy chuyến 19 giờ nhé.\"<br />3. \"Anh đi từ đầu tuyến đến cuối tuyến luôn.\"<br />4. \"Báo giá giúp anh nhé.\"",
+      "expected_result": "- Bot gọi `bus_trip_price_options_tool` sau khi đã có `trip_id`, `base_trip_id`, `origin_selection_key` và `destination_selection_key` hợp lệ<br />- Tool trả `price_options[]` chuẩn hóa và bot diễn giải đúng các option cho user<br />- Mỗi item trong `price_options[]` phải được hiểu là giá của đúng 1 `ticket_unit`<br />- Bot không dùng giá suy diễn từ `bus_trip_schedule_catalog_tool` vì catalog thực chạy có `FareInfo` rỗng"
+    },
+    {
+      "title": "Chuỗi schedule stop price seat_map happy path phải trả đủ giá và sơ đồ ghế trong cùng lượt",
+      "precondition": "AI-547 đã deploy; route kiểm thử có chuyến và fare config hợp lệ; có thể xem trace của `bus_trip_schedule_catalog_tool`, `bus_trip_stop_catalog_tool`, `bus_trip_price_options_tool`, `bus_trip_seat_map_tool` và câu trả lời cuối cùng của bot.",
+      "priority": "High",
+      "steps": [
+        "Mở conversation mới.",
+        "Đi qua flow chọn chuyến rồi chọn điểm đón trả cụ thể.",
+        "Yêu cầu bot đi tiếp sau khi chốt chuyến rồi kiểm tra kết quả cuối."
+      ],
+      "test_data": "1. \"Ngày mai Sài Gòn đi Tuy Hòa có chuyến nào buổi tối không em?\"<br />2. \"Anh lấy chuyến 19 giờ nhé.\"",
+      "expected_result": "- Tool chain đi đúng `bus_trip_schedule_catalog_tool -> bus_trip_stop_catalog_tool -> bus_trip_price_options_tool -> bus_trip_seat_map_tool` ngay sau khi chuyến đã được lock<br />- Nếu khách chưa chốt điểm cụ thể, bot dùng cặp endpoint hợp lệ từ Tool 2 để báo giá tạm rồi vẫn phải gọi Tool 4 trong cùng lượt<br />- Câu trả lời ở lượt chốt chuyến phải có đủ giá thực tế từ Tool 3 và sơ đồ ghế từ Tool 4, không defer sang lượt sau<br />- Bot không hỏi `muốn xem ghế không`, không hỏi tên hoặc số điện thoại trước khi xong block giá + ghế, và không gọi lại Tool 1 dư thừa"
+    },
+    {
+      "title": "Chuỗi liên tool phải tiếp tục được khi user chọn nearest match thay cho giờ exact không tồn tại",
+      "precondition": "AI-547 đã deploy; route kiểm thử không có exact giờ user hỏi nhưng có một hoặc nhiều giờ gần nhất; có thể xem trace của cả 3 tool.",
+      "priority": "High",
+      "steps": [
+        "Mở conversation mới và hỏi một giờ không tồn tại.",
+        "Chọn một nearest match do bot gợi ý.",
+        "Đi tiếp đến bước chọn điểm và báo giá."
+      ],
+      "test_data": "1. \"Tối mai Buôn Ma Thuột đi Sài Gòn có chuyến 21 giờ 15 không em?\"<br />2. \"Nếu không có đúng giờ đó thì lấy chuyến gần nhất giúp anh nhé.\"<br />3. \"Anh đi từ đầu tuyến đến cuối tuyến luôn.\"<br />4. \"Báo giá cho 1 người giúp anh.\"",
+      "expected_result": "- Tool 1 tìm candidate và bot gợi ý nearest match hợp lệ<br />- Sau khi user chấp nhận nearest match, bot phải khóa đúng trip vừa chọn rồi mới gọi Tool 2 và Tool 3<br />- Tool 2 và Tool 3 không được dùng `trip_id` của giờ khác ngoài nearest match đã chốt<br />- Giá cuối cùng phải bám đúng chuyến nearest match, không bám theo yêu cầu giờ ban đầu"
+    },
+    {
+      "title": "Chuỗi liên tool phải reset context sạch khi user đổi route hoặc đổi ngày sau khi đã báo giá",
+      "precondition": "AI-547 đã deploy; route kiểm thử có ít nhất hai route hoặc hai ngày có dữ liệu; có thể xem trace nhiều turn và state chuyển tiếp.",
+      "priority": "High",
+      "steps": [
+        "Mở conversation mới và đi tới bước đã báo giá thành công cho route đầu tiên.",
+        "Đổi route hoặc đổi ngày ngay sau đó.",
+        "Kiểm tra cách bot xây lại context."
+      ],
+      "test_data": "1. \"Ngày mai Sài Gòn đi Tuy Hòa có chuyến nào vậy em?\"<br />2. \"Anh lấy chuyến 19 giờ nhé.\"<br />3. \"Anh đi từ đầu tuyến đến cuối tuyến luôn.\"<br />4. \"Báo giá giúp anh nhé.\"<br />5. \"Thôi đổi lại cho anh ngày mốt đi Nha Trang nhé.\"",
+      "expected_result": "- Khi user đổi route hoặc ngày, bot phải coi toàn bộ `trip_id`, `base_trip_id` và `selection_key` cũ là stale<br />- Bot phải gọi lại `bus_trip_schedule_catalog_tool` cho yêu cầu mới trước khi nói tiếp về point hoặc giá<br />- Tool 2 và Tool 3 của route cũ không được reuse cho route hoặc ngày mới<br />- Phản hồi sau cùng phải hoàn toàn bám theo yêu cầu mới nhất của user"
+    }
+  ]
+}
