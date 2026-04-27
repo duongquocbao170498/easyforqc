@@ -6,7 +6,6 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import bcrypt from "bcryptjs";
 import express from "express";
-import pg from "pg";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..");
@@ -42,8 +41,12 @@ const GOOGLE_ALLOWED_EMAILS = String(process.env.GOOGLE_ALLOWED_EMAILS || "")
   .split(",")
   .map((item) => item.trim().toLowerCase())
   .filter(Boolean);
-const { Pool } = pg;
-const db = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL }) : null;
+let db = null;
+if (DATABASE_URL) {
+  const { default: pg } = await import("pg");
+  const { Pool } = pg;
+  db = new Pool({ connectionString: DATABASE_URL });
+}
 
 const HOME_DIR = process.env.HOME || "";
 const VENDOR_DIR = path.join(ROOT_DIR, "vendor");
@@ -96,12 +99,12 @@ const DEFAULTS = {
   runRoot: "/AI Chatbot",
   outputDir: path.join(ROOT_DIR, "qa", "xmind-test-design"),
   repoContext: {
-    enabled: false,
-    productRepoRoot: "",
-    qaReferenceDir: "",
-    includePaths: "src\napp\ntests\nqa\n.agent/skills",
-    excludePaths: "node_modules\n.git\ndist\nbuild\n.env\n.env.*\n*.pem\n*.key\n*secret*\n*token*",
-    maxSnippets: "10",
+    enabled: process.env.QA_REPO_CONTEXT_ENABLED === "true",
+    productRepoRoot: process.env.QA_PRODUCT_REPO_ROOT || "",
+    qaReferenceDir: process.env.QA_REFERENCE_DIR || "",
+    includePaths: process.env.QA_REPO_INCLUDE_PATHS || "src\napp\ntests\nqa\n.agent/skills",
+    excludePaths: process.env.QA_REPO_EXCLUDE_PATHS || "node_modules\n.git\ndist\nbuild\n.env\n.env.*\n*.pem\n*.key\n*secret*\n*token*",
+    maxSnippets: process.env.QA_REPO_MAX_SNIPPETS || "10",
   },
   labelPolicy: {
     mode: "custom",
