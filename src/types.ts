@@ -45,6 +45,9 @@ export type IssueSummary = {
   status: string;
   issue_type: string;
   project_key?: string;
+  doc_links?: string[];
+  doc_link_sources?: { title?: string; url: string; source?: string }[];
+  doc_link_error?: string;
 };
 
 export type StructuredStep = {

@@ -1,26 +1,24 @@
-import {
-  AlertCircle,
-  CheckCircle2,
-  ClipboardList,
-  FileText,
-  GitBranch,
-  KeyRound,
-  Link,
-  LockKeyhole,
-  LogOut,
-  Loader2,
-  Mail,
-  Map,
-  Play,
-  Plus,
-  RefreshCw,
-  Save,
-  Settings,
-  ShieldCheck,
-  Trash2,
-  UploadCloud,
-  Wand2,
-} from "lucide-react";
+import AlertCircle from "lucide-react/dist/esm/icons/alert-circle.js";
+import CheckCircle2 from "lucide-react/dist/esm/icons/check-circle-2.js";
+import ClipboardList from "lucide-react/dist/esm/icons/clipboard-list.js";
+import FileText from "lucide-react/dist/esm/icons/file-text.js";
+import GitBranch from "lucide-react/dist/esm/icons/git-branch.js";
+import KeyRound from "lucide-react/dist/esm/icons/key-round.js";
+import Link from "lucide-react/dist/esm/icons/link.js";
+import LockKeyhole from "lucide-react/dist/esm/icons/lock-keyhole.js";
+import LogOut from "lucide-react/dist/esm/icons/log-out.js";
+import Loader2 from "lucide-react/dist/esm/icons/loader-2.js";
+import Mail from "lucide-react/dist/esm/icons/mail.js";
+import Map from "lucide-react/dist/esm/icons/map.js";
+import Play from "lucide-react/dist/esm/icons/play.js";
+import Plus from "lucide-react/dist/esm/icons/plus.js";
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw.js";
+import Save from "lucide-react/dist/esm/icons/save.js";
+import Settings from "lucide-react/dist/esm/icons/settings.js";
+import ShieldCheck from "lucide-react/dist/esm/icons/shield-check.js";
+import Trash2 from "lucide-react/dist/esm/icons/trash-2.js";
+import UploadCloud from "lucide-react/dist/esm/icons/upload-cloud.js";
+import Wand2 from "lucide-react/dist/esm/icons/wand-2.js";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type {
@@ -38,7 +36,7 @@ import type {
 } from "./types";
 
 type TabKey = "cases" | "design" | "run";
-type BusyKey = "issue" | "docs" | "draft" | "xmind" | "attach" | "suite" | "cycle" | "";
+type BusyKey = "issue" | "docs" | "draft" | "save" | "xmind" | "attach" | "suite" | "cycle" | "";
 type SettingsSection = "project" | "credentials" | "confluence" | "ai";
 type ConfluenceDocument = { title: string; url: string; text: string; error?: string };
 
@@ -411,6 +409,7 @@ function App() {
   const [message, setMessage] = useState("");
   const [output, setOutput] = useState("");
   const [caseKeys, setCaseKeys] = useState("");
+  const [savedFiles, setSavedFiles] = useState<{ casesFile: string; designFile: string } | null>(null);
 
   function applyDefaults(payload: DefaultsResponse) {
     setDefaults(payload);
@@ -493,7 +492,7 @@ function App() {
     credentials,
     confluenceCredentials: taskConfluenceCredentials,
     confluenceLinks,
-    docContext: confluenceBaseUrl.trim() && docIssueKey === issue.key ? docContext : "",
+    docContext: docIssueKey === issue.key ? docContext : "",
     aiSettings,
     notes,
     archetype: archetypeKey === "auto" ? undefined : archetypeKey,
@@ -521,6 +520,7 @@ function App() {
     setOutline(emptyOutline(nextIssue));
     setCaseKeys("");
     setOutput("");
+    setSavedFiles(null);
     setActiveTab("cases");
   }
 
@@ -695,7 +695,9 @@ function App() {
         issue_type: payload.issue.issue_type || current.issue_type,
       }));
       setOutline((current) => ({ ...current, issue_key: payload.issue.key || current.issue_key }));
-      const detectedDocLinks = extractDocumentLinks(`${payload.issue.description}\n${payload.issue.summary}`);
+      const detectedDocLinks = Array.from(
+        new Set([...(payload.issue.doc_links || []), ...extractDocumentLinks(`${payload.issue.description}\n${payload.issue.summary}`)]),
+      );
       if (detectedDocLinks.length && !confluenceLinks.trim()) {
         const linksText = detectedDocLinks.join("\n");
         setConfluenceLinks(linksText);
@@ -703,7 +705,9 @@ function App() {
         if (inferredBaseUrl) {
           setConfluenceBaseUrl(inferredBaseUrl);
         }
-        clearFetchedDocs(`Tìm thấy ${detectedDocLinks.length} link doc trong Jira description. Nhấn Fetch docs để đọc nội dung vào Task context.`);
+        clearFetchedDocs(`Tìm thấy ${detectedDocLinks.length} link doc từ Jira task/Issue links. Nhấn Fetch docs để đọc nội dung vào Task context.`);
+      } else if (payload.issue.doc_link_error) {
+        setDocStatus(`Không đọc được Jira issue links: ${payload.issue.doc_link_error}`);
       }
       setOutput(JSON.stringify(payload.issue, null, 2));
       setMessage(`Đã fetch Jira task ${payload.issue.key}.`);
@@ -712,9 +716,6 @@ function App() {
 
   function fetchConfluenceDocs() {
     setBusyRun("docs", async () => {
-      if (!confluenceBaseUrl.trim()) {
-        throw new Error("Nhập Confluence Base URL cho task này trước khi Fetch docs.");
-      }
       const currentIssueKey = issueKeyFromText(jiraUrl) || issue.key;
       const payload = await apiPost<{ documents: ConfluenceDocument[]; combinedText: string }>(
         "/api/confluence-docs",
@@ -745,7 +746,7 @@ function App() {
     setBusyRun("draft", async () => {
       const effectiveIssueKey = issueKeyFromText(jiraUrl) || issue.key;
       const effectiveIssue = { ...issue, key: effectiveIssueKey };
-      const shouldUseConfluenceDocs = Boolean(confluenceBaseUrl.trim() && docIssueKey === effectiveIssueKey);
+      const shouldUseConfluenceDocs = Boolean((docContext.trim() || confluenceLinks.trim()) && (!docIssueKey || docIssueKey === effectiveIssueKey));
       const payload = await apiPost<{
         archetypeKey: string;
         testCases: TestCase[];
@@ -762,6 +763,21 @@ function App() {
       setActiveTab("cases");
       setOutput(JSON.stringify(payload, null, 2));
       setMessage(`Đã tạo ${payload.testCases.length} test case và test design draft.`);
+    });
+  }
+
+  function saveDraftFiles() {
+    setBusyRun("save", async () => {
+      const payload = await apiPost<{ saved: boolean; casesFile: string; designFile: string; casesPath: string; designPath: string }>("/api/save-draft", {
+        jiraUrl,
+        issue,
+        testCases,
+        outline,
+        archetypeKey,
+      });
+      setSavedFiles({ casesFile: payload.casesFile, designFile: payload.designFile });
+      setOutput(JSON.stringify(payload, null, 2));
+      setMessage(`Đã lưu JSON test case và test design vào source.`);
     });
   }
 
@@ -1217,7 +1233,7 @@ function App() {
               <IconButton
                 icon={busy === "docs" ? <Loader2 className="spin" size={16} /> : <FileText size={16} />}
                 onClick={fetchConfluenceDocs}
-                disabled={isWorking || !confluenceBaseUrl.trim() || !confluenceLinks.trim()}
+                disabled={isWorking || !confluenceLinks.trim()}
               >
                 Fetch docs
               </IconButton>
@@ -1423,6 +1439,20 @@ function App() {
               </div>
             </div>
             <div className="run-grid">
+              <div className="run-block">
+                <h3>Local storage</h3>
+                <p>Lưu draft hiện tại thành JSON giống cách repo Omni lưu trong `qa/jira` và `qa/xmind-test-design`.</p>
+                <IconButton icon={busy === "save" ? <Loader2 className="spin" size={16} /> : <Save size={16} />} onClick={saveDraftFiles} disabled={isWorking || testCases.length === 0} variant="primary">
+                  Save JSON
+                </IconButton>
+                {savedFiles ? (
+                  <div className="mini-note">
+                    Test cases: {savedFiles.casesFile}
+                    <br />
+                    Test design: {savedFiles.designFile}
+                  </div>
+                ) : null}
+              </div>
               <div className="run-block">
                 <h3>Test design</h3>
                 <p>Build file `.xmind` và `.png` từ outline đang chỉnh.</p>

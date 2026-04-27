@@ -814,11 +814,40 @@ function asText(value) {
   return String(value ?? "").trim();
 }
 
+function cleanContextLine(line) {
+  let text = asText(line).replace(/^[-*#\s]+/, "").trim();
+  text = text.replace(/^\d+[.)]\s+/, "").trim();
+  const headingOnly = normalizeSearchText(text).replace(/[:：]+$/g, "").trim();
+  if (
+    [
+      "muc tieu",
+      "objective",
+      "description",
+      "acceptance criteria",
+      "user story",
+      "scope",
+      "pham vi",
+      "tai lieu",
+      "document",
+      "note",
+      "ghi chu",
+      "requirement",
+    ].includes(headingOnly)
+  ) {
+    return "";
+  }
+  const headingWithContent = text.match(/^(mục tiêu|objective|acceptance criteria|user story|scope|phạm vi|requirement)\s*[:：]\s*(.+)$/i);
+  if (headingWithContent) {
+    text = headingWithContent[2].trim();
+  }
+  return text;
+}
+
 function compactLines(text, limit = 8) {
   return asText(text)
     .replace(/\r/g, "\n")
     .split(/\n|[•●▪◦]/)
-    .map((line) => line.replace(/^[-*#\s]+/, "").trim())
+    .map(cleanContextLine)
     .filter((line) => line.length >= 8)
     .slice(0, limit);
 }
@@ -1011,6 +1040,11 @@ function parseDocumentLinks(input) {
     .filter((item, index, items) => items.indexOf(item) === index);
 }
 
+function extractDocumentLinksFromText(input) {
+  const matches = asText(input).match(/https?:\/\/[^\s<>"')\]]+/gi) || [];
+  return dedupeStrings(matches.map((item) => item.replace(/[),.;\]]+$/g, ""))).filter(isDocumentUrl);
+}
+
 function htmlToText(html) {
   return asText(html)
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -1196,6 +1230,10 @@ function normalizeIssue(raw = {}, jiraUrl = "") {
     status: asText(raw.status),
     issue_type: asText(raw.issue_type || raw.issueType),
     project_key: asText(raw.project_key || raw.projectKey),
+    doc_links: Array.isArray(raw.doc_links || raw.docLinks)
+      ? dedupeStrings(raw.doc_links || raw.docLinks).filter(isDocumentUrl)
+      : [],
+    doc_link_sources: Array.isArray(raw.doc_link_sources || raw.docLinkSources) ? raw.doc_link_sources || raw.docLinkSources : [],
   };
 }
 
@@ -1210,6 +1248,85 @@ function credentialEnv(project, credentials = {}) {
   if (password) env.JIRA_PASSWORD = password;
   if (token) env.JIRA_TOKEN = token;
   return env;
+}
+
+function jiraAuthHeaders(credentials = {}) {
+  const headers = { Accept: "application/json" };
+  const user = asText(credentials.user || credentials.jiraUser);
+  const password = asText(credentials.password || credentials.jiraPassword);
+  const token = asText(credentials.token || credentials.jiraToken);
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  } else if (user && password) {
+    headers.Authorization = `Basic ${Buffer.from(`${user}:${password}`).toString("base64")}`;
+  }
+  return headers;
+}
+
+function isDocumentUrl(value) {
+  const text = asText(value);
+  return /^https?:\/\//i.test(text) && /confluence|docs\.|\/display\/|\/wiki\/|\/pages\/|pageId=/i.test(text);
+}
+
+function dedupeStrings(items) {
+  const seen = new Set();
+  const result = [];
+  for (const item of items.map(asText).filter(Boolean)) {
+    if (seen.has(item)) continue;
+    seen.add(item);
+    result.push(item);
+  }
+  return result;
+}
+
+async function jiraJson(project, credentials, apiPath, params = {}) {
+  const baseUrl = asText(project.jiraBaseUrl).replace(/\/+$/, "");
+  if (!baseUrl) {
+    throw Object.assign(new Error("Thiếu Jira base URL."), { status: 400 });
+  }
+  const url = new URL(`${baseUrl}${apiPath}`);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  }
+  const response = await fetch(url, { headers: jiraAuthHeaders(credentials) });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw Object.assign(new Error(payload.errorMessages?.join("\n") || payload.message || `Jira HTTP ${response.status}`), {
+      status: response.status,
+    });
+  }
+  return payload;
+}
+
+function remoteLinkUrl(item = {}) {
+  return asText(item?.object?.url || item?.globalId || item?.url);
+}
+
+function remoteLinkTitle(item = {}) {
+  return asText(item?.object?.title || item?.relationship || item?.title);
+}
+
+async function fetchJiraDocumentLinks(project, credentials, issueKey) {
+  const links = [];
+  try {
+    const remoteLinks = await jiraJson(project, credentials, `/rest/api/2/issue/${encodeURIComponent(issueKey)}/remotelink`);
+    if (Array.isArray(remoteLinks)) {
+      for (const item of remoteLinks) {
+        const url = remoteLinkUrl(item);
+        if (isDocumentUrl(url)) {
+          links.push({ title: remoteLinkTitle(item) || url, url, source: "jira_remote_link" });
+        }
+      }
+    }
+  } catch (error) {
+    return {
+      links: [],
+      error: error instanceof Error ? error.message : "Không đọc được Jira remote links.",
+    };
+  }
+  return { links: dedupeStrings(links.map((item) => item.url)).map((url) => links.find((item) => item.url === url)) };
 }
 
 function normalizeCredentials(raw = {}) {
@@ -1644,7 +1761,12 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
   const docCandidates = candidates.filter((item) => item.tags?.includes("confluence_reference"));
   const nonDocCandidates = candidates.filter((item) => !item.tags?.includes("confluence_reference"));
   const docQuota = context.docContextApplied ? Math.min(docCandidates.length, Math.max(2, Math.ceil(targetCount * 0.25))) : 0;
-  const selected = [...nonDocCandidates.slice(0, Math.max(0, targetCount - docQuota)), ...docCandidates.slice(0, docQuota)];
+  const coreCandidates = nonDocCandidates.slice(0, Math.max(0, targetCount - docQuota));
+  const selected = [
+    ...coreCandidates.slice(0, Math.min(3, coreCandidates.length)),
+    ...docCandidates.slice(0, docQuota),
+    ...coreCandidates.slice(Math.min(3, coreCandidates.length)),
+  ];
   for (const candidate of nonDocCandidates.slice(Math.max(0, targetCount - docQuota))) {
     if (selected.length >= targetCount) break;
     selected.push(candidate);
@@ -1751,6 +1873,58 @@ function normalizeCasesForFile(cases) {
   return cases;
 }
 
+function safeFileStem(value) {
+  return asText(value).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "jira_task";
+}
+
+function stripTestCasePrefix(title) {
+  return asText(title).replace(/^\[TC[_-]\d{4}\]\s*/, "");
+}
+
+function savedTestCasesPayload(issue, outline, cases, archetypeKey) {
+  const sourceContext = outline?.source_context || {};
+  const designRationale = outline?.design_rationale || {};
+  return {
+    issue_key: issue.key,
+    design_profile: {
+      archetype: outline?.template || archetypeKey || "general",
+      primary_techniques: designRationale.primary_techniques || [],
+      supporting_techniques: designRationale.supporting_techniques || [],
+      assumptions: [
+        "Jira summary và description là source chính của scope.",
+        sourceContext.confluence_doc_lines_used?.length
+          ? "Confluence/doc links được dùng để bổ sung scenario, guardrail và rule chi tiết."
+          : "Không có doc bổ sung được áp dụng cho draft này.",
+      ],
+      open_questions: sourceContext.confluence_doc_ignored_as_unrelated
+        ? ["Doc được cung cấp không có keyword liên quan rõ với Jira description, cần QA xác nhận trước khi áp dụng."]
+        : [],
+    },
+    test_cases: cases.map((testCase) => ({
+      title: stripTestCasePrefix(testCase.title),
+      precondition: asText(testCase.precondition),
+      objective: asText(testCase.objective),
+      priority: asText(testCase.priority) || "Normal",
+      technique: asText(testCase.technique),
+      risk: asText(testCase.risk),
+      requirement_ref: asText(testCase.requirement_ref || issue.key),
+      coverage_tags: Array.isArray(testCase.coverage_tags) ? testCase.coverage_tags.map(asText).filter(Boolean) : [],
+      steps: Array.isArray(testCase.structured_steps)
+        ? testCase.structured_steps.map((item) => asText(item.description)).filter(Boolean)
+        : [],
+      test_data: asText(testCase.test_data),
+      expected_result: asText(testCase.expected_result),
+      structured_steps: Array.isArray(testCase.structured_steps)
+        ? testCase.structured_steps.map((item) => ({
+            description: asText(item.description),
+            test_data: asText(item.test_data),
+            expected_result: asText(item.expected_result),
+          }))
+        : [],
+    })),
+  };
+}
+
 function caseKeysFromResult(payload) {
   const created = Array.isArray(payload?.created) ? payload.created : [];
   return created.map((item) => asText(item.key)).filter(Boolean);
@@ -1803,9 +1977,6 @@ app.post("/api/parse-jira", (req, res) => {
 app.post("/api/confluence-docs", async (req, res) => {
   try {
     const confluenceCredentials = normalizeConfluenceCredentials(req.body?.confluenceCredentials);
-    if (!asText(confluenceCredentials.baseUrl)) {
-      throw Object.assign(new Error("Nhập Confluence Base URL cho task này trước khi Fetch docs."), { status: 400 });
-    }
     const result = await fetchConfluenceDocuments(req.body?.links, confluenceCredentials);
     res.json(result);
   } catch (error) {
@@ -1828,8 +1999,20 @@ app.post("/api/issue", async (req, res) => {
       ["--config-file", configPath, "issue", "--issue-key", issue.key],
       { env: credentialEnv(project, req.body?.credentials) },
     );
+    const issueSummary = normalizeIssue(result.json, req.body?.jiraUrl);
+    const remoteDocs = await fetchJiraDocumentLinks(project, req.body?.credentials, issueSummary.key || issue.key);
+    const descriptionDocLinks = extractDocumentLinksFromText(`${issueSummary.description}\n${issueSummary.summary}`);
+    issueSummary.doc_links = dedupeStrings([
+      ...(issueSummary.doc_links || []),
+      ...descriptionDocLinks,
+      ...remoteDocs.links.map((item) => item.url),
+    ]);
+    issueSummary.doc_link_sources = remoteDocs.links;
+    if (remoteDocs.error) {
+      issueSummary.doc_link_error = remoteDocs.error;
+    }
     res.json({
-      issue: result.json,
+      issue: issueSummary,
       runDir,
       stdout: result.stdout,
       stderr: result.stderr,
@@ -1849,7 +2032,7 @@ app.post("/api/draft", async (req, res) => {
     }
     const archetypeKey = chooseArchetype(issue, req.body?.archetype);
     const confluenceCredentials = normalizeConfluenceCredentials(req.body?.confluenceCredentials);
-    const allowConfluenceDocs = Boolean(asText(confluenceCredentials.baseUrl));
+    const allowConfluenceDocs = Boolean(asText(confluenceCredentials.baseUrl) || asText(req.body?.confluenceLinks) || asText(req.body?.docContext));
     let docContext = allowConfluenceDocs ? asText(req.body?.docContext) : "";
     let referenceDocs = null;
     if (allowConfluenceDocs && !docContext && asText(req.body?.confluenceLinks)) {
@@ -1874,6 +2057,47 @@ app.post("/api/draft", async (req, res) => {
       referenceDocsFetched: referenceDocs,
       testCases,
       outline,
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post("/api/save-draft", async (req, res) => {
+  try {
+    const issue = normalizeIssue(req.body?.issue, req.body?.jiraUrl);
+    if (!issue.key) {
+      throw Object.assign(new Error("Cần issue key để lưu draft."), { status: 400 });
+    }
+    const cases = normalizeCasesForFile(req.body?.testCases);
+    const outline = req.body?.outline;
+    if (!outline || !Array.isArray(outline.branches)) {
+      throw Object.assign(new Error("Cần test design outline hợp lệ để lưu draft."), { status: 400 });
+    }
+    const stem = safeFileStem(issue.key);
+    const jiraDir = path.join(ROOT_DIR, "qa", "jira");
+    const designDir = path.join(ROOT_DIR, "qa", "xmind-test-design");
+    await fs.mkdir(jiraDir, { recursive: true });
+    await fs.mkdir(designDir, { recursive: true });
+    const casesPath = path.join(jiraDir, `${stem}_test_cases.json`);
+    const designPath = path.join(designDir, `${stem}_test_design.json`);
+    const casesPayload = savedTestCasesPayload(issue, outline, cases, req.body?.archetypeKey);
+    const designPayload = {
+      issue_key: issue.key,
+      title: outline.title,
+      template: outline.template || req.body?.archetypeKey || "general",
+      source_context: outline.source_context || {},
+      design_rationale: outline.design_rationale || {},
+      branches: outline.branches,
+    };
+    await fs.writeFile(casesPath, JSON.stringify(casesPayload, null, 2) + "\n", "utf8");
+    await fs.writeFile(designPath, JSON.stringify(designPayload, null, 2) + "\n", "utf8");
+    res.json({
+      saved: true,
+      casesPath,
+      designPath,
+      casesFile: path.relative(ROOT_DIR, casesPath),
+      designFile: path.relative(ROOT_DIR, designPath),
     });
   } catch (error) {
     sendError(res, error);
