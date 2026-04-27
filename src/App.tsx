@@ -686,7 +686,7 @@ function App() {
       });
       const fetchedIssueKey = payload.issue.key || nextIssueKey;
       const generatedIssueKey = outline.issue_key || testCases[0]?.requirement_ref || "";
-      if (fetchedIssueKey && generatedIssueKey && generatedIssueKey !== fetchedIssueKey) {
+      if (fetchedIssueKey && (testCases.length || generatedIssueKey)) {
         resetGeneratedDraft(fetchedIssueKey);
       }
       setIssue((current) => ({
@@ -747,6 +747,12 @@ function App() {
       const effectiveIssueKey = issueKeyFromText(jiraUrl) || issue.key;
       const effectiveIssue = { ...issue, key: effectiveIssueKey };
       const shouldUseConfluenceDocs = Boolean((docContext.trim() || confluenceLinks.trim()) && (!docIssueKey || docIssueKey === effectiveIssueKey));
+      setTestCases([]);
+      setOutline(emptyOutline(effectiveIssue));
+      setCaseKeys("");
+      setSavedFiles(null);
+      setOutput("");
+      setActiveTab("cases");
       const payload = await apiPost<{
         archetypeKey: string;
         testCases: TestCase[];

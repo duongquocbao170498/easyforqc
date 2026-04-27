@@ -839,6 +839,9 @@ function cleanContextLine(line) {
       "note",
       "ghi chu",
       "requirement",
+      "boi canh",
+      "context",
+      "background",
       "steps",
       "step",
       "test data",
@@ -848,7 +851,7 @@ function cleanContextLine(line) {
   ) {
     return "";
   }
-  const headingWithContent = text.match(/^(mục tiêu|objective|acceptance criteria|user story|scope|phạm vi|requirement)\s*[:：]\s*(.+)$/i);
+  const headingWithContent = text.match(/^(mục tiêu|objective|acceptance criteria|user story|scope|phạm vi|requirement|bối cảnh|context|background)\s*[:：]\s*(.+)$/i);
   if (headingWithContent) {
     text = headingWithContent[2].trim();
   }
@@ -1005,6 +1008,9 @@ function titleFromIntent(value, fallback = "Kiểm tra behavior chính") {
     .replace(/^user story\s*[:：-]\s*/i, "")
     .replace(/^acceptance criteria\s*[:：-]\s*/i, "")
     .replace(/^expected\s*[:：-]\s*/i, "")
+    .replace(/^bối cảnh\s*[:：-]\s*/i, "")
+    .replace(/^context\s*[:：-]\s*/i, "")
+    .replace(/^background\s*[:：-]\s*/i, "")
     .replace(/^rule\s*[:：-]\s*/i, "")
     .replace(/^tạo\s+(một\s+)?/i, "")
     .replace(/^kiểm tra\s+/i, "")
@@ -2143,9 +2149,19 @@ function genericCaseTitle(value) {
     "requirement",
     "description",
     "acceptance criteria",
+    "boi canh",
+    "context",
+    "background",
     "conversation bao phu yeu cau",
     "yeu cau jira duoc dap ung",
   ].includes(normalized);
+}
+
+function fallbackTitleFromIssue(issue, fallback = "Kiểm tra behavior chính") {
+  const summaryTitle = titleFromIntent(issue.summary || issue.title, "");
+  if (summaryTitle && !genericCaseTitle(summaryTitle)) return summaryTitle;
+  const line = compactLines(issue.description, 6).find((item) => !genericCaseTitle(item));
+  return titleFromIntent(line || fallback, fallback);
 }
 
 function normalizeAiSteps(rawCase, fallbackCase) {
@@ -2184,7 +2200,10 @@ function normalizeAiSteps(rawCase, fallbackCase) {
 
 function normalizeAiCase(rawCase = {}, index, issue, fallbackCase = {}) {
   const rawTitle = stripTestCasePrefix(rawCase.title || rawCase.name || fallbackCase.title || "");
-  const fallbackTitle = stripTestCasePrefix(fallbackCase.title || `Kiểm tra behavior chính của ${issue.key || "task"}`);
+  const fallbackCaseTitle = stripTestCasePrefix(fallbackCase.title || "");
+  const fallbackTitle = genericCaseTitle(fallbackCaseTitle)
+    ? fallbackTitleFromIssue(issue, `Kiểm tra behavior chính của ${issue.key || "task"}`)
+    : titleFromIntent(fallbackCaseTitle, fallbackTitleFromIssue(issue, `Kiểm tra behavior chính của ${issue.key || "task"}`));
   const cleanTitle = genericCaseTitle(rawTitle) ? fallbackTitle : titleFromIntent(rawTitle, fallbackTitle);
   let structuredSteps = normalizeAiSteps(rawCase, fallbackCase);
   const fallbackSteps = Array.isArray(fallbackCase.structured_steps) ? fallbackCase.structured_steps : [];
@@ -2298,7 +2317,8 @@ function buildAiDraftMessages({
     "## Output rules",
     "- Do not create a fixed number of cases. Create as many as needed to cover the task well.",
     "- Each testcase title must be concise, scenario-specific, and immediately explain what the case covers.",
-    "- Never use generic titles such as `Mục tiêu`, `Description`, `Conversation bao phủ yêu cầu`, or `Yêu cầu Jira được đáp ứng`.",
+    "- Never use generic titles such as `Mục tiêu`, `Bối cảnh`, `Context`, `Background`, `Description`, `Conversation bao phủ yêu cầu`, or `Yêu cầu Jira được đáp ứng`.",
+    "- Always generate a fresh suite from the current Jira issue, current doc context, QA notes, and current AI Settings. Do not reuse old/generated/saved test cases as source content.",
     "- Use QC techniques deliberately: decision table, state transition, equivalence partitioning, boundary/null handling, regression, fallback/recovery, retry/idempotency, field mapping when relevant.",
     "- Match the style of the existing OmniAgent QA suites such as `ai_703_test_cases.json` and `ai_707_test_cases_v2.json`: one testcase = one focused scenario, strong title, concrete precondition, realistic data, and 3-4 tester action steps.",
     "- Do not copy the AI-703/AI-707 content unless the current Jira task is actually about that behavior. Use those suites only as writing/structure examples.",
@@ -2367,9 +2387,6 @@ function buildAiDraftMessages({
     "",
     "## User AI Settings guidance",
     truncateForPrompt(aiGuidanceText(aiCustomization), 6000),
-    "",
-    "## Local fallback draft for structure reference only",
-    jsonForPrompt({ test_cases: fallbackCases.slice(0, 8), outline: fallbackOutline }, 18000),
   ].join("\n");
 
   return [
