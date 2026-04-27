@@ -41,10 +41,14 @@ Every test case must include:
 - `Title`
   - always starts with `[TC_0001] ...`
 - `Precondition`
-- `Step`
+- `Steps`
+  - use 3-4 clear tester actions for the scenario, like the existing `ai_703`, `ai_704`, and `ai_707` suites
+  - each step is one Zephyr Test Player row; do not merge all actions into one paragraph
 - `Test Data`
   - for chatbot/tool flows, this must be the real user messages
+  - for UI/reporting/integration flows, this must be a concrete dataset or named variant, not generic placeholder text
 - `Expected Result`
+  - write multiline bullet points so Jira/Zephyr is readable
 
 Preferred local JSON fields for stronger reusable design:
 
@@ -90,6 +94,8 @@ Use `structured_steps` when per-step test data and expected result matter:
 For future Jira QA tasks that may later sync into NocoDB:
 
 - keep Jira as `1 testcase = 1 scenario`
+- write testcase structure in the same style as the existing OmniAgent suites such as `ai_703_test_cases.json`, `ai_704_test_cases.json`, and `ai_707_test_cases_v2.json`: strong scenario title, concrete precondition, 3-4 action steps, realistic test data, and bullet expected results
+- use those suites as writing examples only; the actual content must be derived from the current Jira task, comments, acceptance criteria, and relevant docs
 - preserve Vietnamese text with full diacritics in testcase title, precondition, step, test data, and expected result when the source task is in Vietnamese
 - keep `Test Data` in Jira as the full ordered user conversation for that scenario
 - render `Test Data` as numbered lines:

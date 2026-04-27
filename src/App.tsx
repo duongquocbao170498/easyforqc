@@ -751,6 +751,8 @@ function App() {
         archetypeKey: string;
         testCases: TestCase[];
         outline: TestDesignOutline;
+        aiGenerationUsed?: boolean;
+        aiGenerationError?: string;
       }>("/api/draft", {
         ...requestBody,
         issue: effectiveIssue,
@@ -762,7 +764,12 @@ function App() {
       setOutline(payload.outline);
       setActiveTab("cases");
       setOutput(JSON.stringify(payload, null, 2));
-      setMessage(`Đã tạo ${payload.testCases.length} test case và test design draft.`);
+      const generationMode = payload.aiGenerationUsed ? "bằng AI provider" : "bằng fallback local";
+      setMessage(
+        payload.aiGenerationError
+          ? `Đã tạo ${payload.testCases.length} test case và test design draft ${generationMode}. ${payload.aiGenerationError}`
+          : `Đã tạo ${payload.testCases.length} test case và test design draft ${generationMode}.`,
+      );
     });
   }
 
@@ -1060,7 +1067,7 @@ function App() {
             <h2>AI Settings</h2>
           </div>
           <p className="panel-help">
-            Khi bật, app sẽ dùng prompt mặc định của skill rồi bổ sung các guideline bên dưới. Khi tắt, app quay về prompt mặc định.
+            Khi bật và có API key/model, app gọi AI provider riêng của user với prompt mặc định của skill và guideline bên dưới. Khi tắt, app dùng generator mặc định trong app.
           </p>
           <label className="checkbox-field">
             <input
@@ -1070,7 +1077,7 @@ function App() {
             />
             <span className="checkbox-copy">
               <strong>Áp dụng AI Settings khi generate</strong>
-              <small>Bật: skill mặc định + style/guideline bên dưới. Tắt: chỉ dùng prompt mặc định của skill.</small>
+              <small>Bật: gọi AI provider bằng key riêng. Tắt: dùng fallback local không gọi AI.</small>
             </span>
           </label>
           <label className="field">
@@ -1364,7 +1371,7 @@ function App() {
                   </div>
                   <div className="steps">
                     <div className="subhead">
-                      <span>Structured steps</span>
+                      <span>Steps</span>
                       <button
                         type="button"
                         className="tiny"

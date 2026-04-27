@@ -1045,10 +1045,14 @@ function parseIssueReference(input) {
 }
 
 function parseDocumentLinks(input) {
-  return asText(input)
+  const text = asText(input);
+  const explicitLinks = text.match(/https?:\/\/[^\s<>"')\]]+/gi) || [];
+  const lineLinks = text
     .split(/\r?\n|,/)
     .map((item) => item.trim())
     .filter(Boolean)
+    .filter((item) => /^https?:\/\//i.test(item));
+  return dedupeStrings([...lineLinks, ...explicitLinks].map((item) => item.replace(/[),.;\]]+$/g, "")))
     .filter((item, index, items) => items.indexOf(item) === index);
 }
 
@@ -1405,6 +1409,167 @@ function aiGuidanceText(aiCustomization) {
     .join("\n");
 }
 
+function aiProviderReady(settings = {}) {
+  return Boolean(settings.enabled && settings.apiKey && settings.model);
+}
+
+function truncateForPrompt(value, limit = 12000) {
+  const text = asText(value);
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit).trim()}\n...[truncated ${text.length - limit} chars]`;
+}
+
+function readReferenceFile(sourceRoot, relativePath, limit = 8000) {
+  try {
+    const filePath = path.join(sourceRoot || DEFAULTS.sourceRoot, relativePath);
+    return truncateForPrompt(fsSync.readFileSync(filePath, "utf8"), limit);
+  } catch {
+    return "";
+  }
+}
+
+function omniSkillReference(sourceRoot) {
+  const files = [
+    ["create-jira-test-cases/SKILL.md", 9000],
+    ["create-xmind-test-design/SKILL.md", 8000],
+    ["_shared-test-design/test-design-techniques.md", 5000],
+    ["_shared-test-design/task-archetype-matrix.md", 5000],
+  ];
+  return files
+    .map(([relativePath, limit]) => {
+      const content = readReferenceFile(sourceRoot, relativePath, limit);
+      return content ? `## ${relativePath}\n${content}` : "";
+    })
+    .filter(Boolean)
+    .join("\n\n---\n\n");
+}
+
+function localTestCaseStyleExamples() {
+  const dirs = [
+    process.env.QA_REFERENCE_CASES_DIR,
+    "/Users/gumball.bi/Vexere/qa/jira",
+    path.join(ROOT_DIR, "qa", "jira"),
+  ].filter(Boolean);
+  const names = [
+    "ai_703_test_cases.json",
+    "ai_704_test_cases.json",
+    "ai_707_test_cases_v2.json",
+    "ai_707_test_cases.json",
+  ];
+  const sections = [];
+  for (const dir of dirs) {
+    for (const name of names) {
+      const filePath = path.join(dir, name);
+      try {
+        if (!fsSync.existsSync(filePath)) continue;
+        const payload = JSON.parse(fsSync.readFileSync(filePath, "utf8"));
+        const cases = Array.isArray(payload) ? payload : Array.isArray(payload.test_cases) ? payload.test_cases : [];
+        if (!cases.length) continue;
+        sections.push(
+          `### ${name}\n` +
+            JSON.stringify(
+              cases.slice(0, 2).map((item) => ({
+                title: stripTestCasePrefix(item.title),
+                precondition: item.precondition,
+                objective: item.objective,
+                priority: item.priority,
+                technique: item.technique,
+                risk: item.risk,
+                requirement_ref: item.requirement_ref,
+                coverage_tags: item.coverage_tags,
+                steps: item.steps,
+                test_data: item.test_data,
+                expected_result: item.expected_result,
+              })),
+              null,
+              2,
+            ),
+        );
+        if (sections.length >= 3) return truncateForPrompt(sections.join("\n\n"), 16000);
+      } catch {
+        continue;
+      }
+    }
+  }
+  return "";
+}
+
+function jsonForPrompt(value, limit = 14000) {
+  return truncateForPrompt(JSON.stringify(value, null, 2), limit);
+}
+
+function aiEndpointUrl(settings = {}) {
+  const baseUrl = (asText(settings.baseUrl) || "https://api.openai.com/v1").replace(/\/+$/, "");
+  if (/\/chat\/completions(?:\?|$)/i.test(baseUrl)) {
+    return baseUrl;
+  }
+  if (settings.provider === "azure-openai") {
+    const deployment = encodeURIComponent(settings.model);
+    const separator = baseUrl.includes("?") ? "&" : "?";
+    return `${baseUrl}/openai/deployments/${deployment}/chat/completions${separator}api-version=2024-10-21`;
+  }
+  return `${baseUrl}/chat/completions`;
+}
+
+async function callOpenAiCompatible(settings, messages) {
+  const url = aiEndpointUrl(settings);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 180000);
+  const isAzure = settings.provider === "azure-openai";
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    Authorization: `Bearer ${settings.apiKey}`,
+  };
+  if (isAzure) {
+    headers["api-key"] = settings.apiKey;
+  }
+  const body = {
+    messages,
+    temperature: 0.2,
+    max_tokens: 9000,
+    response_format: { type: "json_object" },
+  };
+  if (!isAzure) {
+    body.model = settings.model;
+  }
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    let payload = null;
+    try {
+      payload = text ? JSON.parse(text) : null;
+    } catch {
+      payload = null;
+    }
+    if (!response.ok) {
+      const message =
+        payload?.error?.message ||
+        payload?.message ||
+        text.slice(0, 1200) ||
+        `AI provider HTTP ${response.status}`;
+      throw Object.assign(new Error(message), { status: response.status });
+    }
+    const content =
+      payload?.choices?.[0]?.message?.content ||
+      payload?.choices?.[0]?.text ||
+      payload?.output_text ||
+      "";
+    const parsed = parseMaybeJson(content);
+    if (!parsed) {
+      throw new Error("AI provider không trả về JSON hợp lệ.");
+    }
+    return { payload: parsed, usage: payload?.usage || null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function csvList(value) {
   return asText(value)
     .split(",")
@@ -1565,10 +1730,54 @@ function expectation(...items) {
 
 function step(description, testData, expectedResult) {
   return {
-    description,
-    test_data: testData,
-    expected_result: expectedResult,
+    description: asText(description),
+    test_data: asText(testData),
+    expected_result: asText(expectedResult),
   };
+}
+
+function structuredStepsFromDescriptions(descriptions, testData, expectedResult) {
+  const normalized = arrayFromMaybe(descriptions).map(asText).filter(Boolean);
+  if (!normalized.length) return [];
+  return normalized.map((description, index) =>
+    step(
+      description,
+      index === 0 ? testData : "",
+      index === normalized.length - 1 ? ensureExpectedBullets(expectedResult) : "",
+    ),
+  );
+}
+
+function aggregateStepField(steps, field) {
+  if (!Array.isArray(steps)) return "";
+  return steps
+    .map((item) => asText(item?.[field]))
+    .filter(Boolean)
+    .join("\n");
+}
+
+function looksLikeMultilineBullets(value) {
+  return /(^|\n)\s*[-*•]\s+\S/.test(asText(value));
+}
+
+function ensureExpectedBullets(value) {
+  const text = asText(value);
+  if (!text) return "";
+  if (looksLikeMultilineBullets(text)) return text;
+  return text
+    .split(/\r?\n|;+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => `- ${item.replace(/^[-*•]\s*/, "")}`)
+    .join("\n");
+}
+
+function numberedQuotedLines(items) {
+  return items
+    .map(asText)
+    .filter(Boolean)
+    .map((item, index) => `${index + 1}. "${item.replace(/^"+|"+$/g, "").replace(/"/g, '\\"')}"`)
+    .join("\n");
 }
 
 function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = null) {
@@ -1598,11 +1807,7 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
       : "Không dùng Confluence doc nếu task hiện tại không nhập Base URL/doc link hoặc doc không liên quan tới Jira description.",
   ].join("\n");
 
-  const quoteLines = (items) =>
-    items
-      .filter(Boolean)
-      .map((message, index) => `${index + 1}. "${asText(message).replace(/"/g, '\\"')}"`)
-      .join("\n");
+  const quoteLines = (items) => numberedQuotedLines(items);
   const testInputsFor = (intent) => {
     if (mode.isConversation) {
       return [
@@ -1625,20 +1830,49 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
     if (mode.isConversation) return quoteLines(item.inputs);
     return bulletList(item.inputs);
   };
-  const setupDataFor = (item) => (mode.isConversation ? "" : bulletList(item.inputs));
-  const makeStructuredSteps = (item) => [
-    step(
-      mode.isConversation
-        ? "Mở conversation mới hoặc conversation có state phù hợp."
-        : mode.isIntegration
-          ? "Chuẩn bị request, payload, dữ liệu nguồn và dependency liên quan."
-          : "Chuẩn bị dữ liệu và mở màn hình/chức năng cần kiểm thử.",
-      setupDataFor(item),
-      mode.isConversation ? "" : "- Dữ liệu test sẵn sàng và đúng scope Jira.",
-    ),
-    step(item.action, item.stepData || "", ""),
-    step("Đối chiếu kết quả thực tế.", "", expectation(...item.checks)),
-  ];
+  const setupDataFor = (item) =>
+    mode.isConversation
+      ? bulletList([`Conversation/state: ${titleFromIntent(item.objective || item.title)}`, `Task Jira: ${key}`])
+      : bulletList(item.inputs);
+  const defaultStepsFor = (item) => {
+    const scenario = titleFromIntent(item.title || item.objective);
+    const scope = shortText(summary, 90);
+    if (mode.isConversation) {
+      return [
+        "Mở conversation mới hoặc conversation có state đúng với precondition của testcase.",
+        "Gửi lần lượt từng message user trong bộ dữ liệu kiểm tra.",
+        `Quan sát phản hồi, tool call hoặc handoff cho scenario: ${scenario}.`,
+        "Kiểm tra context mới nhất, nguồn dữ liệu và side effect sau lượt hội thoại.",
+      ];
+    }
+    if (mode.isIntegration) {
+      return [
+        "Chuẩn bị payload/request và dependency đúng với precondition của testcase.",
+        `Gửi request/callback/event cho scenario: ${scenario}.`,
+        "Kiểm tra response, mapping field và trạng thái được ghi nhận sau xử lý.",
+        "Retry hoặc đối chiếu log/dữ liệu downstream để bảo đảm không phát sinh duplicate hoặc side effect ngoài scope.",
+      ];
+    }
+    if (archetypeKey === "reporting") {
+      return [
+        `Mở môi trường test và đi tới khu vực báo cáo/màn hình liên quan đến "${scope}".`,
+        `Chuẩn bị hoặc chọn dataset đúng biến thể: ${scenario}.`,
+        "Quan sát dữ liệu hiển thị sau khi màn hình/card tải xong.",
+        "Đối chiếu thứ tự, giá trị hiển thị và mapping dòng với nguồn dữ liệu chuẩn.",
+      ];
+    }
+    return [
+      `Mở chức năng liên quan đến task ${key} và xác nhận precondition đã sẵn sàng.`,
+      `Thực hiện scenario: ${scenario}.`,
+      "Quan sát kết quả chính sau thao tác.",
+      "Đối chiếu regression, side effect và phạm vi không bị mở rộng ngoài Jira task.",
+    ];
+  };
+  const makeStructuredSteps = (item) => {
+    const descriptions = item.steps?.length ? item.steps : defaultStepsFor(item);
+    const stepTestData = testDataFor(item) || setupDataFor(item);
+    return structuredStepsFromDescriptions(descriptions, stepTestData, expectation(...item.checks));
+  };
 
   const candidates = [];
   const addCandidate = (item) => {
@@ -1802,6 +2036,7 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
       precondition,
       test_data: testData,
       expected_result: expectedResult,
+      steps: steps.map((itemStep) => itemStep.description),
       structured_steps: steps,
     };
   });
@@ -1878,6 +2113,290 @@ function buildOutline(issue, archetypeKey, cases = [], sourceInput = {}, aiCusto
   };
 }
 
+function arrayFromMaybe(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string") {
+    return value
+      .split(/\r?\n|,/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function textFromMaybeList(value, bullet = false) {
+  if (Array.isArray(value)) {
+    return value
+      .map(asText)
+      .filter(Boolean)
+      .map((item) => (bullet && !/^[-*•]/.test(item) ? `- ${item}` : item))
+      .join("\n");
+  }
+  return asText(value).replace(/<br\s*\/?>/gi, "\n");
+}
+
+function genericCaseTitle(value) {
+  const normalized = normalizeSearchText(value).replace(/[^a-z0-9\s]+/g, "").trim();
+  return [
+    "muc tieu",
+    "objective",
+    "requirement",
+    "description",
+    "acceptance criteria",
+    "conversation bao phu yeu cau",
+    "yeu cau jira duoc dap ung",
+  ].includes(normalized);
+}
+
+function normalizeAiSteps(rawCase, fallbackCase) {
+  const rawStructured = Array.isArray(rawCase.structured_steps) ? rawCase.structured_steps : [];
+  const structured = rawStructured
+    .map((item) => {
+      if (typeof item === "string") {
+        return step(item, "", "");
+      }
+      return step(
+        item?.description || item?.step || item?.action,
+        item?.test_data || item?.testData,
+        ensureExpectedBullets(item?.expected_result || item?.expectedResult),
+      );
+    })
+    .filter((item) => item.description);
+  if (structured.length) return structured;
+
+  const rawSteps = arrayFromMaybe(rawCase.steps || rawCase.step);
+  if (rawSteps.length) {
+    return rawSteps.map((item) => {
+      if (typeof item === "string") return step(item, "", "");
+      return step(
+        item?.description || item?.step || item?.action,
+        item?.test_data || item?.testData,
+        ensureExpectedBullets(item?.expected_result || item?.expectedResult),
+      );
+    }).filter((item) => item.description);
+  }
+
+  if (Array.isArray(fallbackCase?.structured_steps) && fallbackCase.structured_steps.length) {
+    return fallbackCase.structured_steps;
+  }
+  return [step("Thực hiện scenario theo title test case.", "", "")];
+}
+
+function normalizeAiCase(rawCase = {}, index, issue, fallbackCase = {}) {
+  const rawTitle = stripTestCasePrefix(rawCase.title || rawCase.name || fallbackCase.title || "");
+  const fallbackTitle = stripTestCasePrefix(fallbackCase.title || `Kiểm tra behavior chính của ${issue.key || "task"}`);
+  const cleanTitle = genericCaseTitle(rawTitle) ? fallbackTitle : titleFromIntent(rawTitle, fallbackTitle);
+  let structuredSteps = normalizeAiSteps(rawCase, fallbackCase);
+  const fallbackSteps = Array.isArray(fallbackCase.structured_steps) ? fallbackCase.structured_steps : [];
+  const stepExpectedResult = aggregateStepField(structuredSteps, "expected_result") || aggregateStepField(fallbackSteps, "expected_result");
+  const stepTestData = aggregateStepField(structuredSteps, "test_data") || aggregateStepField(fallbackSteps, "test_data");
+  const expectedResult =
+    ensureExpectedBullets(
+      textFromMaybeList(rawCase.expected_result || rawCase.expectedResult || rawCase.expected || stepExpectedResult || fallbackCase.expected_result, true),
+    ) ||
+    expectation("Kết quả thực tế khớp đúng Jira description/acceptance criteria.");
+  const testData =
+    textFromMaybeList(rawCase.test_data || rawCase.testData || rawCase.data || stepTestData || fallbackCase.test_data) ||
+    `Dữ liệu kiểm tra:\n1. "Dữ liệu đại diện cho ${cleanTitle}"`;
+  if (structuredSteps.length && !structuredSteps.some((item) => item.test_data || item.expected_result)) {
+    structuredSteps = structuredStepsFromDescriptions(
+      structuredSteps.map((item) => item.description),
+      testData,
+      expectedResult,
+    );
+  }
+  return {
+    title: `[TC_${String(index + 1).padStart(4, "0")}] ${cleanTitle}`,
+    objective: asText(rawCase.objective || fallbackCase.objective || `Xác nhận scenario: ${cleanTitle}`),
+    priority: asText(rawCase.priority || fallbackCase.priority || "Normal"),
+    technique: asText(rawCase.technique || fallbackCase.technique || "Use-case / scenario flow"),
+    risk: asText(rawCase.risk || fallbackCase.risk || "Thiếu coverage cho scenario này có thể làm task pass thiếu."),
+    requirement_ref: asText(rawCase.requirement_ref || rawCase.requirementRef || fallbackCase.requirement_ref || issue.key),
+    coverage_tags: arrayFromMaybe(rawCase.coverage_tags || rawCase.coverageTags || fallbackCase.coverage_tags).map(asText).filter(Boolean),
+    scenario_type: asText(rawCase.scenario_type || rawCase.scenarioType || fallbackCase.scenario_type || "coverage"),
+    precondition: asText(rawCase.precondition || fallbackCase.precondition || `Task ${issue.key || ""} đã được triển khai trên môi trường test.`),
+    test_data: testData,
+    expected_result: expectedResult,
+    steps: structuredSteps.map((item) => item.description),
+    structured_steps: structuredSteps,
+  };
+}
+
+function normalizeAiOutline(rawOutline = {}, issue, archetypeKey, fallbackOutline = {}) {
+  const rawBranches = Array.isArray(rawOutline.branches) ? rawOutline.branches : [];
+  const branches = rawBranches
+    .map((branch) => {
+      if (typeof branch === "string") {
+        return { title: titleFromIntent(branch, "Coverage branch"), items: [] };
+      }
+      return {
+        title: titleFromIntent(branch?.title || branch?.name, "Coverage branch"),
+        items: arrayFromMaybe(branch?.items || branch?.bullets || branch?.children).map(asText).filter(Boolean).slice(0, 6),
+      };
+    })
+    .filter((branch) => branch.title && branch.items.length)
+    .slice(0, 5);
+
+  const normalizedBranches = branches.length >= 3 ? [...branches] : [...(fallbackOutline.branches || [])];
+  if (!normalizedBranches.some((branch) => normalizeSearchText(branch.title).includes("out of scope"))) {
+    normalizedBranches.push({
+      title: "Out of scope",
+      items: [
+        "Không kiểm thử thay đổi ngoài mô tả Jira task này.",
+        "Không để tài liệu tham chiếu lấn át Jira description/acceptance criteria.",
+      ],
+    });
+  }
+  return {
+    issue_key: asText(rawOutline.issue_key || rawOutline.issueKey || issue.key),
+    title: asText(rawOutline.title || fallbackOutline.title || issue.title || `[${issue.key}] ${issue.summary}`),
+    sheet_title: asText(rawOutline.sheet_title || rawOutline.sheetTitle || fallbackOutline.sheet_title || "Brace Map"),
+    template: asText(rawOutline.template || fallbackOutline.template || archetypeKey),
+    source_context: rawOutline.source_context || fallbackOutline.source_context || {},
+    design_rationale: rawOutline.design_rationale || rawOutline.designRationale || fallbackOutline.design_rationale || {},
+    branches: normalizedBranches.slice(0, 5),
+  };
+}
+
+function normalizeAiDraft(payload, issue, archetypeKey, fallbackCases, fallbackOutline) {
+  const rawCases = Array.isArray(payload?.test_cases)
+    ? payload.test_cases
+    : Array.isArray(payload?.testCases)
+      ? payload.testCases
+      : [];
+  if (!rawCases.length) {
+    throw new Error("AI provider trả về JSON nhưng thiếu `test_cases`.");
+  }
+  const testCases = rawCases.slice(0, 32).map((rawCase, index) => normalizeAiCase(rawCase, index, issue, fallbackCases[index]));
+  const outline = normalizeAiOutline(payload.outline || payload.test_design || payload.testDesign || {}, issue, archetypeKey, fallbackOutline);
+  return { testCases, outline };
+}
+
+function buildAiDraftMessages({
+  issue,
+  archetypeKey,
+  archetype,
+  sourceInput,
+  aiCustomization,
+  fallbackCases,
+  fallbackOutline,
+  sourceRoot,
+}) {
+  const system = [
+    "You are EasyForQC, a senior QC/QA test design assistant.",
+    "Generate reusable Jira Zephyr test cases and a compact XMind test-design outline.",
+    "Follow the OmniAgent QA skill standards from the provided references.",
+    "Return strict JSON only. No markdown, no prose outside JSON.",
+  ].join("\n");
+
+  const user = [
+    "## Source priority",
+    "1. Jira summary and description are the primary source of scope.",
+    "2. Confluence/doc context is supporting evidence only. Use it only when it clearly relates to the Jira task.",
+    "3. QA notes and AI Settings refine style/coverage; they must not override explicit Jira scope.",
+    "",
+    "## Output rules",
+    "- Do not create a fixed number of cases. Create as many as needed to cover the task well.",
+    "- Each testcase title must be concise, scenario-specific, and immediately explain what the case covers.",
+    "- Never use generic titles such as `Mục tiêu`, `Description`, `Conversation bao phủ yêu cầu`, or `Yêu cầu Jira được đáp ứng`.",
+    "- Use QC techniques deliberately: decision table, state transition, equivalence partitioning, boundary/null handling, regression, fallback/recovery, retry/idempotency, field mapping when relevant.",
+    "- Match the style of the existing OmniAgent QA suites such as `ai_703_test_cases.json` and `ai_707_test_cases_v2.json`: one testcase = one focused scenario, strong title, concrete precondition, realistic data, and 3-4 tester action steps.",
+    "- Do not copy the AI-703/AI-707 content unless the current Jira task is actually about that behavior. Use those suites only as writing/structure examples.",
+    "- `test_data` must contain realistic test data. For chatbot/conversation flows, use numbered quoted user messages: `1. \"...\"`.",
+    "- `expected_result` must be multiline bullet points beginning with `- `.",
+    "- `steps` must be an array of clear tester actions like the sample suites. Each item is one Zephyr Test Player row, not a paragraph.",
+    "- Use `structured_steps` only when a row needs its own test data or expected result; otherwise `steps` plus case-level `test_data`/`expected_result` is preferred.",
+    "- Test design must have 4-5 branches and one branch named `Out of scope`.",
+    "",
+    "## Required JSON schema",
+    JSON.stringify(
+      {
+        test_cases: [
+          {
+            title: "Scenario-specific title without TC prefix",
+            precondition: "Precondition text",
+            objective: "Objective text",
+            priority: "High | Normal | Low",
+            technique: "Decision table",
+            risk: "Risk covered by this case",
+            requirement_ref: issue.key || "Jira issue / doc source",
+            coverage_tags: ["short-tag"],
+            scenario_type: "happy_path | negative | regression | boundary | fallback | mapping | state_transition",
+            steps: ["One clear tester action", "Another concrete verification action"],
+            test_data: "Dữ liệu kiểm tra:\\n1. \"...\"",
+            expected_result: "- Expected 1\\n- Expected 2",
+          },
+        ],
+        outline: {
+          issue_key: issue.key,
+          title: `[${issue.key}] ${issue.summary}`,
+          sheet_title: "Brace Map",
+          template: archetypeKey,
+          source_context: {},
+          design_rationale: {
+            archetype: archetype.label,
+            primary_techniques: archetype.primary,
+            supporting_techniques: archetype.supporting,
+            assumptions: [],
+            open_questions: [],
+          },
+          branches: [{ title: "Branch title", items: ["Concrete bullet"] }],
+        },
+      },
+      null,
+      2,
+    ),
+    "",
+    "## OmniAgent skill references",
+    truncateForPrompt(omniSkillReference(sourceRoot), 22000),
+    "",
+    "## Local reference testcase style examples",
+    truncateForPrompt(localTestCaseStyleExamples(), 16000),
+    "",
+    "## Jira issue",
+    jsonForPrompt(issue, 18000),
+    "",
+    "## Selected archetype",
+    jsonForPrompt({ key: archetypeKey, ...archetype }, 4000),
+    "",
+    "## QA notes",
+    truncateForPrompt(sourceInput.qaNotes || "", 4000),
+    "",
+    "## Confluence/doc context for this task only",
+    truncateForPrompt(sourceInput.docContext || "", 26000),
+    "",
+    "## User AI Settings guidance",
+    truncateForPrompt(aiGuidanceText(aiCustomization), 6000),
+    "",
+    "## Local fallback draft for structure reference only",
+    jsonForPrompt({ test_cases: fallbackCases.slice(0, 8), outline: fallbackOutline }, 18000),
+  ].join("\n");
+
+  return [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ];
+}
+
+async function generateAiDraft({ issue, archetypeKey, sourceInput, aiSettings, aiCustomization, fallbackCases, fallbackOutline, project }) {
+  const archetype = ARCHETYPES[archetypeKey] || ARCHETYPES.general;
+  const messages = buildAiDraftMessages({
+    issue,
+    archetypeKey,
+    archetype,
+    sourceInput,
+    aiCustomization,
+    fallbackCases,
+    fallbackOutline,
+    sourceRoot: project.sourceRoot,
+  });
+  const result = await callOpenAiCompatible(aiSettings, messages);
+  return {
+    ...normalizeAiDraft(result.payload, issue, archetypeKey, fallbackCases, fallbackOutline),
+    usage: result.usage,
+  };
+}
+
 function normalizeCasesForFile(cases) {
   if (!Array.isArray(cases) || cases.length === 0) {
     throw Object.assign(new Error("Cần ít nhất một test case."), { status: 400 });
@@ -1921,18 +2440,14 @@ function savedTestCasesPayload(issue, outline, cases, archetypeKey) {
       risk: asText(testCase.risk),
       requirement_ref: asText(testCase.requirement_ref || issue.key),
       coverage_tags: Array.isArray(testCase.coverage_tags) ? testCase.coverage_tags.map(asText).filter(Boolean) : [],
-      steps: Array.isArray(testCase.structured_steps)
-        ? testCase.structured_steps.map((item) => asText(item.description)).filter(Boolean)
-        : [],
+      steps:
+        Array.isArray(testCase.structured_steps) && testCase.structured_steps.length
+          ? testCase.structured_steps.map((item) => asText(item.description)).filter(Boolean)
+          : Array.isArray(testCase.steps)
+            ? testCase.steps.map(asText).filter(Boolean)
+            : [],
       test_data: asText(testCase.test_data),
       expected_result: asText(testCase.expected_result),
-      structured_steps: Array.isArray(testCase.structured_steps)
-        ? testCase.structured_steps.map((item) => ({
-            description: asText(item.description),
-            test_data: asText(item.test_data),
-            expected_result: asText(item.expected_result),
-          }))
-        : [],
     })),
   };
 }
@@ -2037,6 +2552,7 @@ app.post("/api/issue", async (req, res) => {
 app.post("/api/draft", async (req, res) => {
   try {
     const parsed = parseIssueReference(req.body?.jiraUrl || "");
+    const project = normalizeProject(req.body?.project, { jiraBaseUrl: parsed.baseUrl });
     const issue = normalizeIssue(req.body?.issue, req.body?.jiraUrl);
     if (!issue.key) issue.key = parsed.issueKey;
     if (!issue.summary && !issue.description) {
@@ -2058,13 +2574,42 @@ app.post("/api/draft", async (req, res) => {
       qaNotes: asText(req.body?.notes),
       docContext,
     };
-    const aiCustomization = aiCustomizationFromSettings(req.body?.aiSettings);
-    const testCases = buildCases(issue, archetypeKey, sourceContext, aiCustomization);
-    const outline = buildOutline(issue, archetypeKey, testCases, sourceContext, aiCustomization);
+    const aiSettings = normalizeAiSettings(req.body?.aiSettings);
+    const aiCustomization = aiCustomizationFromSettings(aiSettings);
+    let testCases = buildCases(issue, archetypeKey, sourceContext, aiCustomization);
+    let outline = buildOutline(issue, archetypeKey, testCases, sourceContext, aiCustomization);
+    let aiGenerationUsed = false;
+    let aiGenerationError = "";
+    let aiUsage = null;
+    if (aiSettings.enabled && !aiProviderReady(aiSettings)) {
+      aiGenerationError = "AI Settings đang bật nhưng thiếu API key hoặc model, nên app dùng fallback local.";
+    } else if (aiProviderReady(aiSettings)) {
+      try {
+        const aiDraft = await generateAiDraft({
+          issue,
+          archetypeKey,
+          sourceInput: sourceContext,
+          aiSettings,
+          aiCustomization,
+          fallbackCases: testCases,
+          fallbackOutline: outline,
+          project,
+        });
+        testCases = aiDraft.testCases;
+        outline = aiDraft.outline;
+        aiGenerationUsed = true;
+        aiUsage = aiDraft.usage;
+      } catch (error) {
+        aiGenerationError = `AI provider lỗi, app dùng fallback local: ${error instanceof Error ? error.message : "Không tạo được AI draft."}`;
+      }
+    }
     res.json({
       archetypeKey,
       archetype: ARCHETYPES[archetypeKey],
       aiCustomizationApplied: Boolean(aiCustomization),
+      aiGenerationUsed,
+      aiGenerationError,
+      aiUsage,
       sourceContext: outline.source_context,
       referenceDocsFetched: referenceDocs,
       testCases,

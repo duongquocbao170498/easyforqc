@@ -68,6 +68,7 @@ export type TestCase = {
   precondition: string;
   test_data: string;
   expected_result: string;
+  steps?: string[];
   structured_steps: StructuredStep[];
 };
 
