@@ -69,7 +69,7 @@ const emptyConfluenceCredentials: ConfluenceCredentials = {
 
 const emptyAiSettings: AiSettings = {
   enabled: false,
-  provider: "openai-compatible",
+  provider: "openai",
   baseUrl: "https://api.openai.com/v1",
   model: "",
   apiKey: "",
@@ -1089,8 +1089,8 @@ function App() {
           <label className="field">
             <span>Provider</span>
             <select value={aiSettings.provider} onChange={(event) => setAiSettingValue("provider", event.target.value)}>
-              <option value="openai-compatible">OpenAI compatible</option>
               <option value="openai">OpenAI</option>
+              <option value="openai-compatible">OpenAI compatible</option>
               <option value="azure-openai">Azure OpenAI</option>
               <option value="custom">Custom endpoint</option>
             </select>
@@ -1158,7 +1158,7 @@ function App() {
           </div>
           {settingsStatus.ai ? <div className="mini-note">{settingsStatus.ai}</div> : null}
           <div className="mini-note">
-            API key và guideline được lưu mã hoá theo account. Khi bật AI Settings, app bắt buộc gọi AI provider thành công; nếu lỗi sẽ báo lỗi thay vì dùng fallback local.
+            API key và guideline được lưu mã hoá theo account. OpenAI base URL sẽ dùng Responses API; provider compatible/custom vẫn dùng Chat Completions. Khi bật AI Settings, app bắt buộc gọi AI provider thành công; nếu lỗi sẽ báo lỗi thay vì dùng fallback local.
           </div>
         </section>
       </aside>

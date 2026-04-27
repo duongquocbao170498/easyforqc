@@ -1599,8 +1599,39 @@ function jsonForPrompt(value, limit = 14000) {
   return truncateForPrompt(JSON.stringify(value, null, 2), limit);
 }
 
-function aiEndpointUrl(settings = {}) {
-  const baseUrl = (asText(settings.baseUrl) || "https://api.openai.com/v1").replace(/\/+$/, "");
+function normalizedAiBaseUrl(settings = {}) {
+  return (asText(settings.baseUrl) || "https://api.openai.com/v1").replace(/\/+$/, "");
+}
+
+function isOpenAiHostedUrl(baseUrl) {
+  try {
+    const hostname = new URL(baseUrl).hostname.toLowerCase();
+    return hostname === "api.openai.com";
+  } catch {
+    return /(^|\/\/)api\.openai\.com(?:[:/]|$)/i.test(baseUrl);
+  }
+}
+
+function shouldUseResponsesApi(settings = {}) {
+  const provider = asText(settings.provider).toLowerCase();
+  const baseUrl = normalizedAiBaseUrl(settings);
+  if (provider === "azure-openai") {
+    return false;
+  }
+  return provider === "openai" || isOpenAiHostedUrl(baseUrl) || /\/responses(?:\?|$)/i.test(baseUrl);
+}
+
+function aiEndpointUrl(settings = {}, mode = "chat") {
+  const baseUrl = normalizedAiBaseUrl(settings);
+  if (mode === "responses") {
+    if (/\/responses(?:\?|$)/i.test(baseUrl)) {
+      return baseUrl;
+    }
+    if (/\/chat\/completions(?:\?|$)/i.test(baseUrl)) {
+      return baseUrl.replace(/\/chat\/completions(?:\?.*)?$/i, "/responses");
+    }
+    return `${baseUrl}/responses`;
+  }
   if (/\/chat\/completions(?:\?|$)/i.test(baseUrl)) {
     return baseUrl;
   }
@@ -1612,8 +1643,209 @@ function aiEndpointUrl(settings = {}) {
   return `${baseUrl}/chat/completions`;
 }
 
-async function callOpenAiCompatible(settings, messages) {
-  const url = aiEndpointUrl(settings);
+function escapeRegExp(value) {
+  return asText(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function sanitizeProviderText(value, secrets = []) {
+  let text = asText(value);
+  for (const secret of secrets.map(asText).filter(Boolean)) {
+    text = text.replace(new RegExp(escapeRegExp(secret), "g"), "[redacted]");
+  }
+  return text
+    .replace(/sk-proj-[A-Za-z0-9_-]{12,}/g, "[redacted-openai-key]")
+    .replace(/sk-[A-Za-z0-9_-]{12,}/g, "[redacted-openai-key]")
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, "Bearer [redacted]");
+}
+
+function providerOrigin(url) {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return url;
+  }
+}
+
+async function readAiProviderResponse(response, settings, url) {
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = null;
+  }
+  if (!response.ok) {
+    const rawMessage =
+      payload?.error?.message ||
+      payload?.message ||
+      text.slice(0, 1200) ||
+      `AI provider HTTP ${response.status}`;
+    const message = sanitizeProviderText(rawMessage, [settings.apiKey]);
+    throw Object.assign(new Error(message), {
+      status: response.status,
+      details: {
+        provider: asText(settings.provider) || "openai-compatible",
+        model: asText(settings.model),
+        endpoint: providerOrigin(url),
+        response: sanitizeProviderText(text.slice(0, 1200), [settings.apiKey]),
+      },
+    });
+  }
+  return payload;
+}
+
+function responseInputFromMessages(messages = []) {
+  return messages.map((message) => ({
+    role: message.role === "system" || message.role === "assistant" ? message.role : "user",
+    content: [{ type: "input_text", text: asText(message.content) }],
+  }));
+}
+
+function easyForQcDraftJsonSchema() {
+  return {
+    type: "object",
+    additionalProperties: true,
+    required: ["test_cases", "outline"],
+    properties: {
+      test_cases: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: true,
+          required: ["title", "precondition", "objective", "steps", "test_data", "expected_result"],
+          properties: {
+            title: { type: "string" },
+            precondition: { type: "string" },
+            objective: { type: "string" },
+            priority: { type: "string" },
+            technique: { type: "string" },
+            risk: { type: "string" },
+            requirement_ref: { type: "string" },
+            coverage_tags: { type: "array", items: { type: "string" } },
+            scenario_type: { type: "string" },
+            steps: { type: "array", items: { type: "string" } },
+            test_data: { type: "string" },
+            expected_result: { type: "string" },
+          },
+        },
+      },
+      outline: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          issue_key: { type: "string" },
+          title: { type: "string" },
+          sheet_title: { type: "string" },
+          template: { type: "string" },
+          source_context: { type: "object", additionalProperties: true },
+          design_rationale: { type: "object", additionalProperties: true },
+          branches: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: true,
+              properties: {
+                title: { type: "string" },
+                items: { type: "array", items: { type: "string" } },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
+function extractResponsesOutputText(payload) {
+  if (typeof payload?.output_text === "string") {
+    return payload.output_text;
+  }
+  const chunks = [];
+  for (const item of Array.isArray(payload?.output) ? payload.output : []) {
+    if (typeof item?.content === "string") {
+      chunks.push(item.content);
+    }
+    if (typeof item?.text === "string") {
+      chunks.push(item.text);
+    }
+    for (const part of Array.isArray(item?.content) ? item.content : []) {
+      if (typeof part?.refusal === "string" && part.refusal.trim()) {
+        throw new Error(`AI provider từ chối tạo JSON: ${part.refusal}`);
+      }
+      if (typeof part?.text === "string") {
+        chunks.push(part.text);
+      }
+      if (typeof part?.content === "string") {
+        chunks.push(part.content);
+      }
+    }
+  }
+  return chunks.join("\n").trim();
+}
+
+async function callOpenAiResponses(settings, messages) {
+  const url = aiEndpointUrl(settings, "responses");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 180000);
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    Authorization: `Bearer ${settings.apiKey}`,
+  };
+  const body = {
+    model: settings.model,
+    input: responseInputFromMessages(messages),
+    max_output_tokens: 12000,
+    text: {
+      format: {
+        type: "json_schema",
+        name: "easyforqc_draft",
+        strict: false,
+        schema: easyForQcDraftJsonSchema(),
+      },
+    },
+  };
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const payload = await readAiProviderResponse(response, settings, url);
+    if (payload?.status === "incomplete") {
+      const reason = payload?.incomplete_details?.reason || "unknown";
+      throw Object.assign(new Error(`AI provider trả response incomplete: ${reason}.`), {
+        status: 502,
+        details: {
+          provider: asText(settings.provider) || "openai",
+          model: asText(settings.model),
+          endpoint: providerOrigin(url),
+        },
+      });
+    }
+    const content = extractResponsesOutputText(payload);
+    const parsed = parseMaybeJson(content);
+    if (!parsed) {
+      throw Object.assign(new Error("AI provider không trả về JSON hợp lệ."), {
+        status: 502,
+        details: {
+          provider: asText(settings.provider) || "openai",
+          model: asText(settings.model),
+          endpoint: providerOrigin(url),
+          response: sanitizeProviderText(content.slice(0, 1200), [settings.apiKey]),
+        },
+      });
+    }
+    return { payload: parsed, usage: payload?.usage || null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function callChatCompletionsCompatible(settings, messages) {
+  const url = aiEndpointUrl(settings, "chat");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 180000);
   const isAzure = settings.provider === "azure-openai";
@@ -1641,21 +1873,7 @@ async function callOpenAiCompatible(settings, messages) {
       body: JSON.stringify(body),
       signal: controller.signal,
     });
-    const text = await response.text();
-    let payload = null;
-    try {
-      payload = text ? JSON.parse(text) : null;
-    } catch {
-      payload = null;
-    }
-    if (!response.ok) {
-      const message =
-        payload?.error?.message ||
-        payload?.message ||
-        text.slice(0, 1200) ||
-        `AI provider HTTP ${response.status}`;
-      throw Object.assign(new Error(message), { status: response.status });
-    }
+    const payload = await readAiProviderResponse(response, settings, url);
     const content =
       payload?.choices?.[0]?.message?.content ||
       payload?.choices?.[0]?.text ||
@@ -1663,12 +1881,27 @@ async function callOpenAiCompatible(settings, messages) {
       "";
     const parsed = parseMaybeJson(content);
     if (!parsed) {
-      throw new Error("AI provider không trả về JSON hợp lệ.");
+      throw Object.assign(new Error("AI provider không trả về JSON hợp lệ."), {
+        status: 502,
+        details: {
+          provider: asText(settings.provider) || "openai-compatible",
+          model: asText(settings.model),
+          endpoint: providerOrigin(url),
+          response: sanitizeProviderText(content.slice(0, 1200), [settings.apiKey]),
+        },
+      });
     }
     return { payload: parsed, usage: payload?.usage || null };
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function callOpenAiCompatible(settings, messages) {
+  if (shouldUseResponsesApi(settings)) {
+    return callOpenAiResponses(settings, messages);
+  }
+  return callChatCompletionsCompatible(settings, messages);
 }
 
 function csvList(value) {
@@ -2861,6 +3094,7 @@ app.post("/api/draft", async (req, res) => {
           new Error(`AI provider lỗi nên không generate fallback local: ${error instanceof Error ? error.message : "Không tạo được AI draft."}`),
           {
             status: error.status || 502,
+            details: error.details || null,
           },
         );
       }
