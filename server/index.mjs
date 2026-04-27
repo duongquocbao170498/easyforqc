@@ -95,6 +95,14 @@ const DEFAULTS = {
   folderRoot: "/Bao QC",
   runRoot: "/AI Chatbot",
   outputDir: path.join(ROOT_DIR, "qa", "xmind-test-design"),
+  repoContext: {
+    enabled: false,
+    productRepoRoot: "",
+    qaReferenceDir: "",
+    includePaths: "src\napp\ntests\nqa\n.agent/skills",
+    excludePaths: "node_modules\n.git\ndist\nbuild\n.env\n.env.*\n*.pem\n*.key\n*secret*\n*token*",
+    maxSnippets: "10",
+  },
   labelPolicy: {
     mode: "custom",
     testcaseLabels: "QA_Testcases",
@@ -369,12 +377,14 @@ async function initializeDatabase() {
       credentials_encrypted TEXT NOT NULL DEFAULT '',
       confluence_credentials_encrypted TEXT NOT NULL DEFAULT '',
       ai_settings_encrypted TEXT NOT NULL DEFAULT '',
+      repo_context_encrypted TEXT NOT NULL DEFAULT '',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
   await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS confluence_credentials_encrypted TEXT NOT NULL DEFAULT ''");
   await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_settings_encrypted TEXT NOT NULL DEFAULT ''");
+  await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS repo_context_encrypted TEXT NOT NULL DEFAULT ''");
 
   const adminEmail = normalizeEmail(APP_ADMIN_EMAIL);
   if (!adminEmail || !APP_ADMIN_PASSWORD) {
@@ -770,12 +780,12 @@ app.post("/api/auth/change-password", async (req, res) => {
 app.get("/api/user-settings", async (req, res) => {
   try {
     if (!db) {
-      res.json({ project: null, credentials: null, confluenceCredentials: null, aiSettings: null });
+      res.json({ project: null, credentials: null, confluenceCredentials: null, aiSettings: null, repoContext: null });
       return;
     }
     const result = await db.query(
       `
-        SELECT project_config, credentials_encrypted, confluence_credentials_encrypted, ai_settings_encrypted
+        SELECT project_config, credentials_encrypted, confluence_credentials_encrypted, ai_settings_encrypted, repo_context_encrypted
         FROM user_settings
         WHERE user_email = $1
       `,
@@ -787,6 +797,7 @@ app.get("/api/user-settings", async (req, res) => {
       credentials: decryptSettingsJson(row?.credentials_encrypted),
       confluenceCredentials: decryptSettingsJson(row?.confluence_credentials_encrypted),
       aiSettings: decryptSettingsJson(row?.ai_settings_encrypted),
+      repoContext: decryptSettingsJson(row?.repo_context_encrypted),
     });
   } catch (error) {
     sendError(res, error);
@@ -805,9 +816,10 @@ app.post("/api/user-settings", async (req, res) => {
     const hasCredentials = Object.prototype.hasOwnProperty.call(body, "credentials");
     const hasConfluenceCredentials = Object.prototype.hasOwnProperty.call(body, "confluenceCredentials");
     const hasAiSettings = Object.prototype.hasOwnProperty.call(body, "aiSettings");
+    const hasRepoContext = Object.prototype.hasOwnProperty.call(body, "repoContext");
     const existing = await db.query(
       `
-        SELECT project_config, credentials_encrypted, confluence_credentials_encrypted, ai_settings_encrypted
+        SELECT project_config, credentials_encrypted, confluence_credentials_encrypted, ai_settings_encrypted, repo_context_encrypted
         FROM user_settings
         WHERE user_email = $1
       `,
@@ -820,16 +832,18 @@ app.post("/api/user-settings", async (req, res) => {
       ? normalizeConfluenceCredentials(body.confluenceCredentials)
       : decryptSettingsJson(row?.confluence_credentials_encrypted);
     const aiSettings = hasAiSettings ? normalizeAiSettings(body.aiSettings) : decryptSettingsJson(row?.ai_settings_encrypted);
+    const repoContext = hasRepoContext ? normalizeRepoContext(body.repoContext) : decryptSettingsJson(row?.repo_context_encrypted);
     await db.query(
       `
-        INSERT INTO user_settings (user_email, project_config, credentials_encrypted, confluence_credentials_encrypted, ai_settings_encrypted)
-        VALUES ($1, $2::jsonb, $3, $4, $5)
+        INSERT INTO user_settings (user_email, project_config, credentials_encrypted, confluence_credentials_encrypted, ai_settings_encrypted, repo_context_encrypted)
+        VALUES ($1, $2::jsonb, $3, $4, $5, $6)
         ON CONFLICT (user_email)
         DO UPDATE SET
           project_config = EXCLUDED.project_config,
           credentials_encrypted = EXCLUDED.credentials_encrypted,
           confluence_credentials_encrypted = EXCLUDED.confluence_credentials_encrypted,
           ai_settings_encrypted = EXCLUDED.ai_settings_encrypted,
+          repo_context_encrypted = EXCLUDED.repo_context_encrypted,
           updated_at = NOW()
       `,
       [
@@ -838,6 +852,7 @@ app.post("/api/user-settings", async (req, res) => {
         encryptSettingsJson(credentials),
         encryptSettingsJson(confluenceCredentials),
         encryptSettingsJson(aiSettings),
+        encryptSettingsJson(repoContext),
       ],
     );
     res.json({
@@ -846,6 +861,7 @@ app.post("/api/user-settings", async (req, res) => {
       credentials,
       confluenceCredentials,
       aiSettings,
+      repoContext,
     });
   } catch (error) {
     sendError(res, error);
@@ -1404,6 +1420,28 @@ function buildCoverageAxes(issue, archetype, context, signals, techniques) {
   return axes.slice(0, 10);
 }
 
+function pathList(value) {
+  return asText(value)
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function wildcardToRegExp(pattern) {
+  const escaped = escapeRegExp(pattern).replace(/\\\*/g, ".*");
+  return new RegExp(`(^|/)${escaped}($|/)`, "i");
+}
+
+function pathMatchesRule(relativePath, rules = []) {
+  const normalized = relativePath.split(path.sep).join("/");
+  return rules.some((rule) => {
+    const clean = asText(rule).replace(/^\/+|\/+$/g, "");
+    if (!clean) return false;
+    if (clean.includes("*")) return wildcardToRegExp(clean).test(normalized);
+    return normalized === clean || normalized.startsWith(`${clean}/`) || normalized.includes(`/${clean}/`) || normalized.endsWith(`/${clean}`);
+  });
+}
+
 function isEvidenceFile(filePath) {
   const basename = path.basename(filePath).toLowerCase();
   if (
@@ -1417,8 +1455,10 @@ function isEvidenceFile(filePath) {
   return QA_EVIDENCE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
 }
 
-async function listEvidenceFiles(rootDir, maxFiles = QA_EVIDENCE_FILE_LIMIT) {
+async function listEvidenceFiles(rootDir, maxFiles = QA_EVIDENCE_FILE_LIMIT, options = {}) {
   const root = path.resolve(asText(rootDir));
+  const includeRules = pathList(options.includePaths);
+  const excludeRules = pathList(options.excludePaths);
   const files = [];
   const stack = [root];
   while (stack.length && files.length < maxFiles) {
@@ -1433,11 +1473,17 @@ async function listEvidenceFiles(rootDir, maxFiles = QA_EVIDENCE_FILE_LIMIT) {
     for (const entry of entries) {
       if (files.length >= maxFiles) break;
       const fullPath = path.join(current, entry.name);
+      const relativePath = path.relative(root, fullPath).split(path.sep).join("/");
       if (entry.isDirectory()) {
-        if (!QA_EVIDENCE_EXCLUDED_DIRS.has(entry.name)) stack.push(fullPath);
+        if (!QA_EVIDENCE_EXCLUDED_DIRS.has(entry.name) && !pathMatchesRule(relativePath, excludeRules)) stack.push(fullPath);
         continue;
       }
-      if (entry.isFile() && isEvidenceFile(fullPath)) {
+      if (
+        entry.isFile() &&
+        isEvidenceFile(fullPath) &&
+        !pathMatchesRule(relativePath, excludeRules) &&
+        (!includeRules.length || pathMatchesRule(relativePath, includeRules))
+      ) {
         files.push(fullPath);
       }
     }
@@ -1481,25 +1527,26 @@ function evidenceSnippetsFromText(text, keywords, limit = 3) {
   return scored.sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
-function evidenceRoots(project = {}) {
+function evidenceRoots(repoContext = {}) {
+  if (!repoContext.enabled) return [];
   return dedupeStrings(
     [
       process.env.QA_EVIDENCE_ROOT,
-      project.evidenceRoot,
-      project.repoRoot,
-      project.productRoot,
-      project.sourceRoot,
-      path.join(ROOT_DIR, "qa"),
-      path.join(ROOT_DIR, "vendor", "qa-reference"),
+      repoContext.productRepoRoot,
+      repoContext.qaReferenceDir,
     ]
       .map(asText)
       .filter(Boolean),
   );
 }
 
-async function buildRepoEvidencePack(issue, project, context) {
+async function buildRepoEvidencePack(issue, repoContext, context) {
+  const settings = normalizeRepoContext(repoContext);
   if (process.env.QA_REPO_EVIDENCE_DISABLED === "true") {
     return { enabled: false, reason: "disabled_by_env", roots: [], snippets: [] };
+  }
+  if (!settings.enabled) {
+    return { enabled: false, reason: "disabled_in_repo_context_settings", roots: [], snippets: [] };
   }
   const anchorText = [
     issue.key,
@@ -1514,18 +1561,28 @@ async function buildRepoEvidencePack(issue, project, context) {
   }
   const snippets = [];
   const scannedRoots = [];
-  for (const root of evidenceRoots(project)) {
-    if (snippets.length >= QA_EVIDENCE_SNIPPET_LIMIT) break;
+  const rootStatus = [];
+  const maxSnippets = clampNumber(Number(settings.maxSnippets || QA_EVIDENCE_SNIPPET_LIMIT) || QA_EVIDENCE_SNIPPET_LIMIT, 1, 30);
+  for (const root of evidenceRoots(settings)) {
+    if (snippets.length >= maxSnippets) break;
     try {
       const stat = await fs.stat(root);
-      if (!stat.isDirectory()) continue;
+      if (!stat.isDirectory()) {
+        rootStatus.push({ root, exists: false, reason: "not_a_directory" });
+        continue;
+      }
     } catch {
+      rootStatus.push({ root, exists: false, reason: "not_found_or_inaccessible" });
       continue;
     }
+    rootStatus.push({ root, exists: true, reason: "" });
     scannedRoots.push(root);
-    const files = await listEvidenceFiles(root);
+    const files = await listEvidenceFiles(root, QA_EVIDENCE_FILE_LIMIT, {
+      ...settings,
+      includePaths: path.resolve(root) === path.resolve(settings.qaReferenceDir || "") ? "" : settings.includePaths,
+    });
     for (const filePath of files) {
-      if (snippets.length >= QA_EVIDENCE_SNIPPET_LIMIT) break;
+      if (snippets.length >= maxSnippets) break;
       const relativePath = path.relative(root, filePath);
       const pathScore = keywords.reduce((total, keyword) => total + (normalizeSearchText(relativePath).includes(keyword) ? 2 : 0), 0);
       const text = await readFileHead(filePath);
@@ -1544,8 +1601,11 @@ async function buildRepoEvidencePack(issue, project, context) {
   return {
     enabled: true,
     roots: scannedRoots,
+    root_status: rootStatus,
     keywords: keywords.slice(0, 20),
-    snippets: snippets.slice(0, QA_EVIDENCE_SNIPPET_LIMIT),
+    include_paths: pathList(settings.includePaths),
+    exclude_paths: pathList(settings.excludePaths),
+    snippets: snippets.slice(0, maxSnippets),
   };
 }
 
@@ -1580,13 +1640,16 @@ async function buildQaPlan({ issue, archetypeKey, sourceInput = {}, aiCustomizat
   const signals = detectTaskSignals(issue, context, archetypeKey);
   const techniques = selectQaTechniques(archetype, signals);
   const coverageAxes = buildCoverageAxes(issue, archetype, context, signals, techniques);
-  const repoEvidence = await buildRepoEvidencePack(issue, project, context);
+  const repoEvidence = await buildRepoEvidencePack(issue, sourceInput.repoContext, context);
   const openQuestions = [];
   if (signals.some((item) => item.id === "score_state") && !/nguong|ngưỡng|threshold|low|fail|pass/i.test(`${issue.description} ${sourceInput.docContext || ""}`)) {
     openQuestions.push("Jira chưa nêu ngưỡng AMR pass/low/fail cụ thể; testcase nên dùng dataset đã biết expected state thay vì tự đoán threshold.");
   }
   if (context.docContextIgnored) {
     openQuestions.push("Doc context có được gửi lên nhưng không có keyword liên quan rõ với Jira description; cần QA xác nhận trước khi dùng làm scope.");
+  }
+  if (repoEvidence.enabled && !repoEvidence.roots?.length) {
+    openQuestions.push("Repo Context đang bật nhưng không có Product repo root/QA reference dir nào truy cập được trên môi trường đang chạy app.");
   }
   return {
     version: "adaptive-qa-plan-v1",
@@ -2124,6 +2187,19 @@ function normalizeAiSettings(raw = {}) {
     testCaseGuidelines: asText(raw.testCaseGuidelines),
     testDesignGuidelines: asText(raw.testDesignGuidelines),
     improvementNotes: asText(raw.improvementNotes),
+  };
+}
+
+function normalizeRepoContext(raw = {}) {
+  raw = raw || {};
+  const defaults = DEFAULTS.repoContext;
+  return {
+    enabled: raw.enabled === true || asText(raw.enabled).toLowerCase() === "true",
+    productRepoRoot: asText(raw.productRepoRoot || raw.product_repo_root || raw.repoRoot || raw.repo_root),
+    qaReferenceDir: asText(raw.qaReferenceDir || raw.qa_reference_dir || raw.referenceDir || raw.reference_dir),
+    includePaths: asText(raw.includePaths || raw.include_paths) || defaults.includePaths,
+    excludePaths: asText(raw.excludePaths || raw.exclude_paths) || defaults.excludePaths,
+    maxSnippets: asText(raw.maxSnippets || raw.max_snippets) || defaults.maxSnippets,
   };
 }
 
@@ -3903,6 +3979,7 @@ app.get("/api/defaults", async (_req, res) => {
   };
   res.json({
     defaults: DEFAULTS,
+    repoContext: DEFAULTS.repoContext,
     archetypes: Object.fromEntries(
       Object.entries(ARCHETYPES).map(([key, value]) => [
         key,
@@ -3991,6 +4068,7 @@ app.post("/api/draft", async (req, res) => {
     const sourceContext = {
       qaNotes: asText(req.body?.notes),
       docContext,
+      repoContext: normalizeRepoContext(req.body?.repoContext),
     };
     const aiSettings = normalizeAiSettings(req.body?.aiSettings);
     const aiCustomization = aiCustomizationFromSettings(aiSettings);

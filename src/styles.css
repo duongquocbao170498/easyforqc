@@ -295,6 +295,8 @@ select:focus {
   padding: 5px 8px;
   font-size: 12px;
   font-weight: 700;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .status.ok {

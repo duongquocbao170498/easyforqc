@@ -37,6 +37,15 @@ export type AiSettings = {
   improvementNotes: string;
 };
 
+export type RepoContextSettings = {
+  enabled: boolean;
+  productRepoRoot: string;
+  qaReferenceDir: string;
+  includePaths: string;
+  excludePaths: string;
+  maxSnippets: string;
+};
+
 export type IssueSummary = {
   key: string;
   summary: string;
@@ -117,7 +126,9 @@ export type QaPlan = {
   }[];
   repo_evidence?: {
     enabled?: boolean;
+    reason?: string;
     roots?: string[];
+    root_status?: { root: string; exists: boolean; reason?: string }[];
     snippets?: { root: string; path: string; score: number; snippets: { line: number; text: string }[] }[];
   };
   open_questions?: string[];
@@ -139,6 +150,7 @@ export type DefaultsResponse = {
       testdesignStatusLabels: string;
     };
   };
+  repoContext?: RepoContextSettings | null;
   archetypes: Record<string, ArchetypeInfo>;
   wrappers: {
     jira: string;

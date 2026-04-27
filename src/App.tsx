@@ -31,6 +31,7 @@ import type {
   OutlineBranch,
   ProjectConfig,
   QaPlan,
+  RepoContextSettings,
   StructuredStep,
   TestCase,
   TestDesignOutline,
@@ -38,7 +39,7 @@ import type {
 
 type TabKey = "cases" | "design" | "run";
 type BusyKey = "issue" | "docs" | "draft" | "save" | "xmind" | "attach" | "suite" | "cycle" | "";
-type SettingsSection = "project" | "credentials" | "confluence" | "ai";
+type SettingsSection = "project" | "repo" | "credentials" | "confluence" | "ai";
 type ConfluenceDocument = { title: string; url: string; text: string; error?: string };
 
 const emptyProject: ProjectConfig = {
@@ -78,6 +79,15 @@ const emptyAiSettings: AiSettings = {
   testCaseGuidelines: "",
   testDesignGuidelines: "",
   improvementNotes: "",
+};
+
+const emptyRepoContext: RepoContextSettings = {
+  enabled: false,
+  productRepoRoot: "",
+  qaReferenceDir: "",
+  includePaths: "src\napp\ntests\nqa\n.agent/skills",
+  excludePaths: "node_modules\n.git\ndist\nbuild\n.env\n.env.*\n*.pem\n*.key\n*secret*\n*token*",
+  maxSnippets: "10",
 };
 
 function projectFromDefaults(payload: DefaultsResponse): ProjectConfig {
@@ -384,6 +394,7 @@ function App() {
   const [settingsBusy, setSettingsBusy] = useState<SettingsSection | "">("");
   const [settingsStatus, setSettingsStatus] = useState<Record<SettingsSection, string>>({
     project: "",
+    repo: "",
     credentials: "",
     confluence: "",
     ai: "",
@@ -393,6 +404,7 @@ function App() {
   const [credentials, setCredentials] = useState<Credentials>(emptyCredentials);
   const [confluenceCredentials, setConfluenceCredentials] = useState<ConfluenceCredentials>(emptyConfluenceCredentials);
   const [aiSettings, setAiSettings] = useState<AiSettings>(emptyAiSettings);
+  const [repoContext, setRepoContext] = useState<RepoContextSettings>(emptyRepoContext);
   const [jiraUrl, setJiraUrl] = useState("");
   const [issue, setIssue] = useState<IssueSummary>(emptyIssue);
   const [confluenceBaseUrl, setConfluenceBaseUrl] = useState("");
@@ -429,6 +441,7 @@ function App() {
     let nextCredentials = emptyCredentials;
     let nextConfluenceCredentials = emptyConfluenceCredentials;
     let nextAiSettings = emptyAiSettings;
+    let nextRepoContext = payload.repoContext ? { ...emptyRepoContext, ...payload.repoContext } : emptyRepoContext;
     const settingsResponse = await fetch("/api/user-settings");
     if (settingsResponse.ok) {
       const settings = (await settingsResponse.json()) as {
@@ -436,6 +449,7 @@ function App() {
         credentials?: Partial<Credentials> | null;
         confluenceCredentials?: Partial<ConfluenceCredentials> | null;
         aiSettings?: Partial<AiSettings> | null;
+        repoContext?: Partial<RepoContextSettings> | null;
       };
       if (settings.project) {
         nextProject = { ...nextProject, ...settings.project };
@@ -450,11 +464,15 @@ function App() {
       if (settings.aiSettings) {
         nextAiSettings = { ...nextAiSettings, ...settings.aiSettings };
       }
+      if (settings.repoContext) {
+        nextRepoContext = { ...nextRepoContext, ...settings.repoContext };
+      }
     }
     setProject(nextProject);
     setCredentials(nextCredentials);
     setConfluenceCredentials(nextConfluenceCredentials);
     setAiSettings(nextAiSettings);
+    setRepoContext(nextRepoContext);
   }
 
   useEffect(() => {
@@ -496,6 +514,7 @@ function App() {
     confluenceLinks,
     docContext: docIssueKey === issue.key ? docContext : "",
     aiSettings,
+    repoContext,
     notes,
     archetype: archetypeKey === "auto" ? undefined : archetypeKey,
   };
@@ -514,6 +533,10 @@ function App() {
 
   function setAiSettingValue<K extends keyof AiSettings>(key: K, value: AiSettings[K]) {
     setAiSettings((current) => ({ ...current, [key]: value }));
+  }
+
+  function setRepoContextValue<K extends keyof RepoContextSettings>(key: K, value: RepoContextSettings[K]) {
+    setRepoContext((current) => ({ ...current, [key]: value }));
   }
 
   function resetGeneratedDraft(nextIssueKey: string) {
@@ -634,6 +657,8 @@ function App() {
     const body =
       section === "project"
         ? { project }
+        : section === "repo"
+          ? { repoContext }
         : section === "credentials"
           ? { credentials }
           : section === "confluence"
@@ -642,6 +667,8 @@ function App() {
     const label =
       section === "project"
         ? "Project config"
+        : section === "repo"
+          ? "Repo Context"
         : section === "credentials"
           ? "Jira auth"
           : section === "confluence"
@@ -1023,6 +1050,77 @@ function App() {
 
         <section className="panel compact">
           <div className="panel-title">
+            <GitBranch size={18} />
+            <h2>Repo Context</h2>
+          </div>
+          <p className="panel-help">
+            Dùng repo sản phẩm để lấy evidence về UI/API/test cũ. Không dùng field Source root ở Project config vì field đó chỉ dành cho skill scripts.
+          </p>
+          <label className="checkbox-field">
+            <input
+              type="checkbox"
+              checked={repoContext.enabled}
+              onChange={(event) => setRepoContextValue("enabled", event.target.checked)}
+            />
+            <span className="checkbox-copy">
+              <strong>Đọc repo khi generate draft</strong>
+              <small>Bật khi app chạy ở máy/server có thể truy cập các path bên dưới.</small>
+            </span>
+          </label>
+          <Field
+            label="Product repo root"
+            value={repoContext.productRepoRoot}
+            onChange={(value) => setRepoContextValue("productRepoRoot", value)}
+            placeholder="/Users/gumball.bi/Vexere/knowledge_base/omniagent"
+          />
+          <Field
+            label="QA reference dir"
+            value={repoContext.qaReferenceDir}
+            onChange={(value) => setRepoContextValue("qaReferenceDir", value)}
+            placeholder="/Users/gumball.bi/Vexere/qa"
+          />
+          <div className="form-grid two">
+            <Field
+              label="Include paths"
+              value={repoContext.includePaths}
+              onChange={(value) => setRepoContextValue("includePaths", value)}
+              textarea
+              rows={4}
+              placeholder={"src\ntests\nqa"}
+            />
+            <Field
+              label="Exclude paths"
+              value={repoContext.excludePaths}
+              onChange={(value) => setRepoContextValue("excludePaths", value)}
+              textarea
+              rows={4}
+              placeholder={"node_modules\n.git\n.env*"}
+            />
+          </div>
+          <Field
+            label="Max evidence snippets"
+            value={repoContext.maxSnippets}
+            onChange={(value) => setRepoContextValue("maxSnippets", value)}
+            placeholder="10"
+          />
+          <div className="button-row">
+            <IconButton
+              icon={settingsBusy === "repo" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+              onClick={() => saveUserSettings("repo")}
+              disabled={Boolean(settingsBusy)}
+              variant="primary"
+            >
+              Lưu
+            </IconButton>
+          </div>
+          {settingsStatus.repo ? <div className="mini-note">{settingsStatus.repo}</div> : null}
+          <div className="mini-note">
+            Nếu app chạy trên Render thì các path local `/Users/...` sẽ không tồn tại. Khi đó cần deploy/clone repo lên server hoặc chạy app local để dùng repo context.
+          </div>
+        </section>
+
+        <section className="panel compact">
+          <div className="panel-title">
             <UploadCloud size={18} />
             <h2>Jira auth</h2>
           </div>
@@ -1331,6 +1429,13 @@ function App() {
                 </ul>
                 {qaPlan.repo_evidence?.snippets?.length ? (
                   <p>{qaPlan.repo_evidence.snippets.length} repo/local evidence snippet được dùng để định hướng draft.</p>
+                ) : null}
+                {qaPlan.repo_evidence?.root_status?.length ? (
+                  <div className="status-stack">
+                    {qaPlan.repo_evidence.root_status.map((item) => (
+                      <StatusBadge key={item.root} ok={item.exists} text={item.root} />
+                    ))}
+                  </div>
                 ) : null}
                 {qaPlan.open_questions?.length ? <p>Open question: {qaPlan.open_questions[0]}</p> : null}
               </div>
