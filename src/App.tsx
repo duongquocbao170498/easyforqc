@@ -40,6 +40,38 @@ import type {
 type TabKey = "cases" | "design" | "run";
 type BusyKey = "issue" | "docs" | "draft" | "save" | "xmind" | "attach" | "suite" | "cycle" | "";
 type SettingsSection = "project" | "repo" | "credentials" | "confluence" | "ai";
+
+type AiProviderInfo = {
+  enabled?: boolean;
+  configured?: boolean;
+  used?: boolean;
+  provider?: string;
+  model?: string;
+  endpoint?: string;
+  api_mode?: string;
+  error?: string;
+  usage?: unknown;
+};
+
+type GenerationStatus = {
+  state: "idle" | "running" | "ai" | "fallback" | "error";
+  title: string;
+  detail: string;
+  provider?: string;
+  model?: string;
+  endpoint?: string;
+  apiMode?: string;
+};
+
+type DraftResponse = {
+  archetypeKey: string;
+  qaPlan?: QaPlan;
+  testCases: TestCase[];
+  outline: TestDesignOutline;
+  aiGenerationUsed?: boolean;
+  aiGenerationError?: string;
+  aiProvider?: AiProviderInfo;
+};
 type ConfluenceDocument = { title: string; url: string; text: string; error?: string };
 
 const emptyProject: ProjectConfig = {
@@ -88,6 +120,12 @@ const emptyRepoContext: RepoContextSettings = {
   includePaths: ".agent/skills\nAGENTS.md\nREADME.md\ndocs\nguides\nsops\nsystem-prompts\nreferences\nscripts\nconfig\nsrc\napp\ntests\npackages\narticles\nresearchs",
   excludePaths: "node_modules\n.git\n.idea\n.obsidian\n.venv\ndist\nbuild\ncoverage\nbacktests_v2\ndocs/_generated\n.DS_Store\n.env\n.env.*\n*.pem\n*.key\n*secret*\n*token*",
   maxSnippets: "12",
+};
+
+const idleGenerationStatus: GenerationStatus = {
+  state: "idle",
+  title: "",
+  detail: "",
 };
 
 function projectFromDefaults(payload: DefaultsResponse): ProjectConfig {
@@ -235,6 +273,66 @@ function StatusBadge({ ok, text }: { ok: boolean; text: string }) {
       {ok ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
       {text}
     </span>
+  );
+}
+
+function apiModeLabel(value?: string) {
+  if (value === "responses") return "Responses API";
+  if (value === "chat") return "Chat Completions";
+  return "";
+}
+
+function generationStatusFromPayload(payload: {
+  aiGenerationUsed?: boolean;
+  aiGenerationError?: string;
+  aiProvider?: AiProviderInfo;
+  testCases?: TestCase[];
+}): GenerationStatus {
+  const provider = payload.aiProvider;
+  const count = payload.testCases?.length || 0;
+  if (payload.aiGenerationUsed) {
+    return {
+      state: "ai",
+      title: `Đã dùng AI provider để tạo ${count} test case`,
+      detail: [
+        provider?.provider ? `Provider: ${provider.provider}` : "",
+        provider?.model ? `Model: ${provider.model}` : "",
+        provider?.api_mode ? `Mode: ${apiModeLabel(provider.api_mode)}` : "",
+        provider?.endpoint ? `Endpoint: ${provider.endpoint}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      provider: provider?.provider,
+      model: provider?.model,
+      endpoint: provider?.endpoint,
+      apiMode: provider?.api_mode,
+    };
+  }
+  return {
+    state: "fallback",
+    title: `Đã dùng fallback local để tạo ${count} test case`,
+    detail: payload.aiGenerationError || "AI Settings không được dùng trong lần generate này.",
+    provider: provider?.provider,
+    model: provider?.model,
+    endpoint: provider?.endpoint,
+    apiMode: provider?.api_mode,
+  };
+}
+
+function GenerationBanner({ status }: { status: GenerationStatus }) {
+  if (status.state === "idle") return null;
+  const ok = status.state === "ai";
+  const warn = status.state === "fallback" || status.state === "running";
+  return (
+    <div className={`generation-banner ${ok ? "ok" : warn ? "warn" : "error"}`}>
+      <div className="generation-icon">
+        {ok ? <CheckCircle2 size={18} /> : status.state === "running" ? <Loader2 className="spin" size={18} /> : <AlertCircle size={18} />}
+      </div>
+      <div>
+        <strong>{status.title}</strong>
+        {status.detail ? <span>{status.detail}</span> : null}
+      </div>
+    </div>
   );
 }
 
@@ -421,6 +519,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabKey>("cases");
   const [busy, setBusy] = useState<BusyKey>("");
   const [message, setMessage] = useState("");
+  const [generationStatus, setGenerationStatus] = useState<GenerationStatus>(idleGenerationStatus);
   const [output, setOutput] = useState("");
   const [caseKeys, setCaseKeys] = useState("");
   const [savedFiles, setSavedFiles] = useState<{ casesFile: string; designFile: string } | null>(null);
@@ -562,6 +661,7 @@ function App() {
     setOutput("");
     setSavedFiles(null);
     setQaPlan(null);
+    setGenerationStatus(idleGenerationStatus);
     setActiveTab("cases");
   }
 
@@ -798,26 +898,47 @@ function App() {
       setSavedFiles(null);
       setOutput("");
       setQaPlan(null);
-      setActiveTab("cases");
-      const payload = await apiPost<{
-        archetypeKey: string;
-        qaPlan?: QaPlan;
-        testCases: TestCase[];
-        outline: TestDesignOutline;
-        aiGenerationUsed?: boolean;
-        aiGenerationError?: string;
-      }>("/api/draft", {
-        ...requestBody,
-        issue: effectiveIssue,
-        confluenceLinks: shouldUseConfluenceDocs ? confluenceLinks : "",
-        docContext: shouldUseConfluenceDocs ? docContext : "",
+      setGenerationStatus({
+        state: "running",
+        title: aiSettings.enabled ? "Đang gọi AI provider" : "Đang generate bằng fallback local",
+        detail: aiSettings.enabled
+          ? [
+              aiSettings.provider ? `Provider: ${aiSettings.provider}` : "",
+              aiSettings.model ? `Model: ${aiSettings.model}` : "",
+              aiSettings.baseUrl ? `Base URL: ${aiSettings.baseUrl}` : "",
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          : "AI Settings đang tắt.",
       });
+      setActiveTab("cases");
+      let payload: DraftResponse;
+      try {
+        payload = await apiPost<DraftResponse>("/api/draft", {
+          ...requestBody,
+          issue: effectiveIssue,
+          confluenceLinks: shouldUseConfluenceDocs ? confluenceLinks : "",
+          docContext: shouldUseConfluenceDocs ? docContext : "",
+        });
+      } catch (error) {
+        const text = error instanceof Error ? error.message : "Generate draft lỗi.";
+        setGenerationStatus({
+          state: "error",
+          title: aiSettings.enabled ? "AI provider lỗi" : "Generate draft lỗi",
+          detail: text.split("\n")[0],
+          provider: aiSettings.provider,
+          model: aiSettings.model,
+          endpoint: aiSettings.baseUrl,
+        });
+        throw error;
+      }
       setArchetypeKey(payload.archetypeKey);
       setQaPlan(payload.qaPlan || null);
       setTestCases(payload.testCases);
       setOutline(payload.outline);
       setActiveTab("cases");
       setOutput(JSON.stringify(payload, null, 2));
+      setGenerationStatus(generationStatusFromPayload(payload));
       const generationMode = payload.aiGenerationUsed ? "bằng AI provider" : "bằng fallback local";
       setMessage(
         payload.aiGenerationError
@@ -1279,7 +1400,7 @@ function App() {
           </div>
           {settingsStatus.ai ? <div className="mini-note">{settingsStatus.ai}</div> : null}
           <div className="mini-note">
-            API key và guideline được lưu mã hoá theo account. OpenAI base URL sẽ dùng Responses API; provider compatible/custom vẫn dùng Chat Completions. Khi bật AI Settings, app bắt buộc gọi AI provider thành công; nếu lỗi sẽ báo lỗi thay vì dùng fallback local.
+            API key và guideline được lưu mã hoá theo account. Base URL chính thức `api.openai.com` dùng Responses API; các OpenAI-compatible/custom proxy như llmproxy dùng Chat Completions. Khi bật AI Settings, app bắt buộc gọi AI provider thành công; nếu lỗi sẽ báo lỗi thay vì dùng fallback local.
           </div>
         </section>
       </aside>
@@ -1313,6 +1434,8 @@ function App() {
             </IconButton>
           </div>
         </header>
+
+        <GenerationBanner status={generationStatus} />
 
         {passwordDialogOpen ? (
           <ChangePasswordDialog
@@ -1454,7 +1577,7 @@ function App() {
                     ))}
                   </div>
                 ) : null}
-                {qaPlan.open_questions?.length ? <p>Open question: {qaPlan.open_questions[0]}</p> : null}
+                {qaPlan.open_questions?.length ? <p>Câu hỏi mở: {qaPlan.open_questions[0]}</p> : null}
               </div>
             ) : null}
             <div className="metric-row">

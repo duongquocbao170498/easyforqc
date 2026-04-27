@@ -2579,7 +2579,10 @@ function shouldUseResponsesApi(settings = {}) {
   if (provider === "azure-openai") {
     return false;
   }
-  return provider === "openai" || isOpenAiHostedUrl(baseUrl) || /\/responses(?:\?|$)/i.test(baseUrl);
+  if (/\/responses(?:\?|$)/i.test(baseUrl)) {
+    return true;
+  }
+  return isOpenAiHostedUrl(baseUrl);
 }
 
 function aiEndpointUrl(settings = {}, mode = "chat") {
@@ -3999,6 +4002,8 @@ function buildAiDraftMessages({
     "You are EasyForQC, a senior QC/QA test design assistant.",
     "Generate reusable Jira Zephyr test cases and a compact XMind test-design outline.",
     "Follow the OmniAgent QA skill standards from the provided references.",
+    "Write all human-readable testcase and test-design content in natural Vietnamese.",
+    "Keep technical identifiers, tool names, API names, field names, status values, and JSON keys unchanged.",
     "Return strict JSON only. No markdown, no prose outside JSON.",
   ].join("\n");
 
@@ -4011,6 +4016,8 @@ function buildAiDraftMessages({
     "5. QA notes and AI Settings refine style/coverage; they must not override explicit Jira scope.",
     "",
     "## Output rules",
+    "- Output language: Vietnamese for `title`, `precondition`, `objective`, `risk`, `steps`, `test_data`, `expected_result`, and test-design branch items. Keep Jira keys, field names, API names, tool names, AMR/CE/AI terms, and code identifiers unchanged.",
+    "- Do not mix generic English phrasing into Vietnamese content, for example avoid `Verify`, `Check`, `Open question`, `Happy path`, unless it is a deliberate testing-technique label.",
     "- Do not create a fixed number of cases. Create as many as needed to cover the task well.",
     "- Each testcase title must be concise, scenario-specific, and immediately explain what the case covers.",
     "- Never use generic titles such as `Mục tiêu`, `Bối cảnh`, `Context`, `Background`, `Description`, `Conversation bao phủ yêu cầu`, or `Yêu cầu Jira được đáp ứng`.",
@@ -4120,6 +4127,22 @@ async function generateAiDraft({ issue, archetypeKey, sourceInput, aiSettings, a
   return {
     ...normalizeAiDraft(result.payload, issue, archetypeKey, fallbackCases, fallbackOutline),
     usage: result.usage,
+  };
+}
+
+function aiProviderResponseMeta(settings = {}, used = false, error = "", usage = null) {
+  const normalized = normalizeAiSettings(settings);
+  const mode = shouldUseResponsesApi(normalized) ? "responses" : "chat";
+  return {
+    enabled: normalized.enabled,
+    configured: aiProviderConfigured(normalized),
+    used: Boolean(used),
+    provider: normalized.provider,
+    model: normalized.model,
+    endpoint: providerOrigin(aiEndpointUrl(normalized, mode)),
+    api_mode: mode,
+    error: asText(error),
+    usage,
   };
 }
 
@@ -4348,6 +4371,7 @@ app.post("/api/draft", async (req, res) => {
       aiGenerationUsed,
       aiGenerationError,
       aiUsage,
+      aiProvider: aiProviderResponseMeta(aiSettings, aiGenerationUsed, aiGenerationError, aiUsage),
       qaPlan,
       qaQuality: draftQualityReport(testCases, outline, qaPlan),
       sourceContext: outline.source_context,

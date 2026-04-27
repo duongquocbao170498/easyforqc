@@ -309,6 +309,61 @@ select:focus {
   color: var(--amber);
 }
 
+.generation-banner {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+
+.generation-banner.ok {
+  border-color: rgba(20, 122, 84, 0.35);
+  background: var(--green-soft);
+}
+
+.generation-banner.warn {
+  border-color: rgba(152, 100, 12, 0.35);
+  background: var(--amber-soft);
+}
+
+.generation-banner.error {
+  border-color: rgba(179, 38, 30, 0.35);
+  background: var(--red-soft);
+}
+
+.generation-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.generation-banner strong,
+.generation-banner span {
+  display: block;
+}
+
+.generation-banner strong {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.generation-banner span {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin-top: 2px;
+}
+
 .issue-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.8fr) minmax(280px, 0.9fr);
