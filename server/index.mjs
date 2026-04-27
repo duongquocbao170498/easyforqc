@@ -815,9 +815,16 @@ function asText(value) {
 }
 
 function cleanContextLine(line) {
-  let text = asText(line).replace(/^[-*#\s]+/, "").trim();
+  let text = asText(line)
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^[-*#\s]+/, "")
+    .replace(/[*_`]+$/g, "")
+    .trim();
   text = text.replace(/^\d+[.)]\s+/, "").trim();
-  const headingOnly = normalizeSearchText(text).replace(/[:：]+$/g, "").trim();
+  const headingOnly = normalizeSearchText(text).replace(/[:：*_`]+$/g, "").trim();
   if (
     [
       "muc tieu",
@@ -832,6 +839,11 @@ function cleanContextLine(line) {
       "note",
       "ghi chu",
       "requirement",
+      "steps",
+      "step",
+      "test data",
+      "expected result",
+      "ket qua mong doi",
     ].includes(headingOnly)
   ) {
     return "";
