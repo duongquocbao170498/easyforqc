@@ -500,6 +500,21 @@ function App() {
     return defaults.archetypes[archetypeKey] || null;
   }, [defaults, archetypeKey]);
 
+  const shouldShowRepoContext = useMemo(() => {
+    const hostname = typeof window === "undefined" ? "" : window.location.hostname;
+    const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+    const serverRepoConfigured = Boolean(
+      defaults?.repoContext?.enabled ||
+        defaults?.repoContext?.productRepoRoot ||
+        defaults?.repoContext?.qaReferenceDir,
+    );
+    return isLocalHost || serverRepoConfigured;
+  }, [defaults]);
+
+  const draftRepoContext = shouldShowRepoContext
+    ? repoContext
+    : { ...repoContext, enabled: false, productRepoRoot: "", qaReferenceDir: "" };
+
   const taskConfluenceCredentials = {
     ...confluenceCredentials,
     baseUrl: confluenceBaseUrl.trim(),
@@ -514,7 +529,7 @@ function App() {
     confluenceLinks,
     docContext: docIssueKey === issue.key ? docContext : "",
     aiSettings,
-    repoContext,
+    repoContext: draftRepoContext,
     notes,
     archetype: archetypeKey === "auto" ? undefined : archetypeKey,
   };
@@ -1048,76 +1063,78 @@ function App() {
           {settingsStatus.project ? <div className="mini-note">{settingsStatus.project}</div> : null}
         </section>
 
-        <section className="panel compact">
-          <div className="panel-title">
-            <GitBranch size={18} />
-            <h2>Repo Context</h2>
-          </div>
-          <p className="panel-help">
-            Dùng repo sản phẩm để lấy evidence về UI/API/test cũ. Không dùng field Source root ở Project config vì field đó chỉ dành cho skill scripts.
-          </p>
-          <label className="checkbox-field">
-            <input
-              type="checkbox"
-              checked={repoContext.enabled}
-              onChange={(event) => setRepoContextValue("enabled", event.target.checked)}
-            />
-            <span className="checkbox-copy">
-              <strong>Đọc repo khi generate draft</strong>
-              <small>Bật khi app chạy ở máy/server có thể truy cập các path bên dưới.</small>
-            </span>
-          </label>
-          <Field
-            label="Product repo root"
-            value={repoContext.productRepoRoot}
-            onChange={(value) => setRepoContextValue("productRepoRoot", value)}
-            placeholder="/Users/gumball.bi/Vexere/knowledge_base/omniagent"
-          />
-          <Field
-            label="QA reference dir"
-            value={repoContext.qaReferenceDir}
-            onChange={(value) => setRepoContextValue("qaReferenceDir", value)}
-            placeholder="/Users/gumball.bi/Vexere/qa"
-          />
-          <div className="form-grid two">
+        {shouldShowRepoContext ? (
+          <section className="panel compact">
+            <div className="panel-title">
+              <GitBranch size={18} />
+              <h2>Repo Context</h2>
+            </div>
+            <p className="panel-help">
+              Dùng repo sản phẩm để lấy evidence về UI/API/test cũ. Không dùng field Source root ở Project config vì field đó chỉ dành cho skill scripts.
+            </p>
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={repoContext.enabled}
+                onChange={(event) => setRepoContextValue("enabled", event.target.checked)}
+              />
+              <span className="checkbox-copy">
+                <strong>Đọc repo khi generate draft</strong>
+                <small>Bật khi app chạy ở máy/server có thể truy cập các path bên dưới.</small>
+              </span>
+            </label>
             <Field
-              label="Include paths"
-              value={repoContext.includePaths}
-              onChange={(value) => setRepoContextValue("includePaths", value)}
-              textarea
-              rows={4}
-              placeholder={"src\ntests\nqa"}
+              label="Product repo root"
+              value={repoContext.productRepoRoot}
+              onChange={(value) => setRepoContextValue("productRepoRoot", value)}
+              placeholder="/Users/gumball.bi/Vexere/knowledge_base/omniagent"
             />
             <Field
-              label="Exclude paths"
-              value={repoContext.excludePaths}
-              onChange={(value) => setRepoContextValue("excludePaths", value)}
-              textarea
-              rows={4}
-              placeholder={"node_modules\n.git\n.env*"}
+              label="QA reference dir"
+              value={repoContext.qaReferenceDir}
+              onChange={(value) => setRepoContextValue("qaReferenceDir", value)}
+              placeholder="/Users/gumball.bi/Vexere/qa"
             />
-          </div>
-          <Field
-            label="Max evidence snippets"
-            value={repoContext.maxSnippets}
-            onChange={(value) => setRepoContextValue("maxSnippets", value)}
-            placeholder="10"
-          />
-          <div className="button-row">
-            <IconButton
-              icon={settingsBusy === "repo" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
-              onClick={() => saveUserSettings("repo")}
-              disabled={Boolean(settingsBusy)}
-              variant="primary"
-            >
-              Lưu
-            </IconButton>
-          </div>
-          {settingsStatus.repo ? <div className="mini-note">{settingsStatus.repo}</div> : null}
-          <div className="mini-note">
-            Nếu app chạy trên Render thì các path local `/Users/...` sẽ không tồn tại. Khi đó cần deploy/clone repo lên server hoặc chạy app local để dùng repo context.
-          </div>
-        </section>
+            <div className="form-grid two">
+              <Field
+                label="Include paths"
+                value={repoContext.includePaths}
+                onChange={(value) => setRepoContextValue("includePaths", value)}
+                textarea
+                rows={4}
+                placeholder={"src\ntests\nqa"}
+              />
+              <Field
+                label="Exclude paths"
+                value={repoContext.excludePaths}
+                onChange={(value) => setRepoContextValue("excludePaths", value)}
+                textarea
+                rows={4}
+                placeholder={"node_modules\n.git\n.env*"}
+              />
+            </div>
+            <Field
+              label="Max evidence snippets"
+              value={repoContext.maxSnippets}
+              onChange={(value) => setRepoContextValue("maxSnippets", value)}
+              placeholder="10"
+            />
+            <div className="button-row">
+              <IconButton
+                icon={settingsBusy === "repo" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+                onClick={() => saveUserSettings("repo")}
+                disabled={Boolean(settingsBusy)}
+                variant="primary"
+              >
+                Lưu
+              </IconButton>
+            </div>
+            {settingsStatus.repo ? <div className="mini-note">{settingsStatus.repo}</div> : null}
+            <div className="mini-note">
+              Nếu app chạy trên Render thì các path local `/Users/...` sẽ không tồn tại. Khi đó cần deploy/clone repo lên server hoặc chạy app local để dùng repo context.
+            </div>
+          </section>
+        ) : null}
 
         <section className="panel compact">
           <div className="panel-title">
