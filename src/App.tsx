@@ -746,7 +746,7 @@ function App() {
     setBusyRun("draft", async () => {
       const effectiveIssueKey = issueKeyFromText(jiraUrl) || issue.key;
       const effectiveIssue = { ...issue, key: effectiveIssueKey };
-      const shouldUseConfluenceDocs = Boolean((docContext.trim() || confluenceLinks.trim()) && (!docIssueKey || docIssueKey === effectiveIssueKey));
+      const shouldUseConfluenceDocs = Boolean(docContext.trim() && (!docIssueKey || docIssueKey === effectiveIssueKey));
       setTestCases([]);
       setOutline(emptyOutline(effectiveIssue));
       setCaseKeys("");

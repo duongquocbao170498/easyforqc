@@ -1703,6 +1703,32 @@ function providerOrigin(url) {
   }
 }
 
+function isQuotaOrBillingError(error) {
+  const text = normalizeSearchText(
+    [
+      error?.message,
+      error?.details?.response,
+      error?.details?.provider_error_type,
+      error?.details?.provider_error_code,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+  return /quota|billing|insufficient_quota|exceeded/.test(text);
+}
+
+function aiProviderDraftErrorMessage(error) {
+  const providerMessage = error instanceof Error ? error.message : "Không tạo được AI draft.";
+  if (isQuotaOrBillingError(error)) {
+    return [
+      "AI Settings đã gọi OpenAI thành công nhưng OpenAI từ chối vì API key/project đã hết quota hoặc chưa có billing/credit.",
+      "Hãy kiểm tra Billing/Usage của project chứa API key, nạp credit hoặc đổi sang API key thuộc project còn quota.",
+      "Nếu muốn dùng generator local tạm thời, tắt checkbox AI Settings rồi Generate lại.",
+    ].join(" ");
+  }
+  return `AI Settings đang bật nên app dừng generate vì provider lỗi: ${providerMessage}`;
+}
+
 async function readAiProviderResponse(response, settings, url) {
   const text = await response.text();
   let payload = null;
@@ -1724,6 +1750,8 @@ async function readAiProviderResponse(response, settings, url) {
         provider: asText(settings.provider) || "openai-compatible",
         model: asText(settings.model),
         endpoint: providerOrigin(url),
+        provider_error_type: payload?.error?.type || "",
+        provider_error_code: payload?.error?.code || "",
         response: sanitizeProviderText(text.slice(0, 1200), [settings.apiKey]),
       },
     });
@@ -2147,12 +2175,12 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
     22,
   );
   const precondition = [
-    `Task ${key} đã được fetch đúng Jira summary, description và status mới nhất.`,
-    "QA có môi trường test và dữ liệu test phù hợp với scope trong Jira.",
-    context.docContextApplied
-      ? `Doc Confluence đã fetch (${context.docContextLength.toLocaleString()} ký tự) được dùng như tài liệu tham chiếu bổ sung, không thay thế acceptance criteria trong Jira.`
-      : "Không dùng Confluence doc nếu task hiện tại không nhập Base URL/doc link hoặc doc không liên quan tới Jira description.",
-  ].join("\n");
+    `Build/môi trường test đã triển khai thay đổi của task ${key}.`,
+    "QA có dữ liệu test phù hợp với route/date/operator hoặc biến thể trong từng test case.",
+    mode.isConversation || mode.isIntegration
+      ? "QA có quyền xem conversation trace, tool input/output hoặc log API để đối chiếu kết quả."
+      : "",
+  ].filter(Boolean).join("\n");
 
   const quoteLines = (items) => numberedQuotedLines(items);
   const testInputsFor = (intent) => {
@@ -3172,17 +3200,8 @@ app.post("/api/draft", async (req, res) => {
       throw Object.assign(new Error("Cần summary hoặc description của Jira task để tạo bản nháp."), { status: 400 });
     }
     const archetypeKey = chooseArchetype(issue, req.body?.archetype);
-    const confluenceCredentials = normalizeConfluenceCredentials(req.body?.confluenceCredentials);
-    const allowConfluenceDocs = Boolean(asText(confluenceCredentials.baseUrl) || asText(req.body?.confluenceLinks) || asText(req.body?.docContext));
-    let docContext = allowConfluenceDocs ? asText(req.body?.docContext) : "";
-    let referenceDocs = null;
-    if (allowConfluenceDocs && !docContext && asText(req.body?.confluenceLinks)) {
-      referenceDocs = await fetchConfluenceDocuments(
-        req.body?.confluenceLinks,
-        confluenceCredentials,
-      );
-      docContext = referenceDocs.combinedText;
-    }
+    const docContext = asText(req.body?.docContext);
+    const referenceDocs = null;
     const sourceContext = {
       qaNotes: asText(req.body?.notes),
       docContext,
@@ -3218,7 +3237,7 @@ app.post("/api/draft", async (req, res) => {
         aiUsage = aiDraft.usage;
       } catch (error) {
         throw Object.assign(
-          new Error(`AI provider lỗi nên không generate fallback local: ${error instanceof Error ? error.message : "Không tạo được AI draft."}`),
+          new Error(aiProviderDraftErrorMessage(error)),
           {
             status: error.status || 502,
             details: error.details || null,
