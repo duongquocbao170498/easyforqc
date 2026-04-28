@@ -204,6 +204,19 @@ button:disabled {
   font-weight: 700;
 }
 
+.required-mark {
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.field-error {
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 input,
 textarea,
 select {
@@ -227,6 +240,20 @@ textarea:focus,
 select:focus {
   border-color: var(--blue);
   box-shadow: 0 0 0 3px var(--blue-soft);
+}
+
+.field-invalid input,
+.field-invalid textarea,
+.field-invalid select {
+  border-color: var(--red);
+  background: #fffafa;
+}
+
+.field-invalid input:focus,
+.field-invalid textarea:focus,
+.field-invalid select:focus {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px var(--red-soft);
 }
 
 .button {

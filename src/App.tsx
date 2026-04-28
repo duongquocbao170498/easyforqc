@@ -64,6 +64,8 @@ type GenerationStatus = {
   apiMode?: string;
 };
 
+type ValidationErrors = Record<string, string>;
+
 type DraftResponse = {
   archetypeKey: string;
   qaPlan?: QaPlan;
@@ -146,6 +148,21 @@ const emptyIssue: IssueSummary = {
 
 function issueKeyFromText(value: string): string {
   return value.match(/\b[A-Z][A-Z0-9]+-\d+\b/i)?.[0].toUpperCase() || "";
+}
+
+function parseIssueReferenceBaseUrl(value: string): string {
+  const text = value.trim();
+  if (!/^https?:\/\//i.test(text)) return "";
+  try {
+    const url = new URL(text);
+    const browseIndex = url.pathname.indexOf("/browse/");
+    if (browseIndex >= 0) {
+      return `${url.origin}${url.pathname.slice(0, browseIndex)}`.replace(/\/+$/, "");
+    }
+    return url.origin;
+  } catch {
+    return "";
+  }
 }
 
 const emptyOutline = (issue: IssueSummary): TestDesignOutline => ({
@@ -234,16 +251,25 @@ function Field(props: {
   type?: string;
   textarea?: boolean;
   rows?: number;
+  required?: boolean;
+  error?: string;
 }) {
+  const errorId = props.error ? `field-error-${props.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}` : undefined;
   return (
-    <label className="field">
-      <span>{props.label}</span>
+    <label className={`field ${props.error ? "field-invalid" : ""}`}>
+      <span>
+        {props.label}
+        {props.required ? <small className="required-mark"> *</small> : null}
+      </span>
       {props.textarea ? (
         <textarea
           value={props.value}
           rows={props.rows || 4}
           placeholder={props.placeholder}
           onChange={(event) => props.onChange(event.target.value)}
+          aria-invalid={Boolean(props.error)}
+          aria-describedby={errorId}
+          required={props.required}
         />
       ) : (
         <input
@@ -251,8 +277,16 @@ function Field(props: {
           type={props.type || "text"}
           placeholder={props.placeholder}
           onChange={(event) => props.onChange(event.target.value)}
+          aria-invalid={Boolean(props.error)}
+          aria-describedby={errorId}
+          required={props.required}
         />
       )}
+      {props.error ? (
+        <small id={errorId} className="field-error">
+          {props.error}
+        </small>
+      ) : null}
     </label>
   );
 }
@@ -474,6 +508,7 @@ function App() {
   const [googleAuthEnabled, setGoogleAuthEnabled] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -625,19 +660,125 @@ function App() {
     archetype: archetypeKey === "auto" ? undefined : archetypeKey,
   };
 
+  function clearValidationErrors(keys: string[]) {
+    setValidationErrors((current) => {
+      if (!keys.some((key) => current[key])) return current;
+      const next = { ...current };
+      keys.forEach((key) => delete next[key]);
+      return next;
+    });
+  }
+
+  function setValidationFailure(errors: ValidationErrors, messageText: string) {
+    setValidationErrors(errors);
+    setMessage(messageText);
+  }
+
+  function addJiraAuthValidationErrors(errors: ValidationErrors, reason: string) {
+    const hasToken = Boolean(credentials.token.trim());
+    const hasUserPassword = Boolean(credentials.user.trim() && credentials.password.trim());
+    if (hasToken || hasUserPassword) return;
+
+    const suffix = reason ? ` ${reason}` : "";
+    if (!credentials.user.trim()) {
+      errors["credentials.user"] = `Cần nhập Jira User nếu không dùng Token.${suffix}`;
+    }
+    if (!credentials.password.trim()) {
+      errors["credentials.password"] = `Cần nhập Jira Password nếu không dùng Token.${suffix}`;
+    }
+    if (!credentials.token.trim()) {
+      errors["credentials.token"] = `Cần nhập Jira Token hoặc đủ User + Password.${suffix}`;
+    }
+  }
+
+  function addRequiredProjectErrors(errors: ValidationErrors) {
+    if (!project.jiraBaseUrl.trim()) errors["project.jiraBaseUrl"] = "Jira base URL bắt buộc để map Jira API và link issue.";
+    if (!project.projectKey.trim()) errors["project.projectKey"] = "Project key bắt buộc để map Jira project và tạo testcase/design.";
+    if (!project.folderRoot.trim()) errors["project.folderRoot"] = "Test case folder root bắt buộc để biết nơi tạo testcase.";
+    if (!project.runRoot.trim()) errors["project.runRoot"] = "Test cycle run root bắt buộc để biết nơi tạo test cycle.";
+    if (!project.outputDir.trim()) errors["project.outputDir"] = "XMind output dir bắt buộc để lưu file .xmind/.png.";
+    if (!project.sourceRoot.trim()) errors["project.sourceRoot"] = "Source root bắt buộc để đọc skill/template generate.";
+    if (project.labelMode === "custom" && !project.testcaseLabels.trim()) {
+      errors["project.testcaseLabels"] = "Label testcase bắt buộc khi mode là custom.";
+    }
+    if (project.labelMode === "custom" && !project.testdesignLabels.trim()) {
+      errors["project.testdesignLabels"] = "Label test design bắt buộc khi mode là custom.";
+    }
+  }
+
+  function validateJiraFetch() {
+    const errors: ValidationErrors = {};
+    const parsedBaseUrl = parseIssueReferenceBaseUrl(jiraUrl);
+    if (!issueKeyFromText(jiraUrl) && !issue.key.trim()) {
+      errors.jiraUrl = "Cần nhập Jira URL hoặc issue key để đọc Jira task.";
+      errors["issue.key"] = "Hoặc nhập issue key tại đây, ví dụ AI-707.";
+    }
+    if (!project.jiraBaseUrl.trim() && !parsedBaseUrl) {
+      errors["project.jiraBaseUrl"] = "Cần Jira base URL để gọi Jira API, ví dụ https://jira.vexere.net.";
+    }
+    addJiraAuthValidationErrors(errors, "Field này dùng để đọc Jira link/task.");
+    return errors;
+  }
+
+  function validateConfluenceFetch() {
+    const errors: ValidationErrors = {};
+    if (!confluenceLinks.trim()) {
+      errors.confluenceLinks = "Cần nhập ít nhất 1 link Confluence/doc trước khi Fetch docs.";
+    }
+    if (!confluenceBaseUrl.trim()) {
+      errors.confluenceBaseUrl = "Cần Confluence Base URL cho task này trước khi Fetch docs.";
+    }
+    if (!confluenceCredentials.user.trim()) {
+      errors["confluence.user"] = "Cần nhập Confluence User để fetch docs.";
+    }
+    if (!confluenceCredentials.password.trim()) {
+      errors["confluence.password"] = "Cần nhập Confluence Password để fetch docs.";
+    }
+    if (!confluenceCredentials.token.trim()) {
+      errors["confluence.token"] = "Cần nhập Confluence Token để fetch docs.";
+    }
+    return errors;
+  }
+
+  function validateGenerateDraft() {
+    const errors: ValidationErrors = {};
+    const effectiveIssueKey = issueKeyFromText(jiraUrl) || issue.key.trim();
+    const hasIssueContext = Boolean(issue.summary.trim() || issue.description.trim());
+    if (!effectiveIssueKey) {
+      errors.jiraUrl = "Cần nhập Jira URL hoặc issue key trước khi Generate draft.";
+      errors["issue.key"] = "Issue key bắt buộc nếu Jira URL không có key.";
+    }
+    if (!hasIssueContext) {
+      errors["issue.summary"] = "Cần summary hoặc description để tạo draft. Có thể nhấn Fetch Jira task trước.";
+      errors["issue.description"] = "Cần description/acceptance criteria hoặc summary để tạo draft.";
+      addJiraAuthValidationErrors(errors, "Cần auth để Fetch Jira task trước khi Generate nếu chưa có context.");
+    }
+    addRequiredProjectErrors(errors);
+    if (aiSettings.enabled) {
+      if (!aiSettings.baseUrl.trim()) errors["ai.baseUrl"] = "Base URL bắt buộc khi bật AI Settings.";
+      if (!aiSettings.model.trim()) errors["ai.model"] = "Model bắt buộc khi bật AI Settings.";
+      if (!aiSettings.apiKey.trim()) errors["ai.apiKey"] = "API key bắt buộc khi bật AI Settings.";
+    }
+    return errors;
+  }
+
   function setProjectValue(key: keyof ProjectConfig, value: string) {
+    clearValidationErrors(key === "labelMode" ? ["project.testcaseLabels", "project.testdesignLabels"] : [`project.${key}`]);
     setProject((current) => ({ ...current, [key]: value }));
   }
 
   function setCredentialValue(key: keyof Credentials, value: string) {
+    clearValidationErrors(["credentials.user", "credentials.password", "credentials.token"]);
     setCredentials((current) => ({ ...current, [key]: value }));
   }
 
   function setConfluenceCredentialValue(key: keyof ConfluenceCredentials, value: string) {
+    clearValidationErrors([`confluence.${key}`]);
     setConfluenceCredentials((current) => ({ ...current, [key]: value }));
   }
 
   function setAiSettingValue<K extends keyof AiSettings>(key: K, value: AiSettings[K]) {
+    clearValidationErrors(key === "enabled" ? ["ai.baseUrl", "ai.model", "ai.apiKey"] : [`ai.${String(key)}`]);
     setAiSettings((current) => ({ ...current, [key]: value }));
   }
 
@@ -671,6 +812,7 @@ function App() {
   }
 
   function handleJiraUrlChange(value: string) {
+    clearValidationErrors(["jiraUrl", "issue.key"]);
     setJiraUrl(value);
     const nextIssueKey = issueKeyFromText(value);
     if (nextIssueKey && nextIssueKey !== issue.key) {
@@ -682,6 +824,13 @@ function App() {
   }
 
   function setIssueValue(key: keyof IssueSummary, value: string) {
+    clearValidationErrors(
+      key === "summary" || key === "description"
+        ? ["issue.summary", "issue.description"]
+        : key === "key"
+          ? ["issue.key", "jiraUrl"]
+          : [`issue.${String(key)}`],
+    );
     setIssue((current) => ({ ...current, [key]: value }));
     if (key === "key") {
       setOutline((current) => ({ ...current, issue_key: value }));
@@ -791,6 +940,11 @@ function App() {
   }
 
   function parseJiraLink() {
+    if (!jiraUrl.trim()) {
+      setValidationFailure({ jiraUrl: "Cần nhập Jira URL hoặc issue key trước khi Parse." }, "Vui lòng bổ sung field bắt buộc đang được highlight.");
+      return;
+    }
+    clearValidationErrors(["jiraUrl"]);
     setBusyRun("issue", async () => {
       const parsed = await apiPost<{ issueKey: string; baseUrl: string }>("/api/parse-jira", { jiraUrl });
       if (parsed.issueKey && parsed.issueKey !== issue.key) {
@@ -806,6 +960,12 @@ function App() {
   }
 
   function fetchIssue() {
+    const errors = validateJiraFetch();
+    if (Object.keys(errors).length) {
+      setValidationFailure(errors, "Vui lòng bổ sung Jira URL/base URL/auth trước khi Fetch Jira task.");
+      return;
+    }
+    setValidationErrors({});
     setBusyRun("issue", async () => {
       const nextIssueKey = issueKeyFromText(jiraUrl) || issue.key;
       const payload = await apiPost<{ issue: IssueSummary; stdout: string }>("/api/issue", {
@@ -845,6 +1005,12 @@ function App() {
   }
 
   function fetchConfluenceDocs() {
+    const errors = validateConfluenceFetch();
+    if (Object.keys(errors).length) {
+      setValidationFailure(errors, "Vui lòng bổ sung link, Base URL và đủ Confluence auth trước khi Fetch docs.");
+      return;
+    }
+    setValidationErrors({});
     setBusyRun("docs", async () => {
       const currentIssueKey = issueKeyFromText(jiraUrl) || issue.key;
       const payload = await apiPost<{ documents: ConfluenceDocument[]; combinedText: string }>(
@@ -873,6 +1039,17 @@ function App() {
   }
 
   function generateDraft() {
+    const errors = validateGenerateDraft();
+    if (Object.keys(errors).length) {
+      setValidationFailure(errors, "Vui lòng bổ sung các field bắt buộc đang được highlight trước khi Generate draft.");
+      setGenerationStatus({
+        state: "error",
+        title: "Thiếu field bắt buộc",
+        detail: "Bổ sung các field đang được highlight rồi Generate draft lại.",
+      });
+      return;
+    }
+    setValidationErrors({});
     setBusyRun("draft", async () => {
       const effectiveIssueKey = issueKeyFromText(jiraUrl) || issue.key;
       const effectiveIssue = { ...issue, key: effectiveIssueKey };
@@ -1085,15 +1262,25 @@ function App() {
             <Link size={18} />
             <h2>Jira task</h2>
           </div>
-          <Field label="Jira URL hoặc issue key" value={jiraUrl} onChange={handleJiraUrlChange} placeholder="https://jira.vexere.net/browse/AI-707" />
+          <Field
+            label="Jira URL hoặc issue key"
+            value={jiraUrl}
+            onChange={handleJiraUrlChange}
+            placeholder="https://jira.vexere.net/browse/AI-707"
+            required
+            error={validationErrors.jiraUrl}
+          />
           <Field
             label="Confluence Base URL cho task này"
             value={confluenceBaseUrl}
             onChange={(value) => {
+              clearValidationErrors(["confluenceBaseUrl"]);
               setConfluenceBaseUrl(value);
               clearFetchedDocs(value.trim() && confluenceLinks.trim() ? "Base URL đã đổi. Nhấn Fetch docs để đọc lại doc cho task hiện tại." : "");
             }}
             placeholder="Optional, ví dụ https://confluence.vexere.net"
+            required={Boolean(confluenceLinks.trim())}
+            error={validationErrors.confluenceBaseUrl}
           />
           <div className="mini-note">Bỏ trống nếu task này không cần đọc doc Confluence.</div>
           <div className="button-row">
@@ -1111,12 +1298,12 @@ function App() {
             <Settings size={18} />
             <h2>Project config</h2>
           </div>
-          <Field label="Jira base URL" value={project.jiraBaseUrl} onChange={(value) => setProjectValue("jiraBaseUrl", value)} />
-          <Field label="Project key" value={project.projectKey} onChange={(value) => setProjectValue("projectKey", value)} />
-          <Field label="Test case folder root" value={project.folderRoot} onChange={(value) => setProjectValue("folderRoot", value)} />
-          <Field label="Test cycle run root" value={project.runRoot} onChange={(value) => setProjectValue("runRoot", value)} />
-          <Field label="XMind output dir" value={project.outputDir} onChange={(value) => setProjectValue("outputDir", value)} />
-          <Field label="Source root" value={project.sourceRoot} onChange={(value) => setProjectValue("sourceRoot", value)} />
+          <Field label="Jira base URL" value={project.jiraBaseUrl} onChange={(value) => setProjectValue("jiraBaseUrl", value)} required error={validationErrors["project.jiraBaseUrl"]} />
+          <Field label="Project key" value={project.projectKey} onChange={(value) => setProjectValue("projectKey", value)} required error={validationErrors["project.projectKey"]} />
+          <Field label="Test case folder root" value={project.folderRoot} onChange={(value) => setProjectValue("folderRoot", value)} required error={validationErrors["project.folderRoot"]} />
+          <Field label="Test cycle run root" value={project.runRoot} onChange={(value) => setProjectValue("runRoot", value)} required error={validationErrors["project.runRoot"]} />
+          <Field label="XMind output dir" value={project.outputDir} onChange={(value) => setProjectValue("outputDir", value)} required error={validationErrors["project.outputDir"]} />
+          <Field label="Source root" value={project.sourceRoot} onChange={(value) => setProjectValue("sourceRoot", value)} required error={validationErrors["project.sourceRoot"]} />
           <div className="label-policy">
             <div className="subhead">
               <span>Label policy</span>
@@ -1134,12 +1321,16 @@ function App() {
               value={project.testcaseLabels}
               onChange={(value) => setProjectValue("testcaseLabels", value)}
               placeholder="QA_Testcases"
+              required={project.labelMode === "custom"}
+              error={validationErrors["project.testcaseLabels"]}
             />
             <Field
               label="Test design required labels"
               value={project.testdesignLabels}
               onChange={(value) => setProjectValue("testdesignLabels", value)}
               placeholder="QA_testdesign"
+              required={project.labelMode === "custom"}
+              error={validationErrors["project.testdesignLabels"]}
             />
             <Field
               label="Test case status labels"
@@ -1174,9 +1365,9 @@ function App() {
             <UploadCloud size={18} />
             <h2>Jira auth</h2>
           </div>
-          <Field label="User" value={credentials.user} onChange={(value) => setCredentialValue("user", value)} placeholder="name@example.com" />
-          <Field label="Password" value={credentials.password} type="password" onChange={(value) => setCredentialValue("password", value)} />
-          <Field label="Token" value={credentials.token} type="password" onChange={(value) => setCredentialValue("token", value)} />
+          <Field label="User" value={credentials.user} onChange={(value) => setCredentialValue("user", value)} placeholder="name@example.com" error={validationErrors["credentials.user"]} />
+          <Field label="Password" value={credentials.password} type="password" onChange={(value) => setCredentialValue("password", value)} error={validationErrors["credentials.password"]} />
+          <Field label="Token" value={credentials.token} type="password" onChange={(value) => setCredentialValue("token", value)} error={validationErrors["credentials.token"]} />
           <div className="button-row">
             <IconButton
               icon={settingsBusy === "credentials" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
@@ -1202,9 +1393,9 @@ function App() {
             <FileText size={18} />
             <h2>Confluence auth</h2>
           </div>
-          <Field label="User" value={confluenceCredentials.user} onChange={(value) => setConfluenceCredentialValue("user", value)} placeholder="name@example.com" />
-          <Field label="Password" value={confluenceCredentials.password} type="password" onChange={(value) => setConfluenceCredentialValue("password", value)} />
-          <Field label="Token" value={confluenceCredentials.token} type="password" onChange={(value) => setConfluenceCredentialValue("token", value)} />
+          <Field label="User" value={confluenceCredentials.user} onChange={(value) => setConfluenceCredentialValue("user", value)} placeholder="name@example.com" required error={validationErrors["confluence.user"]} />
+          <Field label="Password" value={confluenceCredentials.password} type="password" onChange={(value) => setConfluenceCredentialValue("password", value)} required error={validationErrors["confluence.password"]} />
+          <Field label="Token" value={confluenceCredentials.token} type="password" onChange={(value) => setConfluenceCredentialValue("token", value)} required error={validationErrors["confluence.token"]} />
           <div className="button-row">
             <IconButton
               icon={settingsBusy === "confluence" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
@@ -1254,12 +1445,16 @@ function App() {
             value={aiSettings.baseUrl}
             onChange={(value) => setAiSettingValue("baseUrl", value)}
             placeholder="https://api.openai.com/v1"
+            required={aiSettings.enabled}
+            error={validationErrors["ai.baseUrl"]}
           />
           <Field
             label="Model"
             value={aiSettings.model}
             onChange={(value) => setAiSettingValue("model", value)}
             placeholder="Nhập model mà user muốn dùng"
+            required={aiSettings.enabled}
+            error={validationErrors["ai.model"]}
           />
           <Field
             label="API key"
@@ -1267,6 +1462,8 @@ function App() {
             type="password"
             onChange={(value) => setAiSettingValue("apiKey", value)}
             placeholder="Key riêng của từng user"
+            required={aiSettings.enabled}
+            error={validationErrors["ai.apiKey"]}
           />
           <Field
             label="Phong cách viết"
@@ -1405,33 +1602,36 @@ function App() {
               <h2>Task context</h2>
             </div>
             <div className="form-grid">
-              <Field label="Issue key" value={issue.key} onChange={(value) => setIssueValue("key", value.toUpperCase())} placeholder="AI-707" />
+              <Field label="Issue key" value={issue.key} onChange={(value) => setIssueValue("key", value.toUpperCase())} placeholder="AI-707" required error={validationErrors["issue.key"]} />
               <Field label="Status" value={issue.status} onChange={(value) => setIssueValue("status", value)} placeholder="Ready To Test" />
               <Field label="Issue type" value={issue.issue_type} onChange={(value) => setIssueValue("issue_type", value)} placeholder="Task / Bug / Story" />
               <Field label="Project key từ Jira" value={issue.project_key || ""} onChange={(value) => setIssueValue("project_key", value)} placeholder="AI" />
             </div>
-            <Field label="Summary" value={issue.summary} onChange={(value) => setIssueValue("summary", value)} placeholder="[Payment] Route callback..." />
-            <Field label="Description / acceptance criteria" value={issue.description} onChange={(value) => setIssueValue("description", value)} textarea rows={8} />
+            <Field label="Summary" value={issue.summary} onChange={(value) => setIssueValue("summary", value)} placeholder="[Payment] Route callback..." error={validationErrors["issue.summary"]} />
+            <Field label="Description / acceptance criteria" value={issue.description} onChange={(value) => setIssueValue("description", value)} textarea rows={8} error={validationErrors["issue.description"]} />
             <Field
               label="Confluence / doc links"
               value={confluenceLinks}
               onChange={(value) => {
+                clearValidationErrors(["confluenceLinks"]);
                 setConfluenceLinks(value);
                 const inferredBaseUrl = confluenceBaseUrl.trim() ? "" : inferConfluenceBaseUrl(value);
                 if (inferredBaseUrl) {
                   setConfluenceBaseUrl(inferredBaseUrl);
+                  clearValidationErrors(["confluenceBaseUrl"]);
                 }
                 clearFetchedDocs(value.trim() ? "Đã nhận link doc. Nhấn Fetch docs để đọc nội dung vào Task context." : "");
               }}
               textarea
               rows={3}
               placeholder="Mỗi dòng một link Confluence hoặc tài liệu liên quan"
+              error={validationErrors.confluenceLinks}
             />
             <div className="button-row">
               <IconButton
                 icon={busy === "docs" ? <Loader2 className="spin" size={16} /> : <FileText size={16} />}
                 onClick={fetchConfluenceDocs}
-                disabled={isWorking || !confluenceLinks.trim()}
+                disabled={isWorking}
               >
                 Fetch docs
               </IconButton>
