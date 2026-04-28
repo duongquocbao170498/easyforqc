@@ -82,7 +82,6 @@ type SavedDraftFiles = {
   cases: DownloadFileMeta;
   design: DownloadFileMeta;
 };
-type JsonDownloadTarget = "cases" | "design" | "both";
 type BuiltDesignFiles = {
   xmind?: DownloadFileMeta | null;
   png?: DownloadFileMeta | null;
@@ -1152,7 +1151,7 @@ function App() {
     });
   }
 
-  function saveDraftFiles(target: JsonDownloadTarget) {
+  function saveDraftFiles() {
     setBusyRun("save", async () => {
       const payload = await apiPost<{
         saved: boolean;
@@ -1171,19 +1170,8 @@ function App() {
       });
       setSavedFiles(payload.files);
       setOutput(JSON.stringify(payload, null, 2));
-      if (target === "cases" || target === "both") {
-        triggerDownload(payload.files.cases);
-      }
-      if (target === "design" || target === "both") {
-        triggerDownload(payload.files.design);
-      }
-      const targetLabel =
-        target === "cases"
-          ? "test cases JSON"
-          : target === "design"
-            ? "test design JSON"
-            : "test cases JSON và test design JSON";
-      setMessage(`Đã lưu ${targetLabel} vào thư mục QA đã cấu hình. Bản tải qua Chrome sẽ nằm theo cấu hình Downloads của trình duyệt.`);
+      triggerDownload(payload.files.cases);
+      setMessage("Đã lưu test cases JSON vào thư mục QA đã cấu hình. Bản tải qua Chrome sẽ nằm theo cấu hình Downloads của trình duyệt.");
     });
   }
 
@@ -1932,30 +1920,6 @@ function App() {
             </div>
             <div className="run-grid">
               <div className="run-block">
-                <h3>Local storage</h3>
-                <p>Lưu JSON vào thư mục QA đã cấu hình; bản tải qua Chrome vẫn theo Downloads của trình duyệt.</p>
-                <div className="button-row">
-                  <IconButton icon={busy === "save" ? <Loader2 className="spin" size={16} /> : <Download size={16} />} onClick={() => saveDraftFiles("cases")} disabled={isWorking || testCases.length === 0}>
-                    Test cases JSON
-                  </IconButton>
-                  <IconButton icon={busy === "save" ? <Loader2 className="spin" size={16} /> : <Download size={16} />} onClick={() => saveDraftFiles("design")} disabled={isWorking || testCases.length === 0}>
-                    Test design JSON
-                  </IconButton>
-                </div>
-                <div className="button-row compact-actions">
-                  <IconButton icon={busy === "save" ? <Loader2 className="spin" size={16} /> : <Download size={16} />} onClick={() => saveDraftFiles("both")} disabled={isWorking || testCases.length === 0} variant="primary">
-                    Download JSON
-                  </IconButton>
-                </div>
-                {savedFiles ? (
-                  <div className="mini-note">
-                    Test cases: {savedFiles.cases.file}
-                    <br />
-                    Test design: {savedFiles.design.file}
-                  </div>
-                ) : null}
-              </div>
-              <div className="run-block">
                 <h3>Test design</h3>
                 <p>Build file `.xmind` và `.png` từ outline đang chỉnh vào XMind output dir.</p>
                 <div className="button-row">
@@ -1964,6 +1928,14 @@ function App() {
                   </IconButton>
                   <IconButton icon={busy === "attach" ? <Loader2 className="spin" size={16} /> : <UploadCloud size={16} />} onClick={() => buildXmind(true)} disabled={isWorking} variant="primary">
                     Build and attach
+                  </IconButton>
+                </div>
+                <div className="button-row compact-actions">
+                  <IconButton icon={<Download size={16} />} onClick={() => triggerDownload(builtDesignFiles?.xmind)} disabled={isWorking || !builtDesignFiles?.xmind}>
+                    Download XMind
+                  </IconButton>
+                  <IconButton icon={<Download size={16} />} onClick={() => triggerDownload(builtDesignFiles?.png)} disabled={isWorking || !builtDesignFiles?.png}>
+                    Download PNG
                   </IconButton>
                 </div>
                 {builtDesignFiles?.xmind || builtDesignFiles?.png ? (
@@ -1975,23 +1947,23 @@ function App() {
                       </>
                     ) : null}
                     {builtDesignFiles.png ? <>PNG: {builtDesignFiles.png.file}</> : null}
-                    <div className="button-row compact-actions">
-                      <IconButton icon={<Download size={16} />} onClick={() => triggerDownload(builtDesignFiles.xmind)} disabled={isWorking || !builtDesignFiles.xmind}>
-                        Download XMind
-                      </IconButton>
-                      <IconButton icon={<Download size={16} />} onClick={() => triggerDownload(builtDesignFiles.png)} disabled={isWorking || !builtDesignFiles.png}>
-                        Download PNG
-                      </IconButton>
-                    </div>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="mini-note">Cần Build local files trước khi tải XMind/PNG.</div>
+                )}
               </div>
               <div className="run-block">
                 <h3>Test cases</h3>
-                <p>Tạo Zephyr testcase folder và import toàn bộ case đang chỉnh.</p>
-                <IconButton icon={busy === "suite" ? <Loader2 className="spin" size={16} /> : <ClipboardList size={16} />} onClick={createSuite} disabled={isWorking || testCases.length === 0} variant="primary">
-                  Create suite
-                </IconButton>
+                <p>Tải test cases JSON hoặc tạo Zephyr testcase folder và import toàn bộ case đang chỉnh.</p>
+                <div className="button-row">
+                  <IconButton icon={busy === "save" ? <Loader2 className="spin" size={16} /> : <Download size={16} />} onClick={saveDraftFiles} disabled={isWorking || testCases.length === 0}>
+                    Download JSON
+                  </IconButton>
+                  <IconButton icon={busy === "suite" ? <Loader2 className="spin" size={16} /> : <ClipboardList size={16} />} onClick={createSuite} disabled={isWorking || testCases.length === 0} variant="primary">
+                    Create suite
+                  </IconButton>
+                </div>
+                {savedFiles ? <div className="mini-note">Test cases: {savedFiles.cases.file}</div> : null}
               </div>
               <div className="run-block">
                 <h3>Test cycle</h3>
