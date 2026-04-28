@@ -1,4 +1,5 @@
 import AlertCircle from "lucide-react/dist/esm/icons/alert-circle.js";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.js";
 import CheckCircle2 from "lucide-react/dist/esm/icons/check-circle-2.js";
 import ClipboardList from "lucide-react/dist/esm/icons/clipboard-list.js";
 import FileText from "lucide-react/dist/esm/icons/file-text.js";
@@ -18,9 +19,10 @@ import Settings from "lucide-react/dist/esm/icons/settings.js";
 import ShieldCheck from "lucide-react/dist/esm/icons/shield-check.js";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2.js";
 import UploadCloud from "lucide-react/dist/esm/icons/upload-cloud.js";
+import User from "lucide-react/dist/esm/icons/user.js";
 import Wand2 from "lucide-react/dist/esm/icons/wand-2.js";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   AiSettings,
   ArchetypeInfo,
@@ -470,6 +472,8 @@ function App() {
   const [loginError, setLoginError] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
   const [googleAuthEnabled, setGoogleAuthEnabled] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -573,6 +577,30 @@ function App() {
       .catch((error) => setLoginError(error.message))
       .finally(() => setAuthChecked(true));
   }, []);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+
+    function closeUserMenuOnOutsideClick(event: MouseEvent) {
+      if (!userMenuRef.current?.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+
+    function closeUserMenuOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setUserMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", closeUserMenuOnOutsideClick);
+    document.addEventListener("keydown", closeUserMenuOnEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", closeUserMenuOnOutsideClick);
+      document.removeEventListener("keydown", closeUserMenuOnEscape);
+    };
+  }, [userMenuOpen]);
 
   const selectedArchetype = useMemo<ArchetypeInfo | null>(() => {
     if (!defaults || archetypeKey === "auto") return null;
@@ -696,6 +724,7 @@ function App() {
   }
 
   async function logout() {
+    setUserMenuOpen(false);
     await apiPost("/api/auth/logout", {});
     setAuthenticated(false);
     setAuthUser(null);
@@ -1295,7 +1324,42 @@ function App() {
             <h2>{issue.key || "Nhập Jira task để bắt đầu"}</h2>
           </div>
           <div className="top-actions">
-            {authUser ? <span className="user-pill">{authUser}</span> : null}
+            <div className="user-menu" ref={userMenuRef}>
+              <button
+                className="user-menu-trigger"
+                type="button"
+                onClick={() => setUserMenuOpen((current) => !current)}
+                aria-expanded={userMenuOpen}
+                aria-haspopup="menu"
+                aria-label="User menu"
+              >
+                <User size={16} />
+                <span>User</span>
+                <ChevronDown size={14} />
+              </button>
+              {userMenuOpen ? (
+                <div className="user-menu-popover" role="menu">
+                  {authUser ? <div className="user-menu-email">{authUser}</div> : null}
+                  <button
+                    className="user-menu-item"
+                    type="button"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      setPasswordDialogOpen(true);
+                    }}
+                    disabled={isWorking}
+                    role="menuitem"
+                  >
+                    <KeyRound size={16} />
+                    <span>Đổi mật khẩu</span>
+                  </button>
+                  <button className="user-menu-item danger" type="button" onClick={logout} disabled={isWorking} role="menuitem">
+                    <LogOut size={16} />
+                    <span>Logout</span>
+                  </button>
+                </div>
+              ) : null}
+            </div>
             <select value={archetypeKey} onChange={(event) => setArchetypeKey(event.target.value)}>
               <option value="auto">Auto archetype</option>
               {defaults
@@ -1308,12 +1372,6 @@ function App() {
             </select>
             <IconButton icon={busy === "draft" ? <Loader2 className="spin" size={16} /> : <Wand2 size={16} />} onClick={generateDraft} disabled={isWorking} variant="primary">
               Generate draft
-            </IconButton>
-            <IconButton icon={<KeyRound size={16} />} onClick={() => setPasswordDialogOpen(true)} disabled={isWorking}>
-              Đổi mật khẩu
-            </IconButton>
-            <IconButton icon={<LogOut size={16} />} onClick={logout} disabled={isWorking}>
-              Logout
             </IconButton>
           </div>
         </header>
