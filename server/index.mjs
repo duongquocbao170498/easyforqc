@@ -1170,14 +1170,28 @@ function detectTaskSignals(issue, context, archetypeKey) {
   if (/\b(ui|screen|display|show|badge|indicator|highlight|bubble|modal|form|button)\b/.test(text) || /hien thi|lam noi bat|giao dien/.test(text)) {
     add("ui_surface", "UI surface", "Task thay đổi cách hiển thị hoặc trạng thái thị giác.");
   }
-  if (/conversation stream|chat stream|tin nhan|message|bubble|\bce\b|amr/.test(text)) {
+  if (/conversation stream|chat stream|message stream|tin nhan|cặp message|cap message|bubble/.test(text)) {
     add("message_stream", "Message stream", "Behavior nằm trong luồng chat/message nên cần kiểm mapping theo vị trí message.");
   }
-  if (/amr|score|diem|threshold|nguong|low|fail|pass|vi pham/.test(text)) {
+  const hasScoreSubject = /amr|score|diem|điểm|vi pham|vi phạm/.test(text);
+  const hasScoreStateTerm = /threshold|nguong|ngưỡng|low|fail|pass/.test(text);
+  if (hasScoreSubject || (hasScoreStateTerm && /badge|highlight|indicator|danh gia|đánh giá|score/.test(text))) {
     add("score_state", "Score state matrix", "Output phụ thuộc score/trạng thái đánh giá nên cần bảng quyết định.");
   }
   if (/mapping|map|binding|pair|cap message|cặp message|ngay sau|field|payload|contract|selection_key|tool input|tool output/.test(text)) {
     add("field_mapping", "Field/message mapping", "Rủi ro chính là gắn sai source-of-truth vào UI/output.");
+  }
+  if (/\b(event|trace|metadata|telemetry|langfuse|log|logging)\b|ghi nhan event|ghi nhận event|on_[a-z0-9_]+/.test(text)) {
+    add("event_logging", "Event/logging contract", "Task yêu cầu ghi nhận event/log/metadata nên cần kiểm payload và điều kiện phát sinh.");
+  }
+  if (/decision|outcome|classif|phan loai|phân loại|routing|route|n8n|create|update|patch|post|tao moi|tạo mới|cap nhat|cập nhật/.test(text)) {
+    add("downstream_decision", "Downstream decision/routing", "Task có nhánh phân loại hoặc routing downstream nên cần bảng quyết định outcome.");
+  }
+  if (/fuzzy|chunk|section|article_sections|difflib|sequencematcher|threshold|similarity|markdown heading|heading|mapping.*section/.test(text)) {
+    add("fuzzy_matching", "Fuzzy/matching algorithm", "Task có mapping theo thuật toán hoặc threshold nên cần kiểm match, mismatch và boundary.");
+  }
+  if (/audit|reasoning|review|ly do|lý do|reason|giai thich|giải thích/.test(text)) {
+    add("audit_reasoning", "Audit/reasoning record", "Task yêu cầu lưu lý do/quyết định để review nên cần kiểm dữ liệu audit.");
   }
   if (/empty|null|missing|chua co|chưa có|khong xac dinh|không xác định|error|loi|lỗi|timeout|unavailable|partial/.test(text)) {
     add("fallback_state", "Fallback and empty/error states", "Task có yêu cầu xử lý missing/error/empty rõ ràng.");
@@ -1229,6 +1243,21 @@ function selectQaTechniques(archetype, signals) {
   }
   if (ids.has("field_mapping") || ids.has("message_stream")) {
     addPrimary("Integration contract / field mapping");
+  }
+  if (ids.has("event_logging")) {
+    addPrimary("Integration contract / field mapping");
+    addSupporting("Observability/log validation");
+  }
+  if (ids.has("downstream_decision")) {
+    addPrimary("Decision table");
+    addSupporting("State transition");
+  }
+  if (ids.has("fuzzy_matching")) {
+    addSupporting("Boundary value analysis");
+    addFailSafe("Fallback / partial failure / recovery");
+  }
+  if (ids.has("audit_reasoning")) {
+    addSupporting("Risk-based regression");
   }
   if (ids.has("ui_surface") || ids.has("refresh_stability")) {
     addSupporting("Realtime / refresh / pagination stability");
@@ -1353,6 +1382,72 @@ function buildCoverageAxes(issue, archetype, context, signals, techniques) {
         [
           "Record có đủ field hợp lệ.",
           "Record thiếu field optional hoặc có field legacy dễ nhầm.",
+        ],
+      ),
+    );
+  }
+
+  if (ids.has("event_logging")) {
+    axes.push(
+      coverageAxis(
+        "event_payload_contract",
+        "Event/log payload ghi nhận đúng điều kiện và đủ context",
+        "Integration contract / field mapping",
+        "Event thiếu field hoặc bị log sai điều kiện sẽ làm downstream phân tích sai hoặc mất khả năng audit.",
+        "mapping",
+        [
+          "Event chỉ được ghi khi đúng điều kiện phát sinh trong Jira.",
+          "Payload có đủ reference chính như session/conversation, request, response/context và source-of-truth liên quan.",
+          "Metadata/log không bị mất field, sai kiểu dữ liệu hoặc ghi nhầm context cũ.",
+        ],
+        [
+          "Scenario có event hợp lệ cần ghi nhận.",
+          "Scenario không đủ điều kiện để kiểm không log false positive.",
+          "Payload/log mẫu để đối chiếu từng field.",
+        ],
+      ),
+    );
+  }
+
+  if (ids.has("downstream_decision")) {
+    axes.push(
+      coverageAxis(
+        "downstream_decision_routing",
+        "Downstream decision chọn đúng outcome và route xử lý",
+        "Decision table",
+        "Sai nhánh create/update/route hoặc outcome làm hệ thống xử lý nhầm action phía sau.",
+        "decision_table",
+        [
+          "Mỗi điều kiện chính map đúng một outcome/action.",
+          "Outcome có đủ dữ liệu để gọi đúng API, workflow hoặc bước xử lý tiếp theo.",
+          "Trường hợp ambiguous/missing được xử lý fail-safe thay vì tự đoán.",
+        ],
+        [
+          "Input khớp entity/document/record hiện có.",
+          "Input không tìm thấy entity/document/record phù hợp.",
+          "Input ambiguous hoặc source-of-truth trả partial.",
+        ],
+      ),
+    );
+  }
+
+  if (ids.has("fuzzy_matching")) {
+    axes.push(
+      coverageAxis(
+        "fuzzy_matching_section_mapping",
+        "Fuzzy/matching map đúng source section và xử lý threshold",
+        "Boundary value analysis",
+        "Thuật toán matching chọn nhầm section hoặc pass sai threshold khiến downstream cập nhật nhầm nội dung.",
+        "boundary",
+        [
+          "Chunk/input đã normalize vẫn match đúng section/source tương ứng.",
+          "Case dưới ngưỡng hoặc không match không được tự gán vào source sai.",
+          "Nhiều chunk/section trùng hoặc gần giống được deduplicate và giữ đúng context.",
+        ],
+        [
+          "Input match rõ source section.",
+          "Input mất markdown/newline hoặc bị normalize.",
+          "Input dưới threshold, duplicate hoặc gần giống nhiều section.",
         ],
       ),
     );
@@ -1508,6 +1603,27 @@ function buildCoverageAxes(issue, archetype, context, signals, techniques) {
           "Log/downstream không có side effect ngoài scope.",
         ],
         ["Gửi lại cùng event/action hoặc refresh liên tiếp nhiều lần."],
+      ),
+    );
+  }
+
+  if (ids.has("audit_reasoning")) {
+    axes.push(
+      coverageAxis(
+        "audit_reasoning_record",
+        "Decision/reasoning được lưu đủ để audit và review",
+        "Risk-based regression",
+        "Không lưu hoặc lưu thiếu reasoning khiến team không review được vì sao hệ thống chọn outcome.",
+        "regression",
+        [
+          "Decision cuối cùng được lưu cùng reasoning ngắn gọn và source reference liên quan.",
+          "Reasoning không chứa thông tin bịa hoặc mâu thuẫn với source-of-truth.",
+          "Reviewer có thể truy vết từ record/audit log về input ban đầu.",
+        ],
+        [
+          "Scenario có decision rõ ràng cần lưu reasoning.",
+          "Scenario fallback/error vẫn cần audit trail tối thiểu.",
+        ],
       ),
     );
   }
@@ -1936,12 +2052,52 @@ function buildPreconditionGuidelines(archetypeKey, signals, issue) {
   };
 }
 
+function buildCaseStrategy({ issue, archetypeKey, context, signals = [], coverageAxes = [] }) {
+  const ids = new Set(signals.map((item) => item.id));
+  const mode = workflowMode(issue, archetypeKey);
+  const signalScore = Math.min(2, Math.floor(signals.length / 3));
+  const axesScore = coverageAxes.length >= 8 ? 2 : coverageAxes.length >= 5 ? 1 : 0;
+  const docScore =
+    (context.docContextApplied ? 2 : 0) +
+    (context.docLines.length >= 8 ? 1 : 0) +
+    (context.docToolNames.length ? 1 : 0);
+  const modeScore = mode.isConversation || mode.isIntegration || archetypeKey === "workflow" ? 1 : 0;
+  const longScopeScore = context.description.length > 1800 ? 1 : 0;
+  const specialRiskScore = Math.min(
+    2,
+    ["event_logging", "downstream_decision", "fuzzy_matching", "audit_reasoning"].filter((id) => ids.has(id)).length,
+  );
+  const targetCount = clampNumber(
+    5 + signalScore + axesScore + docScore + modeScore + longScopeScore + specialRiskScore,
+    5,
+    12,
+  );
+  const minimumCount = clampNumber(targetCount - (targetCount >= 10 ? 2 : 1), 5, targetCount);
+  const maximumCount = clampNumber(targetCount + 4, targetCount, 18);
+  return {
+    minimum_count: minimumCount,
+    target_count: targetCount,
+    maximum_count: maximumCount,
+    complexity_tier: targetCount >= 10 ? "complex" : targetCount >= 7 ? "medium" : "small",
+    rationale: [
+      `signals=${signals.length}`,
+      `coverage_axes=${coverageAxes.length}`,
+      context.docContextApplied ? `doc_lines=${context.docLines.length}` : "",
+      context.docToolNames.length ? `doc_tools=${context.docToolNames.length}` : "",
+      mode.isConversation ? "conversation" : "",
+      mode.isIntegration ? "integration" : "",
+      specialRiskScore ? "event/decision/matching/audit risk" : "",
+    ].filter(Boolean),
+  };
+}
+
 async function buildQaPlan({ issue, archetypeKey, sourceInput = {}, aiCustomization = null, project = {} }) {
   const archetype = ARCHETYPES[archetypeKey] || ARCHETYPES.general;
   const context = sourceContextFrom(issue, sourceInput);
   const signals = detectTaskSignals(issue, context, archetypeKey);
   const techniques = selectQaTechniques(archetype, signals);
   const coverageAxes = buildCoverageAxes(issue, archetype, context, signals, techniques);
+  const caseStrategy = buildCaseStrategy({ issue, archetypeKey, context, signals, coverageAxes });
   const repoEvidence = await buildRepoEvidencePack(issue, sourceInput.repoContext, context);
   const openQuestions = [];
   if (signals.some((item) => item.id === "score_state") && !/nguong|ngưỡng|threshold|low|fail|pass/i.test(`${issue.description} ${sourceInput.docContext || ""}`)) {
@@ -1959,6 +2115,7 @@ async function buildQaPlan({ issue, archetypeKey, sourceInput = {}, aiCustomizat
     archetype_key: archetypeKey,
     archetype_label: archetype.label,
     signals,
+    case_strategy: caseStrategy,
     selected_techniques: techniques,
     coverage_axes: coverageAxes,
     source_priority: [
@@ -1975,6 +2132,7 @@ async function buildQaPlan({ issue, archetypeKey, sourceInput = {}, aiCustomizat
       doc_tool_names: context.docToolNames,
       doc_context_applied: context.docContextApplied,
       doc_context_ignored: context.docContextIgnored,
+      case_strategy: caseStrategy,
       ai_customization_applied: Boolean(aiCustomization),
       ai_customization_guidance: aiGuidanceText(aiCustomization) || undefined,
     },
@@ -1992,6 +2150,7 @@ function attachQaPlanToOutline(outline = {}, qaPlan = null) {
       adaptive_qa_plan: {
         version: qaPlan.version,
         signals: qaPlan.signals,
+        case_strategy: qaPlan.case_strategy,
         coverage_axes: qaPlan.coverage_axes.map((axis) => ({
           id: axis.id,
           title: axis.title,
@@ -3186,13 +3345,14 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
   const coverageLines = uniqueLines([...context.primaryLines, ...guidanceLines], 16);
   const pick = (index, fallback) => coverageLines[index % Math.max(coverageLines.length, 1)] || fallback;
   const targetCount = clampNumber(
-    4 +
-      Math.min(context.issueLines.length || 1, 10) +
-      Math.min(context.qaNoteLines.length, 2) +
-      Math.min(context.docLines.length, 5) +
-      (mode.isConversation || mode.isIntegration || archetypeKey === "workflow" ? 2 : 0) +
-      (context.description.length > 1800 ? 2 : 0),
-    6,
+    Number(qaPlan?.case_strategy?.target_count) ||
+      4 +
+        Math.min(context.issueLines.length || 1, 10) +
+        Math.min(context.qaNoteLines.length, 2) +
+        Math.min(context.docLines.length, 5) +
+        (mode.isConversation || mode.isIntegration || archetypeKey === "workflow" ? 2 : 0) +
+        (context.description.length > 1800 ? 2 : 0),
+    5,
     22,
   );
   const quoteLines = (items) => numberedQuotedLines(items);
@@ -3458,8 +3618,14 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
   });
 
   const hasDocTool = (name) => context.docToolNames.includes(name);
-  if (context.docContextApplied && context.docToolNames.length) {
-    const knownTools = context.docToolNames.join(" -> ");
+  const busDocTools = [
+    "bus_trip_schedule_catalog_tool",
+    "bus_trip_stop_catalog_tool",
+    "bus_trip_price_options_tool",
+    "bus_trip_seat_map_tool",
+  ].filter(hasDocTool);
+  if (context.docContextApplied && busDocTools.length) {
+    const knownTools = busDocTools.join(" -> ");
     addCandidate({
       title: "Luồng bus discovery gọi đúng chuỗi tool theo doc kỹ thuật",
       objective: `Xác minh test case dùng đúng tool name từ doc thay vì gọi chung chung Tool 1/Tool 2/Tool 3: ${knownTools}`,
@@ -3838,6 +4004,7 @@ function buildOutline(issue, archetypeKey, cases = [], sourceInput = {}, aiCusto
         ? {
             version: qaPlan.version,
             signals: qaPlan.signals,
+            case_strategy: qaPlan.case_strategy,
             coverage_axes: qaPlan.coverage_axes.map((axis) => ({
               id: axis.id,
               title: axis.title,
@@ -4042,7 +4209,34 @@ function normalizeAiOutline(rawOutline = {}, issue, archetypeKey, fallbackOutlin
   };
 }
 
-function normalizeAiDraft(payload, issue, archetypeKey, fallbackCases, fallbackOutline) {
+function normalizedCaseIdentity(testCase = {}) {
+  const title = normalizeSearchText(stripTestCasePrefix(testCase.title || testCase.name || ""));
+  const tags = arrayFromMaybe(testCase.coverage_tags || testCase.coverageTags).join(" ");
+  return `${title}|${normalizeSearchText(testCase.scenario_type || testCase.scenarioType || "")}|${normalizeSearchText(tags)}`;
+}
+
+function completeAiCasesWithFallback(testCases = [], fallbackCases = [], qaPlan = null) {
+  const targetCount = clampNumber(
+    Number(qaPlan?.case_strategy?.target_count) || testCases.length || fallbackCases.length || 0,
+    0,
+    32,
+  );
+  if (!targetCount || testCases.length >= targetCount || !fallbackCases.length) {
+    return testCases;
+  }
+  const selected = [...testCases];
+  const seen = new Set(selected.map(normalizedCaseIdentity).filter(Boolean));
+  for (const fallbackCase of fallbackCases) {
+    if (selected.length >= targetCount) break;
+    const key = normalizedCaseIdentity(fallbackCase);
+    if (key && seen.has(key)) continue;
+    seen.add(key);
+    selected.push(fallbackCase);
+  }
+  return selected;
+}
+
+function normalizeAiDraft(payload, issue, archetypeKey, fallbackCases, fallbackOutline, qaPlan = null) {
   const rawCases = Array.isArray(payload?.test_cases)
     ? payload.test_cases
     : Array.isArray(payload?.testCases)
@@ -4051,7 +4245,8 @@ function normalizeAiDraft(payload, issue, archetypeKey, fallbackCases, fallbackO
   if (!rawCases.length) {
     throw new Error("AI provider trả về JSON nhưng thiếu `test_cases`.");
   }
-  const testCases = rawCases.slice(0, 32).map((rawCase, index) => normalizeAiCase(rawCase, index, issue, fallbackCases[index]));
+  const aiCases = rawCases.slice(0, 32).map((rawCase, index) => normalizeAiCase(rawCase, index, issue, fallbackCases[index]));
+  const testCases = completeAiCasesWithFallback(aiCases, fallbackCases, qaPlan);
   const outline = normalizeAiOutline(payload.outline || payload.test_design || payload.testDesign || {}, issue, archetypeKey, fallbackOutline);
   return { testCases, outline };
 }
@@ -4113,9 +4308,14 @@ function draftQualityReport(cases = [], outline = {}, qaPlan = null) {
   if (!outline?.branches?.some((branch) => normalizeSearchText(branch.title).includes("out of scope"))) {
     warnings.push("Test design thiếu branch Out of scope.");
   }
+  const minCaseCount = Number(qaPlan?.case_strategy?.minimum_count) || 0;
+  if (minCaseCount && cases.length < minCaseCount) {
+    warnings.push(`Số testcase (${cases.length}) thấp hơn minimum adaptive (${minCaseCount}).`);
+  }
   return {
     warnings,
     case_count: cases.length,
+    recommended_case_count: qaPlan?.case_strategy || null,
     branch_count: Array.isArray(outline?.branches) ? outline.branches.length : 0,
     adaptive_axes_covered: qaPlan?.coverage_axes?.map((axis) => axis.title) || [],
   };
@@ -4153,6 +4353,7 @@ function buildAiDraftMessages({
     "- Output language: Vietnamese for `title`, `precondition`, `objective`, `risk`, `steps`, `test_data`, `expected_result`, and test-design branch items. Keep Jira keys, field names, API names, tool names, AMR/CE/AI terms, and code identifiers unchanged.",
     "- Do not mix generic English phrasing into Vietnamese content, for example avoid `Verify`, `Check`, `Open question`, `Happy path`, unless it is a deliberate testing-technique label.",
     "- Do not create a fixed number of cases. Create as many as needed to cover the task well.",
+    "- Use `Adaptive QA plan.case_strategy`: generate at least `minimum_count`, aim for `target_count`, and stay under `maximum_count`. Do not collapse unrelated risk axes into one broad testcase just to keep the suite short.",
     "- Each testcase title must be concise, scenario-specific, and immediately explain what the case covers.",
     "- Never use generic titles such as `Mục tiêu`, `Bối cảnh`, `Context`, `Background`, `Description`, `Conversation bao phủ yêu cầu`, or `Yêu cầu Jira được đáp ứng`.",
     "- Always generate a fresh suite from the current Jira issue, current doc context, QA notes, and current AI Settings. Do not reuse old/generated/saved test cases as source content.",
@@ -4259,7 +4460,7 @@ async function generateAiDraft({ issue, archetypeKey, sourceInput, aiSettings, a
   });
   const result = await callOpenAiCompatible(aiSettings, messages);
   return {
-    ...normalizeAiDraft(result.payload, issue, archetypeKey, fallbackCases, fallbackOutline),
+    ...normalizeAiDraft(result.payload, issue, archetypeKey, fallbackCases, fallbackOutline, qaPlan),
     usage: result.usage,
   };
 }
