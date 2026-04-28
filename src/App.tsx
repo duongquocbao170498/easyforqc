@@ -2,6 +2,7 @@ import AlertCircle from "lucide-react/dist/esm/icons/alert-circle.js";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.js";
 import CheckCircle2 from "lucide-react/dist/esm/icons/check-circle-2.js";
 import ClipboardList from "lucide-react/dist/esm/icons/clipboard-list.js";
+import Download from "lucide-react/dist/esm/icons/download.js";
 import FileText from "lucide-react/dist/esm/icons/file-text.js";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch.js";
 import KeyRound from "lucide-react/dist/esm/icons/key-round.js";
@@ -76,6 +77,15 @@ type DraftResponse = {
   aiProvider?: AiProviderInfo;
 };
 type ConfluenceDocument = { title: string; url: string; text: string; error?: string };
+type DownloadFileMeta = { file: string; path: string; url: string };
+type SavedDraftFiles = {
+  cases: DownloadFileMeta;
+  design: DownloadFileMeta;
+};
+type BuiltDesignFiles = {
+  xmind?: DownloadFileMeta | null;
+  png?: DownloadFileMeta | null;
+};
 
 const emptyProject: ProjectConfig = {
   sourceRoot: "",
@@ -83,6 +93,7 @@ const emptyProject: ProjectConfig = {
   projectKey: "AI",
   folderRoot: "/Bao QC",
   runRoot: "/AI Chatbot",
+  jsonOutputDir: "",
   outputDir: "",
   labelMode: "custom",
   testcaseLabels: "QA_Testcases",
@@ -129,6 +140,7 @@ function projectFromDefaults(payload: DefaultsResponse): ProjectConfig {
     projectKey: payload.defaults.projectKey,
     folderRoot: payload.defaults.folderRoot,
     runRoot: payload.defaults.runRoot,
+    jsonOutputDir: payload.defaults.jsonOutputDir,
     outputDir: payload.defaults.outputDir,
     labelMode: payload.defaults.labelPolicy.mode,
     testcaseLabels: payload.defaults.labelPolicy.testcaseLabels,
@@ -241,6 +253,16 @@ async function apiPost<T>(url: string, body: unknown): Promise<T> {
     throw new Error(`${message}${details}`);
   }
   return payload;
+}
+
+function triggerDownload(file?: DownloadFileMeta | null) {
+  if (!file?.url) return;
+  const anchor = document.createElement("a");
+  anchor.href = file.url;
+  anchor.download = file.file.split("/").pop() || "";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
 }
 
 function Field(props: {
@@ -547,7 +569,8 @@ function App() {
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>(idleGenerationStatus);
   const [output, setOutput] = useState("");
   const [caseKeys, setCaseKeys] = useState("");
-  const [savedFiles, setSavedFiles] = useState<{ casesFile: string; designFile: string } | null>(null);
+  const [savedFiles, setSavedFiles] = useState<SavedDraftFiles | null>(null);
+  const [builtDesignFiles, setBuiltDesignFiles] = useState<BuiltDesignFiles | null>(null);
 
   function applyDefaults(payload: DefaultsResponse) {
     setDefaults(payload);
@@ -696,6 +719,7 @@ function App() {
     if (!project.projectKey.trim()) errors["project.projectKey"] = "Project key bắt buộc để map Jira project và tạo testcase/design.";
     if (!project.folderRoot.trim()) errors["project.folderRoot"] = "Test case folder root bắt buộc để biết nơi tạo testcase.";
     if (!project.runRoot.trim()) errors["project.runRoot"] = "Test cycle run root bắt buộc để biết nơi tạo test cycle.";
+    if (!project.jsonOutputDir.trim()) errors["project.jsonOutputDir"] = "JSON output dir bắt buộc để lưu test case JSON.";
     if (!project.outputDir.trim()) errors["project.outputDir"] = "XMind output dir bắt buộc để lưu file .xmind/.png.";
     if (!project.sourceRoot.trim()) errors["project.sourceRoot"] = "Source root bắt buộc để đọc skill/template generate.";
     if (project.labelMode === "custom" && !project.testcaseLabels.trim()) {
@@ -720,12 +744,12 @@ function App() {
     return errors;
   }
 
-  function validateConfluenceFetch() {
+  function validateConfluenceFetch(linksText = confluenceLinks, baseUrlText = confluenceBaseUrl) {
     const errors: ValidationErrors = {};
-    if (!confluenceLinks.trim()) {
+    if (!linksText.trim()) {
       errors.confluenceLinks = "Cần nhập ít nhất 1 link Confluence/doc trước khi Fetch docs.";
     }
-    if (!confluenceBaseUrl.trim()) {
+    if (!baseUrlText.trim()) {
       errors.confluenceBaseUrl = "Cần Confluence Base URL cho task này trước khi Fetch docs.";
     }
     if (!confluenceCredentials.user.trim()) {
@@ -789,6 +813,7 @@ function App() {
     setCaseKeys("");
     setOutput("");
     setSavedFiles(null);
+    setBuiltDesignFiles(null);
     setQaPlan(null);
     setGenerationStatus(idleGenerationStatus);
     setActiveTab("cases");
@@ -880,6 +905,8 @@ function App() {
     setDefaults(null);
     setOutput("");
     setMessage("");
+    setSavedFiles(null);
+    setBuiltDesignFiles(null);
   }
 
   async function changePassword() {
@@ -985,57 +1012,70 @@ function App() {
         issue_type: payload.issue.issue_type || current.issue_type,
       }));
       setOutline((current) => ({ ...current, issue_key: payload.issue.key || current.issue_key }));
+      setOutput(JSON.stringify(payload.issue, null, 2));
       const detectedDocLinks = Array.from(
         new Set([...(payload.issue.doc_links || []), ...extractDocumentLinks(`${payload.issue.description}\n${payload.issue.summary}`)]),
       );
-      if (detectedDocLinks.length && !confluenceLinks.trim()) {
-        const linksText = detectedDocLinks.join("\n");
-        setConfluenceLinks(linksText);
+      let docsAutoHandled = false;
+      if (detectedDocLinks.length) {
+        const linksText = confluenceLinks.trim() || detectedDocLinks.join("\n");
+        if (!confluenceLinks.trim()) {
+          setConfluenceLinks(linksText);
+        }
         const inferredBaseUrl = confluenceBaseUrl.trim() || inferConfluenceBaseUrl(linksText);
         if (inferredBaseUrl) {
           setConfluenceBaseUrl(inferredBaseUrl);
         }
-        clearFetchedDocs(`Tìm thấy ${detectedDocLinks.length} link doc từ Jira task/Issue links. Nhấn Fetch docs để đọc nội dung vào Task context.`);
+        await loadConfluenceDocs(linksText, inferredBaseUrl, fetchedIssueKey || payload.issue.key || nextIssueKey, {
+          validationMessage: `Tìm thấy ${detectedDocLinks.length} link doc từ Jira task nhưng chưa fetch được vì thiếu Confluence config/auth.`,
+        });
+        docsAutoHandled = true;
       } else if (payload.issue.doc_link_error) {
         setDocStatus(`Không đọc được Jira issue links: ${payload.issue.doc_link_error}`);
       }
-      setOutput(JSON.stringify(payload.issue, null, 2));
-      setMessage(`Đã fetch Jira task ${payload.issue.key}.`);
+      if (!docsAutoHandled) {
+        setMessage(`Đã fetch Jira task ${payload.issue.key}.`);
+      }
     });
   }
 
-  function fetchConfluenceDocs() {
-    const errors = validateConfluenceFetch();
+  async function loadConfluenceDocs(
+    linksText: string,
+    baseUrlText: string,
+    currentIssueKey: string,
+    options: { validationMessage?: string } = {},
+  ) {
+    const errors = validateConfluenceFetch(linksText, baseUrlText);
     if (Object.keys(errors).length) {
-      setValidationFailure(errors, "Vui lòng bổ sung link, Base URL và đủ Confluence auth trước khi Fetch docs.");
-      return;
+      clearFetchedDocs(options.validationMessage || "Vui lòng bổ sung link, Base URL và đủ Confluence auth trước khi Fetch docs.");
+      setValidationFailure(errors, options.validationMessage || "Vui lòng bổ sung link, Base URL và đủ Confluence auth trước khi Fetch docs.");
+      return false;
     }
     setValidationErrors({});
-    setBusyRun("docs", async () => {
-      const currentIssueKey = issueKeyFromText(jiraUrl) || issue.key;
-      const payload = await apiPost<{ documents: ConfluenceDocument[]; combinedText: string }>(
-        "/api/confluence-docs",
-        {
-          links: confluenceLinks,
-          confluenceCredentials: taskConfluenceCredentials,
-        },
-      );
-      const loadedDocs = payload.documents.filter((item) => item.text);
-      const failedDocs = payload.documents.filter((item) => item.error);
-      setDocContext(payload.combinedText);
-      setDocIssueKey(payload.combinedText ? currentIssueKey : "");
-      setDocSources(payload.documents);
-      setOutput(JSON.stringify(payload.documents, null, 2));
-      const nextStatus = loadedDocs.length
-        ? `Doc context đã gắn với ${currentIssueKey}: đọc được ${loadedDocs.length}/${payload.documents.length} doc, ${payload.combinedText.length.toLocaleString()} ký tự. Generate draft sẽ dùng doc này cho đúng task hiện tại.`
-        : `Chưa đọc được nội dung doc cho ${currentIssueKey}. Kiểm tra lại Base URL, auth hoặc link Confluence.`;
-      setDocStatus(nextStatus);
-      setMessage(
-        failedDocs.length
-          ? `Đã đọc ${loadedDocs.length}/${payload.documents.length} Confluence doc. Có ${failedDocs.length} doc lỗi.`
-          : `Đã đọc ${payload.documents.length} Confluence doc.`,
-      );
-    });
+    setDocStatus(`Đang tự động fetch ${linksText.split(/\r?\n/).filter((item) => item.trim()).length} Confluence doc từ Jira task...`);
+    const payload = await apiPost<{ documents: ConfluenceDocument[]; combinedText: string }>(
+      "/api/confluence-docs",
+      {
+        links: linksText,
+        confluenceCredentials: { ...confluenceCredentials, baseUrl: baseUrlText },
+      },
+    );
+    const loadedDocs = payload.documents.filter((item) => item.text);
+    const failedDocs = payload.documents.filter((item) => item.error);
+    setDocContext(payload.combinedText);
+    setDocIssueKey(payload.combinedText ? currentIssueKey : "");
+    setDocSources(payload.documents);
+    setOutput(JSON.stringify(payload.documents, null, 2));
+    const nextStatus = loadedDocs.length
+      ? `Doc context đã tự động gắn với ${currentIssueKey}: đọc được ${loadedDocs.length}/${payload.documents.length} doc, ${payload.combinedText.length.toLocaleString()} ký tự. Generate draft sẽ dùng doc này cho đúng task hiện tại.`
+      : `Chưa đọc được nội dung doc cho ${currentIssueKey}. Kiểm tra lại Base URL, auth hoặc link Confluence.`;
+    setDocStatus(nextStatus);
+    setMessage(
+      failedDocs.length
+        ? `Đã fetch Jira task ${currentIssueKey} và tự đọc ${loadedDocs.length}/${payload.documents.length} Confluence doc. Có ${failedDocs.length} doc lỗi.`
+        : `Đã fetch Jira task ${currentIssueKey} và tự đọc ${payload.documents.length} Confluence doc.`,
+    );
+    return true;
   }
 
   function generateDraft() {
@@ -1058,6 +1098,7 @@ function App() {
       setOutline(emptyOutline(effectiveIssue));
       setCaseKeys("");
       setSavedFiles(null);
+      setBuiltDesignFiles(null);
       setOutput("");
       setQaPlan(null);
       setGenerationStatus({
@@ -1112,22 +1153,35 @@ function App() {
 
   function saveDraftFiles() {
     setBusyRun("save", async () => {
-      const payload = await apiPost<{ saved: boolean; casesFile: string; designFile: string; casesPath: string; designPath: string }>("/api/save-draft", {
+      const payload = await apiPost<{
+        saved: boolean;
+        casesFile: string;
+        designFile: string;
+        casesPath: string;
+        designPath: string;
+        files: SavedDraftFiles;
+      }>("/api/save-draft", {
         jiraUrl,
         issue,
         testCases,
         outline,
         archetypeKey,
+        project,
       });
-      setSavedFiles({ casesFile: payload.casesFile, designFile: payload.designFile });
+      setSavedFiles(payload.files);
       setOutput(JSON.stringify(payload, null, 2));
-      setMessage(`Đã lưu JSON test case và test design vào source.`);
+      triggerDownload(payload.files.cases);
+      triggerDownload(payload.files.design);
+      setMessage(`Đã lưu và tải JSON test case/test design vào thư mục QA đã cấu hình.`);
     });
   }
 
   function buildXmind(attachAll: boolean) {
     setBusyRun(attachAll ? "attach" : "xmind", async () => {
-      const payload = await apiPost<{ result: unknown; stdout: string }>("/api/build-xmind", {
+      if (!attachAll) {
+        setBuiltDesignFiles(null);
+      }
+      const payload = await apiPost<{ result: unknown; stdout: string; files?: BuiltDesignFiles }>("/api/build-xmind", {
         outline,
         issueKey: issue.key,
         project,
@@ -1135,6 +1189,9 @@ function App() {
         attachAll,
         replaceExisting: true,
       });
+      if (payload.files) {
+        setBuiltDesignFiles(payload.files);
+      }
       setOutput(JSON.stringify(payload.result || payload, null, 2));
       setMessage(attachAll ? "Đã build và attach test design lên Jira." : "Đã build XMind/PNG local.");
     });
@@ -1302,6 +1359,7 @@ function App() {
           <Field label="Project key" value={project.projectKey} onChange={(value) => setProjectValue("projectKey", value)} required error={validationErrors["project.projectKey"]} />
           <Field label="Test case folder root" value={project.folderRoot} onChange={(value) => setProjectValue("folderRoot", value)} required error={validationErrors["project.folderRoot"]} />
           <Field label="Test cycle run root" value={project.runRoot} onChange={(value) => setProjectValue("runRoot", value)} required error={validationErrors["project.runRoot"]} />
+          <Field label="JSON output dir" value={project.jsonOutputDir} onChange={(value) => setProjectValue("jsonOutputDir", value)} required error={validationErrors["project.jsonOutputDir"]} />
           <Field label="XMind output dir" value={project.outputDir} onChange={(value) => setProjectValue("outputDir", value)} required error={validationErrors["project.outputDir"]} />
           <Field label="Source root" value={project.sourceRoot} onChange={(value) => setProjectValue("sourceRoot", value)} required error={validationErrors["project.sourceRoot"]} />
           <div className="label-policy">
@@ -1393,9 +1451,9 @@ function App() {
             <FileText size={18} />
             <h2>Confluence auth</h2>
           </div>
-          <Field label="User" value={confluenceCredentials.user} onChange={(value) => setConfluenceCredentialValue("user", value)} placeholder="name@example.com" required error={validationErrors["confluence.user"]} />
-          <Field label="Password" value={confluenceCredentials.password} type="password" onChange={(value) => setConfluenceCredentialValue("password", value)} required error={validationErrors["confluence.password"]} />
-          <Field label="Token" value={confluenceCredentials.token} type="password" onChange={(value) => setConfluenceCredentialValue("token", value)} required error={validationErrors["confluence.token"]} />
+          <Field label="User" value={confluenceCredentials.user} onChange={(value) => setConfluenceCredentialValue("user", value)} placeholder="name@example.com" required={Boolean(confluenceLinks.trim())} error={validationErrors["confluence.user"]} />
+          <Field label="Password" value={confluenceCredentials.password} type="password" onChange={(value) => setConfluenceCredentialValue("password", value)} required={Boolean(confluenceLinks.trim())} error={validationErrors["confluence.password"]} />
+          <Field label="Token" value={confluenceCredentials.token} type="password" onChange={(value) => setConfluenceCredentialValue("token", value)} required={Boolean(confluenceLinks.trim())} error={validationErrors["confluence.token"]} />
           <div className="button-row">
             <IconButton
               icon={settingsBusy === "confluence" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
@@ -1620,22 +1678,13 @@ function App() {
                   setConfluenceBaseUrl(inferredBaseUrl);
                   clearValidationErrors(["confluenceBaseUrl"]);
                 }
-                clearFetchedDocs(value.trim() ? "Đã nhận link doc. Nhấn Fetch docs để đọc nội dung vào Task context." : "");
+                clearFetchedDocs(value.trim() ? "Doc link thủ công đã được ghi nhận. Khi Fetch Jira task tìm thấy doc link, app sẽ tự fetch docs vào Task context." : "");
               }}
               textarea
               rows={3}
               placeholder="Mỗi dòng một link Confluence hoặc tài liệu liên quan"
               error={validationErrors.confluenceLinks}
             />
-            <div className="button-row">
-              <IconButton
-                icon={busy === "docs" ? <Loader2 className="spin" size={16} /> : <FileText size={16} />}
-                onClick={fetchConfluenceDocs}
-                disabled={isWorking}
-              >
-                Fetch docs
-              </IconButton>
-            </div>
             {docStatus ? <div className="mini-note">{docStatus}</div> : null}
             {docSources.length ? (
               <div className="doc-source-list">
@@ -1873,29 +1922,56 @@ function App() {
             <div className="run-grid">
               <div className="run-block">
                 <h3>Local storage</h3>
-                <p>Lưu draft hiện tại thành JSON giống cách repo Omni lưu trong `qa/jira` và `qa/xmind-test-design`.</p>
-                <IconButton icon={busy === "save" ? <Loader2 className="spin" size={16} /> : <Save size={16} />} onClick={saveDraftFiles} disabled={isWorking || testCases.length === 0} variant="primary">
-                  Save JSON
+                <p>Lưu test case JSON vào JSON output dir và test design JSON vào XMind output dir.</p>
+                <IconButton icon={busy === "save" ? <Loader2 className="spin" size={16} /> : <Download size={16} />} onClick={saveDraftFiles} disabled={isWorking || testCases.length === 0} variant="primary">
+                  Download JSON
                 </IconButton>
                 {savedFiles ? (
                   <div className="mini-note">
-                    Test cases: {savedFiles.casesFile}
+                    Test cases: {savedFiles.cases.file}
                     <br />
-                    Test design: {savedFiles.designFile}
+                    Test design: {savedFiles.design.file}
+                    <div className="button-row compact-actions">
+                      <IconButton icon={<Download size={16} />} onClick={() => triggerDownload(savedFiles.cases)} disabled={isWorking}>
+                        Test cases JSON
+                      </IconButton>
+                      <IconButton icon={<Download size={16} />} onClick={() => triggerDownload(savedFiles.design)} disabled={isWorking}>
+                        Test design JSON
+                      </IconButton>
+                    </div>
                   </div>
                 ) : null}
               </div>
               <div className="run-block">
                 <h3>Test design</h3>
-                <p>Build file `.xmind` và `.png` từ outline đang chỉnh.</p>
+                <p>Build file `.xmind` và `.png` từ outline đang chỉnh vào XMind output dir.</p>
                 <div className="button-row">
                   <IconButton icon={busy === "xmind" ? <Loader2 className="spin" size={16} /> : <Map size={16} />} onClick={() => buildXmind(false)} disabled={isWorking}>
-                    Build local
+                    Build local files
                   </IconButton>
                   <IconButton icon={busy === "attach" ? <Loader2 className="spin" size={16} /> : <UploadCloud size={16} />} onClick={() => buildXmind(true)} disabled={isWorking} variant="primary">
                     Build and attach
                   </IconButton>
                 </div>
+                {builtDesignFiles?.xmind || builtDesignFiles?.png ? (
+                  <div className="mini-note">
+                    {builtDesignFiles.xmind ? (
+                      <>
+                        XMind: {builtDesignFiles.xmind.file}
+                        <br />
+                      </>
+                    ) : null}
+                    {builtDesignFiles.png ? <>PNG: {builtDesignFiles.png.file}</> : null}
+                    <div className="button-row compact-actions">
+                      <IconButton icon={<Download size={16} />} onClick={() => triggerDownload(builtDesignFiles.xmind)} disabled={isWorking || !builtDesignFiles.xmind}>
+                        Download XMind
+                      </IconButton>
+                      <IconButton icon={<Download size={16} />} onClick={() => triggerDownload(builtDesignFiles.png)} disabled={isWorking || !builtDesignFiles.png}>
+                        Download PNG
+                      </IconButton>
+                    </div>
+                  </div>
+                ) : null}
               </div>
               <div className="run-block">
                 <h3>Test cases</h3>

@@ -4,6 +4,7 @@ export type ProjectConfig = {
   projectKey: string;
   folderRoot: string;
   runRoot: string;
+  jsonOutputDir: string;
   outputDir: string;
   labelMode: string;
   testcaseLabels: string;
@@ -141,6 +142,7 @@ export type DefaultsResponse = {
     projectKey: string;
     folderRoot: string;
     runRoot: string;
+    jsonOutputDir: string;
     outputDir: string;
     labelPolicy: {
       mode: string;

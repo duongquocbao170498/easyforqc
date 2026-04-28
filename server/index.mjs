@@ -136,6 +136,7 @@ const DEFAULTS = {
   projectKey: "AI",
   folderRoot: "/Bao QC",
   runRoot: "/AI Chatbot",
+  jsonOutputDir: path.join(ROOT_DIR, "qa", "jira"),
   outputDir: path.join(ROOT_DIR, "qa", "xmind-test-design"),
   repoContext: {
     enabled: process.env.QA_REPO_CONTEXT_ENABLED === "true",
@@ -817,6 +818,20 @@ app.post("/api/auth/change-password", async (req, res) => {
     }
     await changeUserPassword(req.session.email, req.body?.currentPassword, req.body?.newPassword);
     res.json({ changed: true });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.get("/api/download-file", async (req, res) => {
+  try {
+    const filePath = path.resolve(asText(req.query.path));
+    if (!filePath || !isAllowedDownloadPath(filePath)) {
+      res.status(403).json({ error: "File download chỉ cho phép trong thư mục output QA của app." });
+      return;
+    }
+    await fs.access(filePath);
+    res.download(filePath, path.basename(filePath));
   } catch (error) {
     sendError(res, error);
   }
@@ -2502,6 +2517,7 @@ function normalizeProject(raw = {}, fallback = {}) {
     projectKey: asText(raw.projectKey) || asText(fallback.projectKey) || DEFAULTS.projectKey,
     folderRoot: asText(raw.folderRoot) || asText(fallback.folderRoot) || DEFAULTS.folderRoot,
     runRoot: asText(raw.runRoot) || asText(fallback.runRoot) || DEFAULTS.runRoot,
+    jsonOutputDir: asText(raw.jsonOutputDir) || asText(fallback.jsonOutputDir) || DEFAULTS.jsonOutputDir,
     outputDir: asText(raw.outputDir) || asText(fallback.outputDir) || DEFAULTS.outputDir,
     labelMode: asText(raw.labelMode) || "custom",
     testcaseLabels: asText(raw.testcaseLabels) || DEFAULTS.labelPolicy.testcaseLabels,
@@ -2509,6 +2525,25 @@ function normalizeProject(raw = {}, fallback = {}) {
     testcaseStatusLabels: asText(raw.testcaseStatusLabels) || DEFAULTS.labelPolicy.testcaseStatusLabels,
     testdesignStatusLabels: asText(raw.testdesignStatusLabels) || DEFAULTS.labelPolicy.testdesignStatusLabels,
   };
+}
+
+function resolveConfiguredPath(rawPath, fallbackPath) {
+  const selected = asText(rawPath) || fallbackPath;
+  return path.isAbsolute(selected) ? selected : path.resolve(ROOT_DIR, selected);
+}
+
+function fileDownloadMeta(filePath) {
+  return {
+    path: filePath,
+    file: path.relative(ROOT_DIR, filePath),
+    url: `/api/download-file?path=${encodeURIComponent(filePath)}`,
+  };
+}
+
+function isAllowedDownloadPath(filePath) {
+  const resolved = path.resolve(filePath);
+  const allowedRoots = [path.resolve(ROOT_DIR, "qa")];
+  return allowedRoots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`));
 }
 
 function normalizeIssue(raw = {}, jiraUrl = "") {
@@ -4730,9 +4765,10 @@ app.post("/api/save-draft", async (req, res) => {
     if (!outline || !Array.isArray(outline.branches)) {
       throw Object.assign(new Error("Cần test design outline hợp lệ để lưu draft."), { status: 400 });
     }
+    const project = normalizeProject(req.body?.project);
     const stem = safeFileStem(issue.key);
-    const jiraDir = path.join(ROOT_DIR, "qa", "jira");
-    const designDir = path.join(ROOT_DIR, "qa", "xmind-test-design");
+    const jiraDir = resolveConfiguredPath(project.jsonOutputDir, DEFAULTS.jsonOutputDir);
+    const designDir = resolveConfiguredPath(project.outputDir, DEFAULTS.outputDir);
     await fs.mkdir(jiraDir, { recursive: true });
     await fs.mkdir(designDir, { recursive: true });
     const casesPath = path.join(jiraDir, `${stem}_test_cases.json`);
@@ -4754,6 +4790,10 @@ app.post("/api/save-draft", async (req, res) => {
       designPath,
       casesFile: path.relative(ROOT_DIR, casesPath),
       designFile: path.relative(ROOT_DIR, designPath),
+      files: {
+        cases: fileDownloadMeta(casesPath),
+        design: fileDownloadMeta(designPath),
+      },
     });
   } catch (error) {
     sendError(res, error);
@@ -4781,11 +4821,16 @@ app.post("/api/build-xmind", async (req, res) => {
       env: credentialEnv(project, req.body?.credentials),
       timeoutMs: 360000,
     });
+    const outputPaths = result.json?.paths || {};
     res.json({
       result: result.json,
       runDir,
       configPath,
       outlinePath,
+      files: {
+        xmind: outputPaths.xmind ? fileDownloadMeta(outputPaths.xmind) : null,
+        png: outputPaths.png ? fileDownloadMeta(outputPaths.png) : null,
+      },
       stdout: result.stdout,
       stderr: result.stderr,
     });
