@@ -153,8 +153,6 @@ const emptyOutline = (issue: IssueSummary): TestDesignOutline => ({
   template: "general",
   branches: [
     { title: "Luồng nghiệp vụ chính", items: ["Xác nhận behavior chính đúng với scope Jira"] },
-    { title: "Validation và điều kiện dữ liệu", items: ["Kiểm tra input thiếu, sai format hoặc null"] },
-    { title: "Negative path và edge cases", items: ["Kiểm tra fallback khi dependency lỗi hoặc trả rỗng"] },
     { title: "Regression và guardrails", items: ["Xác nhận luồng cũ liên quan không bị ảnh hưởng"] },
     { title: "Out of scope", items: ["Không kiểm thử thay đổi ngoài mô tả Jira task này"] },
   ],
@@ -1576,7 +1574,7 @@ function App() {
             <div className="section-heading">
               <div>
                 <h2>Editable XMind outline</h2>
-                <p>Renderer yêu cầu 4-5 branch và bắt buộc có branch Out of scope.</p>
+                <p>Branch linh hoạt theo độ phức tạp task; bắt buộc có branch Out of scope.</p>
               </div>
               <IconButton icon={<Plus size={16} />} onClick={addBranch}>
                 Add branch

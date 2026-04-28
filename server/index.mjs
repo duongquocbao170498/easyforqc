@@ -173,6 +173,9 @@ const STATUS_LABELS = {
   },
 };
 
+const OUTLINE_MAX_BRANCHES = 8;
+const OUTLINE_MIN_IN_SCOPE_BRANCHES = 2;
+
 const ARCHETYPES = {
   reporting: {
     label: "UI Reporting / Dashboard / Default Sort",
@@ -1167,7 +1170,7 @@ function detectTaskSignals(issue, context, archetypeKey) {
   if (/\b(ui|screen|display|show|badge|indicator|highlight|bubble|modal|form|button)\b/.test(text) || /hien thi|lam noi bat|giao dien/.test(text)) {
     add("ui_surface", "UI surface", "Task thay đổi cách hiển thị hoặc trạng thái thị giác.");
   }
-  if (/conversation stream|chat stream|tin nhan|message|bubble|ce|amr/.test(text)) {
+  if (/conversation stream|chat stream|tin nhan|message|bubble|\bce\b|amr/.test(text)) {
     add("message_stream", "Message stream", "Behavior nằm trong luồng chat/message nên cần kiểm mapping theo vị trí message.");
   }
   if (/amr|score|diem|threshold|nguong|low|fail|pass|vi pham/.test(text)) {
@@ -1268,8 +1271,14 @@ function coverageAxis(id, title, technique, risk, scenarioType, checks = [], inp
 function buildCoverageAxes(issue, archetype, context, signals, techniques) {
   const key = issue.key || "JIRA-TASK";
   const ids = new Set(signals.map((item) => item.id));
+  const hasMessageContext = ids.has("message_stream") || ids.has("score_state");
   const axes = [];
   const summaryIntent = titleFromIntent(context.summary || issue.summary || "behavior chính");
+  const representativeInput = hasMessageContext
+    ? `Conversation có message đại diện cho: ${summaryIntent}`
+    : ids.has("integration_contract")
+      ? `Payload/request đại diện cho: ${summaryIntent}`
+      : `Dataset hoặc màn hình đại diện cho: ${summaryIntent}`;
 
   axes.push(
     coverageAxis(
@@ -1283,7 +1292,7 @@ function buildCoverageAxes(issue, archetype, context, signals, techniques) {
         "Không mở rộng sang flow ngoài scope.",
         "Tester đối chiếu được source-of-truth thay vì chỉ nhìn text hiển thị.",
       ],
-      [`Build chứa task ${key}.`, `Dataset hoặc conversation đại diện cho: ${summaryIntent}`],
+      [`Build chứa task ${key}.`, representativeInput],
     ),
   );
 
@@ -1309,7 +1318,7 @@ function buildCoverageAxes(issue, archetype, context, signals, techniques) {
     );
   }
 
-  if (ids.has("message_stream") || ids.has("field_mapping")) {
+  if (ids.has("message_stream")) {
     axes.push(
       coverageAxis(
         "message_pair_mapping",
@@ -1328,69 +1337,142 @@ function buildCoverageAxes(issue, archetype, context, signals, techniques) {
         ],
       ),
     );
+  } else if (ids.has("field_mapping")) {
+    axes.push(
+      coverageAxis(
+        "field_mapping_guardrail",
+        "Mapping field/source-of-truth đúng với output hiển thị",
+        "Integration contract / field mapping",
+        "Mapping sai field làm UI/output nhìn có vẻ đúng nhưng lệch source-of-truth.",
+        "mapping",
+        [
+          "Field hiển thị lấy đúng từ source-of-truth hiện hành.",
+          "Không áp dụng nhầm field legacy hoặc field của entity khác.",
+          "Partial/missing field không làm hệ thống bịa dữ liệu.",
+        ],
+        [
+          "Record có đủ field hợp lệ.",
+          "Record thiếu field optional hoặc có field legacy dễ nhầm.",
+        ],
+      ),
+    );
   }
 
   if (ids.has("ui_surface")) {
+    const messageUiAxis = hasMessageContext;
     axes.push(
-      coverageAxis(
-        "ui_density_regression",
-        "Indicator scan nhanh nhưng không làm rối conversation stream",
-        "Risk-based regression",
-        "UI đúng dữ liệu nhưng gây nhiễu hoặc phá layout chat stream.",
-        "ui_regression",
-        [
-          "Badge/indicator đủ gần message CE để hiểu score thuộc cặp nào.",
-          "Long message, nhiều metadata hoặc nhiều badge không overlap.",
-          "Conversation thường vẫn đọc được và không bị quá tải thị giác.",
-        ],
-        [
-          "Conversation có message ngắn, message dài và nhiều metadata.",
-          "Có cả message bình thường và message bị đánh giá vi phạm.",
-        ],
-      ),
+      messageUiAxis
+        ? coverageAxis(
+            "ui_density_regression",
+            "Indicator scan nhanh nhưng không làm rối conversation stream",
+            "Risk-based regression",
+            "UI đúng dữ liệu nhưng gây nhiễu hoặc phá layout chat stream.",
+            "ui_regression",
+            [
+              "Badge/indicator đủ gần message CE để hiểu score thuộc cặp nào.",
+              "Long message, nhiều metadata hoặc nhiều badge không overlap.",
+              "Conversation thường vẫn đọc được và không bị quá tải thị giác.",
+            ],
+            [
+              "Conversation có message ngắn, message dài và nhiều metadata.",
+              "Có cả message bình thường và message bị đánh giá vi phạm.",
+            ],
+          )
+        : coverageAxis(
+            "ui_surface_regression",
+            "UI hiển thị rõ và không phá layout hiện có",
+            "Risk-based regression",
+            "UI đúng logic nhưng khó scan, overlap hoặc làm lệch layout hiện có.",
+            "ui_regression",
+            [
+              "Nội dung/trạng thái mới hiển thị đúng vị trí và đúng wording.",
+              "Text dài, dữ liệu rỗng hoặc metadata phụ không gây overlap.",
+              "Luồng thao tác cũ trên cùng màn hình vẫn đọc và dùng được.",
+            ],
+            [
+              "Màn hình có dữ liệu thường và dữ liệu dài.",
+              "Viewport hoặc trạng thái UI gần với production.",
+            ],
+          ),
     );
   }
 
   if (ids.has("fallback_state")) {
+    const messageFallbackAxis = hasMessageContext;
     axes.push(
-      coverageAxis(
-        "empty_error_fallback",
-        "Empty/error/mapping lỗi được hiển thị rõ và fail-safe",
-        "Fallback / partial failure / recovery",
-        "Ẩn im lặng khi score chưa có hoặc mapping lỗi khiến QA/CE tưởng không có vấn đề.",
-        "fallback",
-        [
-          "Score chưa có hiển thị empty/loading state đúng quy ước.",
-          "API lỗi hoặc mapping ambiguous có error state rõ.",
-          "Không tự dựng score/highlight nếu source-of-truth không xác định.",
-        ],
-        [
-          "AMR score chưa được trả về.",
-          "Mapping id giữa AI message và CE message không xác định.",
-          "API score trả lỗi hoặc timeout.",
-        ],
-      ),
+      messageFallbackAxis
+        ? coverageAxis(
+            "empty_error_fallback",
+            "Empty/error/mapping lỗi được hiển thị rõ và fail-safe",
+            "Fallback / partial failure / recovery",
+            "Ẩn im lặng khi score chưa có hoặc mapping lỗi khiến QA/CE tưởng không có vấn đề.",
+            "fallback",
+            [
+              "Score chưa có hiển thị empty/loading state đúng quy ước.",
+              "API lỗi hoặc mapping ambiguous có error state rõ.",
+              "Không tự dựng score/highlight nếu source-of-truth không xác định.",
+            ],
+            [
+              "AMR score chưa được trả về.",
+              "Mapping id giữa AI message và CE message không xác định.",
+              "API score trả lỗi hoặc timeout.",
+            ],
+          )
+        : coverageAxis(
+            "empty_error_fallback",
+            "Empty/error/missing data được xử lý rõ và fail-safe",
+            "Fallback / partial failure / recovery",
+            "Ẩn im lặng khi dữ liệu chưa có hoặc dependency lỗi làm QA/CE hiểu nhầm trạng thái.",
+            "fallback",
+            [
+              "Dữ liệu chưa có hiển thị empty/loading state đúng quy ước.",
+              "API/dependency lỗi có error state rõ.",
+              "Không tự dựng giá trị hiển thị nếu source-of-truth không xác định.",
+            ],
+            [
+              "Dataset không có record phù hợp.",
+              "API/dependency trả lỗi, timeout hoặc partial response.",
+            ],
+          ),
     );
   }
 
   if (ids.has("refresh_stability")) {
+    const messageRefreshAxis = hasMessageContext;
     axes.push(
-      coverageAxis(
-        "refresh_realtime_stability",
-        "Refresh/reload hoặc dữ liệu đến trễ vẫn giữ đúng binding",
-        "Realtime / refresh / pagination stability",
-        "Score đến sau hoặc reload làm badge/highlight biến mất hoặc nhảy sang message khác.",
-        "state_transition",
-        [
-          "Sau reload, badge/highlight vẫn khớp đúng message.",
-          "Khi score đến trễ, UI cập nhật đúng state mà không cần rời màn hình nếu hệ thống hỗ trợ.",
-          "Không duplicate indicator sau nhiều lần refresh.",
-        ],
-        [
-          "Conversation load trước, AMR score có sau.",
-          "Reload conversation sau khi score đã có.",
-        ],
-      ),
+      messageRefreshAxis
+        ? coverageAxis(
+            "refresh_realtime_stability",
+            "Refresh/reload hoặc dữ liệu đến trễ vẫn giữ đúng binding",
+            "Realtime / refresh / pagination stability",
+            "Score đến sau hoặc reload làm badge/highlight biến mất hoặc nhảy sang message khác.",
+            "state_transition",
+            [
+              "Sau reload, badge/highlight vẫn khớp đúng message.",
+              "Khi score đến trễ, UI cập nhật đúng state mà không cần rời màn hình nếu hệ thống hỗ trợ.",
+              "Không duplicate indicator sau nhiều lần refresh.",
+            ],
+            [
+              "Conversation load trước, AMR score có sau.",
+              "Reload conversation sau khi score đã có.",
+            ],
+          )
+        : coverageAxis(
+            "refresh_realtime_stability",
+            "Refresh/reload hoặc dữ liệu đến trễ vẫn giữ đúng state",
+            "Realtime / refresh / pagination stability",
+            "Dữ liệu đến sau hoặc reload làm UI mất state, stale data hoặc duplicate indicator.",
+            "state_transition",
+            [
+              "Sau reload, UI vẫn hiển thị đúng trạng thái mới.",
+              "Khi dữ liệu đến trễ, UI cập nhật đúng nếu hệ thống hỗ trợ.",
+              "Không duplicate indicator/record sau nhiều lần refresh.",
+            ],
+            [
+              "Màn hình load trước khi dữ liệu sẵn sàng.",
+              "Reload màn hình sau khi dữ liệu đã có.",
+            ],
+          ),
     );
   }
 
@@ -3653,6 +3735,75 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
   });
 }
 
+function isOutOfScopeBranchTitle(title) {
+  return normalizeSearchText(title).includes("out of scope");
+}
+
+function outlineBranchItemsFromAxis(axis = {}, index, context, caseTitles = []) {
+  const checks = Array.isArray(axis.checks) ? axis.checks.map(asText).filter(Boolean) : [];
+  const inputs = Array.isArray(axis.inputs) ? axis.inputs.map(asText).filter(Boolean) : [];
+  const scopeLine = context.primaryLines[index];
+  const items = dedupeStrings([
+    ...checks.slice(0, 3),
+    ...inputs.slice(0, 2).map((input) => `Dữ liệu/biến thể: ${shortText(input, 140)}`),
+    axis.risk ? `Rủi ro: ${shortText(axis.risk, 140)}` : "",
+    caseTitles[index] ? `Liên kết testcase: ${shortText(caseTitles[index], 120)}` : "",
+    scopeLine ? `Scope Jira: ${shortText(scopeLine, 140)}` : "",
+  ]);
+  return items.slice(0, 5);
+}
+
+function fallbackOutlineBranch(archetype, context, issue, index, caseTitles = [], docLines = []) {
+  const fallbackTitles = (archetype.branches || []).filter((title) => !isOutOfScopeBranchTitle(title));
+  const title = fallbackTitles[index] || `Coverage ${index + 1}`;
+  const scopeLine = context.primaryLines[index] || context.primaryLines[0] || issue.summary || "scope Jira";
+  const dimension = archetype.dimensions?.[index] || "điều kiện dữ liệu quan trọng";
+  const items = dedupeStrings([
+    `Xác nhận ${shortText(scopeLine, 140)}`,
+    `Kiểm tra ${dimension}`,
+    caseTitles[index] ? `Liên kết testcase: ${shortText(caseTitles[index], 120)}` : "",
+    docLines[index] ? `Đối chiếu tài liệu liên quan: ${shortText(docLines[index], 120)}` : "",
+  ]);
+  return {
+    title,
+    items: items.slice(0, 5),
+  };
+}
+
+function outOfScopeOutlineBranch(context) {
+  return {
+    title: "Out of scope",
+    items: [
+      "Không kiểm thử thay đổi ngoài mô tả Jira task này",
+      context.docContextIgnored
+        ? "Không dùng Confluence doc không có keyword liên quan tới Jira description"
+        : "Không để tài liệu tham chiếu hoặc AI Settings lấn át Jira description/acceptance criteria",
+      "Không xác nhận performance/load/security nếu Jira không yêu cầu",
+    ],
+  };
+}
+
+function buildFlexibleOutlineBranches({ archetype, axes = [], context, issue, caseTitles = [], docLines = [] }) {
+  const maxInScopeBranches = OUTLINE_MAX_BRANCHES - 1;
+  const normalizedAxes = axes
+    .filter((axis) => axis?.title && !isOutOfScopeBranchTitle(axis.title))
+    .slice(0, maxInScopeBranches);
+  const branches = normalizedAxes.map((axis, index) => {
+    const title = titleFromIntent(axis.title, archetype.branches?.[index] || `Coverage ${index + 1}`);
+    const items = outlineBranchItemsFromAxis(axis, index, context, caseTitles);
+    return {
+      title,
+      items: items.length ? items : fallbackOutlineBranch(archetype, context, issue, index, caseTitles, docLines).items,
+    };
+  });
+
+  while (branches.length < OUTLINE_MIN_IN_SCOPE_BRANCHES) {
+    branches.push(fallbackOutlineBranch(archetype, context, issue, branches.length, caseTitles, docLines));
+  }
+
+  return [...branches.slice(0, maxInScopeBranches), outOfScopeOutlineBranch(context)];
+}
+
 function buildOutline(issue, archetypeKey, cases = [], sourceInput = {}, aiCustomization = null, qaPlan = null) {
   const archetype = ARCHETYPES[archetypeKey] || ARCHETYPES.general;
   const title = issue.title || `[${issue.key || "JIRA-TASK"}] ${issue.summary || "Test design"}`;
@@ -3660,45 +3811,12 @@ function buildOutline(issue, archetypeKey, cases = [], sourceInput = {}, aiCusto
   const scopeLines = context.primaryLines.slice(0, 8);
   const docLines = context.docLines.slice(0, 4);
   const axes = Array.isArray(qaPlan?.coverage_axes) ? qaPlan.coverage_axes : [];
-  const axisItem = (index, fallback) => {
-    const axis = axes[index];
-    if (!axis) return fallback;
-    return `${axis.title}: ${axis.checks?.[0] || axis.risk || fallback}`;
-  };
   const caseTitles = Array.isArray(cases)
     ? cases
         .map((testCase) => asText(testCase.title).replace(/^\[TC[_-]\d{4}\]\s*/, ""))
         .filter(Boolean)
         .slice(0, 8)
     : [];
-
-  const branchItems = [
-    [
-      axisItem(0, `Xác nhận business rule chính: ${scopeLines[0] || issue.summary || "đúng scope Jira"}`),
-      axisItem(1, `Bao phủ luồng thành công cho ${issue.key || "task"}`),
-      "Kết quả cuối cùng khớp mô tả và acceptance intent trong Jira",
-    ],
-    [
-      axisItem(2, `Kiểm tra ${scopeLines[1] || archetype.dimensions[0]}`),
-      axisItem(3, `Kiểm tra ${scopeLines[2] || archetype.dimensions[1]}`),
-      axisItem(4, `Kiểm tra ${scopeLines[3] || archetype.dimensions[2] || "các biến thể dữ liệu quan trọng"}`),
-    ],
-    [
-      axisItem(5, `Không xử lý sai khi ${scopeLines[4] || archetype.dimensions[3] || "dữ liệu không đầy đủ"}`),
-      `Không mất context khi chuyển state hoặc reload`,
-      `Không tạo side effect ngoài scope của ${issue.key || "task"}`,
-    ],
-    [
-      `Regression từ case: ${caseTitles[0] || "luồng cũ cùng module"}`,
-      docLines[0] ? `Đối chiếu doc liên quan: ${shortText(docLines[0], 120)}` : "Retry/duplicate vẫn nhất quán với rule mới",
-      docLines[1] ? `Không áp dụng nhầm doc ngoài scope: ${shortText(docLines[1], 120)}` : "Fallback rõ ràng khi dependency lỗi, timeout hoặc trả rỗng",
-    ],
-    [
-      "Không kiểm thử thay đổi ngoài mô tả Jira task này",
-      context.docContextIgnored ? "Không dùng Confluence doc không có keyword liên quan tới Jira description" : "Không để tài liệu tham chiếu lấn át Jira description/AC",
-      "Không xác nhận performance/load test nếu Jira không yêu cầu",
-    ],
-  ];
 
   return {
     issue_key: issue.key || "",
@@ -3743,10 +3861,7 @@ function buildOutline(issue, archetypeKey, cases = [], sourceInput = {}, aiCusto
       coverage_axes: axes.map((axis) => axis.title),
       open_questions: qaPlan?.open_questions || [],
     },
-    branches: archetype.branches.map((branchTitle, index) => ({
-      title: branchTitle,
-      items: branchItems[index],
-    })),
+    branches: buildFlexibleOutlineBranches({ archetype, axes, context, issue, caseTitles, docLines }),
   };
 }
 
@@ -3884,19 +3999,38 @@ function normalizeAiOutline(rawOutline = {}, issue, archetypeKey, fallbackOutlin
         items: arrayFromMaybe(branch?.items || branch?.bullets || branch?.children).map(asText).filter(Boolean).slice(0, 6),
       };
     })
-    .filter((branch) => branch.title && branch.items.length)
-    .slice(0, 5);
+    .filter((branch) => branch.title && branch.items.length);
 
-  const normalizedBranches = branches.length >= 3 ? [...branches] : [...(fallbackOutline.branches || [])];
-  if (!normalizedBranches.some((branch) => normalizeSearchText(branch.title).includes("out of scope"))) {
-    normalizedBranches.push({
-      title: "Out of scope",
-      items: [
-        "Không kiểm thử thay đổi ngoài mô tả Jira task này.",
-        "Không để tài liệu tham chiếu lấn át Jira description/acceptance criteria.",
-      ],
-    });
+  const dedupedBranches = [];
+  const seenTitles = new Set();
+  for (const branch of branches) {
+    const normalizedTitle = normalizeSearchText(branch.title);
+    if (!normalizedTitle || seenTitles.has(normalizedTitle)) continue;
+    seenTitles.add(normalizedTitle);
+    dedupedBranches.push(branch);
   }
+  const nonOutBranches = dedupedBranches.filter((branch) => !isOutOfScopeBranchTitle(branch.title));
+  const outScopeBranch = dedupedBranches.find((branch) => isOutOfScopeBranchTitle(branch.title));
+  const fallbackBranches = Array.isArray(fallbackOutline.branches) ? fallbackOutline.branches : [];
+  const fallbackNonOutBranches = fallbackBranches.filter((branch) => !isOutOfScopeBranchTitle(branch.title));
+  const fallbackOutScopeBranch = fallbackBranches.find((branch) => isOutOfScopeBranchTitle(branch.title));
+  const baseBranches =
+    nonOutBranches.length >= OUTLINE_MIN_IN_SCOPE_BRANCHES
+      ? nonOutBranches
+      : fallbackNonOutBranches.length
+        ? fallbackNonOutBranches
+        : nonOutBranches;
+  const normalizedBranches = [
+    ...baseBranches.slice(0, OUTLINE_MAX_BRANCHES - 1),
+    outScopeBranch ||
+      fallbackOutScopeBranch || {
+        title: "Out of scope",
+        items: [
+          "Không kiểm thử thay đổi ngoài mô tả Jira task này.",
+          "Không để tài liệu tham chiếu lấn át Jira description/acceptance criteria.",
+        ],
+      },
+  ];
   return {
     issue_key: asText(rawOutline.issue_key || rawOutline.issueKey || issue.key),
     title: asText(rawOutline.title || fallbackOutline.title || issue.title || `[${issue.key}] ${issue.summary}`),
@@ -3904,7 +4038,7 @@ function normalizeAiOutline(rawOutline = {}, issue, archetypeKey, fallbackOutlin
     template: asText(rawOutline.template || fallbackOutline.template || archetypeKey),
     source_context: rawOutline.source_context || fallbackOutline.source_context || {},
     design_rationale: rawOutline.design_rationale || rawOutline.designRationale || fallbackOutline.design_rationale || {},
-    branches: normalizedBranches.slice(0, 5),
+    branches: normalizedBranches.slice(0, OUTLINE_MAX_BRANCHES),
   };
 }
 
@@ -4035,7 +4169,7 @@ function buildAiDraftMessages({
     "- `expected_result` must be multiline bullet points beginning with `- `.",
     "- `steps` must be an array of clear tester actions like the sample suites. Each item is one Zephyr Test Player row, not a paragraph.",
     "- Use `structured_steps` only when a row needs its own test data or expected result; otherwise `steps` plus case-level `test_data`/`expected_result` is preferred.",
-    "- Test design must have 4-5 branches and one branch named `Out of scope`.",
+    "- Test design branch count is flexible: use the smallest useful set for the current task, usually 3-8 branches total depending on complexity. Always include one branch named `Out of scope`; do not pad generic branches just to hit a number.",
     "",
     "## Required JSON schema",
     JSON.stringify(
