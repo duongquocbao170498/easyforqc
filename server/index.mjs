@@ -2579,6 +2579,16 @@ function confluenceDisplayPageFromUrl(url) {
   };
 }
 
+function confluenceQueryPageFromUrl(url) {
+  const spaceKey = url.searchParams.get("spaceKey") || url.searchParams.get("space");
+  const title = url.searchParams.get("title") || url.searchParams.get("pageTitle");
+  if (!spaceKey || !title) return null;
+  return {
+    spaceKey: decodeConfluencePathSegment(spaceKey),
+    title: decodeConfluencePathSegment(title),
+  };
+}
+
 function confluenceRootFromUrl(url) {
   if (url.pathname.startsWith("/wiki/")) {
     return `${url.origin}/wiki`;
@@ -2651,11 +2661,13 @@ async function fetchConfluenceDocument(link, credentials = {}) {
   }
 
   const displayPage = confluenceDisplayPageFromUrl(url);
-  if (displayPage?.spaceKey && displayPage?.title) {
+  const queryPage = confluenceQueryPageFromUrl(url);
+  const titlePage = displayPage || queryPage;
+  if (titlePage?.spaceKey && titlePage?.title) {
     const baseUrl = confluenceBaseUrlFrom(url, credentials);
     const params = new URLSearchParams({
-      spaceKey: displayPage.spaceKey,
-      title: displayPage.title,
+      spaceKey: titlePage.spaceKey,
+      title: titlePage.title,
       expand: "body.storage,body.view,title,space",
     });
     const apiUrl = `${baseUrl}/rest/api/content?${params.toString()}`;

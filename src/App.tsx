@@ -12,6 +12,7 @@ import LogOut from "lucide-react/dist/esm/icons/log-out.js";
 import Loader2 from "lucide-react/dist/esm/icons/loader-2.js";
 import Mail from "lucide-react/dist/esm/icons/mail.js";
 import Map from "lucide-react/dist/esm/icons/map.js";
+import Maximize2 from "lucide-react/dist/esm/icons/maximize-2.js";
 import Play from "lucide-react/dist/esm/icons/play.js";
 import Plus from "lucide-react/dist/esm/icons/plus.js";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw.js";
@@ -22,8 +23,9 @@ import Trash2 from "lucide-react/dist/esm/icons/trash-2.js";
 import UploadCloud from "lucide-react/dist/esm/icons/upload-cloud.js";
 import User from "lucide-react/dist/esm/icons/user.js";
 import Wand2 from "lucide-react/dist/esm/icons/wand-2.js";
+import X from "lucide-react/dist/esm/icons/x.js";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type {
   AiSettings,
   ArchetypeInfo,
@@ -42,6 +44,7 @@ import type {
 type TabKey = "cases" | "design" | "run";
 type BusyKey = "issue" | "docs" | "draft" | "save" | "xmind" | "attach" | "suite" | "cycle" | "";
 type SettingsSection = "project" | "credentials" | "confluence" | "ai";
+type AppView = "run" | "settings";
 
 type AiProviderInfo = {
   enabled?: boolean;
@@ -248,6 +251,23 @@ function inferConfluenceBaseUrl(value: string) {
   }
 }
 
+function looksLikeConfluencePageUrl(value: string) {
+  const text = value.trim();
+  if (!/^https?:\/\//i.test(text)) return false;
+  try {
+    const url = new URL(text);
+    return Boolean(
+      url.searchParams.get("pageId") ||
+        (url.searchParams.get("spaceKey") && url.searchParams.get("title")) ||
+        /\/pages\//i.test(url.pathname) ||
+        /\/display\/[^/]+\/[^/]+/i.test(url.pathname) ||
+        /\/content\/\d+/i.test(url.pathname),
+    );
+  } catch {
+    return false;
+  }
+}
+
 function extractDocumentLinks(value: string) {
   const matches = value.match(/https?:\/\/[^\s<>"')\]]+/gi) || [];
   return Array.from(
@@ -295,40 +315,91 @@ function Field(props: {
   required?: boolean;
   error?: string;
 }) {
-  const errorId = props.error ? `field-error-${props.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}` : undefined;
+  const fieldId = useId();
+  const [expanded, setExpanded] = useState(false);
+  const errorId = props.error ? `${fieldId}-error` : undefined;
+  const modalTitleId = `${fieldId}-expand-title`;
+  const inputType = props.type || "text";
+  const canExpand = inputType !== "password";
+  const control = props.textarea ? (
+    <textarea
+      id={fieldId}
+      value={props.value}
+      rows={props.rows || 4}
+      placeholder={props.placeholder}
+      onChange={(event) => props.onChange(event.target.value)}
+      aria-invalid={Boolean(props.error)}
+      aria-describedby={errorId}
+      required={props.required}
+    />
+  ) : (
+    <input
+      id={fieldId}
+      value={props.value}
+      type={inputType}
+      placeholder={props.placeholder}
+      onChange={(event) => props.onChange(event.target.value)}
+      aria-invalid={Boolean(props.error)}
+      aria-describedby={errorId}
+      required={props.required}
+    />
+  );
   return (
-    <label className={`field ${props.error ? "field-invalid" : ""}`}>
-      <span>
+    <div className={`field ${props.error ? "field-invalid" : ""}`}>
+      <label className="field-label" htmlFor={fieldId}>
         {props.label}
         {props.required ? <small className="required-mark"> *</small> : null}
-      </span>
-      {props.textarea ? (
-        <textarea
-          value={props.value}
-          rows={props.rows || 4}
-          placeholder={props.placeholder}
-          onChange={(event) => props.onChange(event.target.value)}
-          aria-invalid={Boolean(props.error)}
-          aria-describedby={errorId}
-          required={props.required}
-        />
-      ) : (
-        <input
-          value={props.value}
-          type={props.type || "text"}
-          placeholder={props.placeholder}
-          onChange={(event) => props.onChange(event.target.value)}
-          aria-invalid={Boolean(props.error)}
-          aria-describedby={errorId}
-          required={props.required}
-        />
-      )}
+      </label>
+      <div className={`field-control-wrap ${canExpand ? "has-expand" : ""}`}>
+        {control}
+        {canExpand ? (
+          <button
+            className="field-expand-button"
+            type="button"
+            onClick={() => setExpanded(true)}
+            aria-label={`Expand ${props.label}`}
+            title="Expand"
+          >
+            <Maximize2 size={14} />
+          </button>
+        ) : null}
+      </div>
       {props.error ? (
         <small id={errorId} className="field-error">
           {props.error}
         </small>
       ) : null}
-    </label>
+      {canExpand && expanded ? (
+        <div className="field-expand-backdrop" role="presentation" onMouseDown={() => setExpanded(false)}>
+          <section
+            className="field-expand-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={modalTitleId}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="field-expand-header">
+              <h2 id={modalTitleId}>{props.label}</h2>
+              <button className="field-expand-close" type="button" onClick={() => setExpanded(false)} aria-label="Close expanded field">
+                <X size={18} />
+              </button>
+            </div>
+            <textarea
+              className="field-expand-editor"
+              value={props.value}
+              placeholder={props.placeholder}
+              onChange={(event) => props.onChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setExpanded(false);
+                }
+              }}
+              autoFocus
+            />
+          </section>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -406,7 +477,7 @@ function IconButton(props: {
   icon: ReactNode;
   onClick: () => void;
   disabled?: boolean;
-  variant?: "primary" | "secondary" | "danger";
+  variant?: "primary" | "secondary" | "success" | "danger";
   title?: string;
 }) {
   return (
@@ -547,6 +618,8 @@ function App() {
   const [loginError, setLoginError] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
   const [googleAuthEnabled, setGoogleAuthEnabled] = useState(false);
+  const [appView, setAppView] = useState<AppView>("run");
+  const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSection>("project");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
@@ -786,11 +859,12 @@ function App() {
   }
 
   function validateConfluenceFetch(linksText = confluenceLinks, baseUrlText = confluenceBaseUrl) {
+    const fetchInput = resolveConfluenceFetchInput(linksText, baseUrlText);
     const errors: ValidationErrors = {};
-    if (!linksText.trim()) {
+    if (!fetchInput.linksText.trim()) {
       errors.confluenceLinks = "Cần nhập ít nhất 1 link Confluence/doc trước khi Fetch docs.";
     }
-    if (!baseUrlText.trim()) {
+    if (!fetchInput.baseUrlText.trim()) {
       errors.confluenceBaseUrl = "Cần Confluence Base URL cho task này trước khi Fetch docs.";
     }
     if (!confluenceCredentials.user.trim()) {
@@ -803,6 +877,23 @@ function App() {
       errors["confluence.token"] = "Cần nhập Confluence Token để fetch docs hoặc lưu token trước đó.";
     }
     return errors;
+  }
+
+  function resolveConfluenceFetchInput(linksText = confluenceLinks, baseUrlText = confluenceBaseUrl) {
+    const rawLinks = linksText.trim();
+    const rawBaseUrl = baseUrlText.trim();
+    const linksFromBaseUrl = rawLinks ? "" : looksLikeConfluencePageUrl(rawBaseUrl) ? rawBaseUrl : "";
+    const effectiveLinks = rawLinks || linksFromBaseUrl;
+    const effectiveBaseUrl = rawBaseUrl
+      ? looksLikeConfluencePageUrl(rawBaseUrl)
+        ? inferConfluenceBaseUrl(rawBaseUrl) || rawBaseUrl
+        : rawBaseUrl
+      : inferConfluenceBaseUrl(effectiveLinks);
+    return {
+      linksText: effectiveLinks,
+      baseUrlText: effectiveBaseUrl,
+      usedBaseUrlAsDocLink: Boolean(linksFromBaseUrl),
+    };
   }
 
   function validateGenerateDraft() {
@@ -1086,18 +1177,22 @@ function App() {
       const detectedDocLinks = Array.from(
         new Set([...(payload.issue.doc_links || []), ...extractDocumentLinks(`${payload.issue.description}\n${payload.issue.summary}`)]),
       );
+      const manualDocInput = resolveConfluenceFetchInput(confluenceLinks, confluenceBaseUrl);
       let docsAutoHandled = false;
-      if (detectedDocLinks.length) {
-        const linksText = confluenceLinks.trim() || detectedDocLinks.join("\n");
-        if (!confluenceLinks.trim()) {
+      if (manualDocInput.linksText || detectedDocLinks.length) {
+        const linksText = manualDocInput.linksText || detectedDocLinks.join("\n");
+        if (!confluenceLinks.trim() && linksText) {
           setConfluenceLinks(linksText);
         }
-        const inferredBaseUrl = confluenceBaseUrl.trim() || inferConfluenceBaseUrl(linksText);
+        const inferredBaseUrl = manualDocInput.baseUrlText || inferConfluenceBaseUrl(linksText);
         if (inferredBaseUrl) {
           setConfluenceBaseUrl(inferredBaseUrl);
         }
         await loadConfluenceDocs(linksText, inferredBaseUrl, fetchedIssueKey || payload.issue.key || nextIssueKey, {
-          validationMessage: `Tìm thấy ${detectedDocLinks.length} link doc từ Jira task nhưng chưa fetch được vì thiếu Confluence config/auth.`,
+          sourceLabel: manualDocInput.linksText ? "link doc thủ công" : "Jira task",
+          validationMessage: manualDocInput.linksText
+            ? "Đã có link doc thủ công nhưng chưa fetch được vì thiếu Confluence config/auth."
+            : `Tìm thấy ${detectedDocLinks.length} link doc từ Jira task nhưng chưa fetch được vì thiếu Confluence config/auth.`,
         });
         docsAutoHandled = true;
       } else if (payload.issue.doc_link_error) {
@@ -1113,21 +1208,23 @@ function App() {
     linksText: string,
     baseUrlText: string,
     currentIssueKey: string,
-    options: { validationMessage?: string } = {},
+    options: { validationMessage?: string; sourceLabel?: string } = {},
   ) {
-    const errors = validateConfluenceFetch(linksText, baseUrlText);
+    const fetchInput = resolveConfluenceFetchInput(linksText, baseUrlText);
+    const errors = validateConfluenceFetch(fetchInput.linksText, fetchInput.baseUrlText);
     if (Object.keys(errors).length) {
       clearFetchedDocs(options.validationMessage || "Vui lòng bổ sung link, Base URL và đủ Confluence auth trước khi Fetch docs.");
       setValidationFailure(errors, options.validationMessage || "Vui lòng bổ sung link, Base URL và đủ Confluence auth trước khi Fetch docs.");
       return false;
     }
     setValidationErrors({});
-    setDocStatus(`Đang tự động fetch ${linksText.split(/\r?\n/).filter((item) => item.trim()).length} Confluence doc từ Jira task...`);
+    const docCount = fetchInput.linksText.split(/\r?\n|,/).filter((item) => item.trim()).length;
+    setDocStatus(`Đang fetch ${docCount} Confluence doc từ ${options.sourceLabel || "Jira task"}...`);
     const payload = await apiPost<{ documents: ConfluenceDocument[]; combinedText: string }>(
       "/api/confluence-docs",
       {
-        links: linksText,
-        confluenceCredentials: { ...confluenceCredentials, baseUrl: baseUrlText },
+        links: fetchInput.linksText,
+        confluenceCredentials: { ...confluenceCredentials, baseUrl: fetchInput.baseUrlText },
       },
     );
     const loadedDocs = payload.documents.filter((item) => item.text);
@@ -1400,15 +1497,19 @@ function App() {
             label="Confluence Base URL cho task này"
             value={confluenceBaseUrl}
             onChange={(value) => {
-              clearValidationErrors(["confluenceBaseUrl"]);
+              clearValidationErrors(["confluenceBaseUrl", "confluenceLinks"]);
               setConfluenceBaseUrl(value);
-              clearFetchedDocs(value.trim() && confluenceLinks.trim() ? "Base URL đã đổi. Nhấn Fetch docs để đọc lại doc cho task hiện tại." : "");
+              clearFetchedDocs(
+                value.trim() && (confluenceLinks.trim() || looksLikeConfluencePageUrl(value))
+                  ? "Confluence config đã đổi. Nhấn Fetch để đọc lại Jira task và doc cho task hiện tại."
+                  : "",
+              );
             }}
-            placeholder="Optional, ví dụ https://confluence.vexere.net"
-            required={Boolean(confluenceLinks.trim())}
+            placeholder="Optional, ví dụ https://docs.vexere.net hoặc link page Confluence"
+            required={Boolean(confluenceLinks.trim() || looksLikeConfluencePageUrl(confluenceBaseUrl))}
             error={validationErrors.confluenceBaseUrl}
           />
-          <div className="mini-note">Bỏ trống nếu task này không cần đọc doc Confluence.</div>
+          <div className="mini-note">Bỏ trống nếu task này không cần đọc doc. Nếu dán full page URL ở đây, app vẫn sẽ dùng nó như doc link khi Fetch.</div>
           <div className="button-row">
             <IconButton icon={<RefreshCw size={16} />} onClick={parseJiraLink} disabled={isWorking} title="Đọc issue key từ link">
               Parse
@@ -1419,294 +1520,60 @@ function App() {
           </div>
         </section>
 
-        <section className="panel compact">
-          <div className="panel-title">
-            <Settings size={18} />
-            <h2>Project config</h2>
-          </div>
-          <Field label="Jira base URL" value={project.jiraBaseUrl} onChange={(value) => setProjectValue("jiraBaseUrl", value)} required error={validationErrors["project.jiraBaseUrl"]} />
-          <Field label="Project key" value={project.projectKey} onChange={(value) => setProjectValue("projectKey", value)} required error={validationErrors["project.projectKey"]} />
-          <Field label="Test case folder root" value={project.folderRoot} onChange={(value) => setProjectValue("folderRoot", value)} required error={validationErrors["project.folderRoot"]} />
-          <Field label="Test cycle run root" value={project.runRoot} onChange={(value) => setProjectValue("runRoot", value)} required error={validationErrors["project.runRoot"]} />
-          <div className="label-policy">
-            <div className="subhead">
-              <span>Label policy</span>
-            </div>
-            <label className="field">
-              <span>Mode</span>
-              <select value={project.labelMode} onChange={(event) => setProjectValue("labelMode", event.target.value)}>
-                <option value="custom">custom - thay bằng label dưới đây</option>
-                <option value="passthrough">passthrough - giữ label từ skill</option>
-                <option value="none">none - không gắn label tự động</option>
-              </select>
-            </label>
-            <Field
-              label="Test case required labels"
-              value={project.testcaseLabels}
-              onChange={(value) => setProjectValue("testcaseLabels", value)}
-              placeholder="QA_Testcases"
-              required={project.labelMode === "custom"}
-              error={validationErrors["project.testcaseLabels"]}
-            />
-            <Field
-              label="Test design required labels"
-              value={project.testdesignLabels}
-              onChange={(value) => setProjectValue("testdesignLabels", value)}
-              placeholder="QA_testdesign"
-              required={project.labelMode === "custom"}
-              error={validationErrors["project.testdesignLabels"]}
-            />
-            <Field
-              label="Test case status labels"
-              value={project.testcaseStatusLabels}
-              onChange={(value) => setProjectValue("testcaseStatusLabels", value)}
-              textarea
-              rows={5}
-            />
-            <Field
-              label="Test design status labels"
-              value={project.testdesignStatusLabels}
-              onChange={(value) => setProjectValue("testdesignStatusLabels", value)}
-              textarea
-              rows={5}
-            />
-          </div>
-          <div className="button-row">
-            <IconButton
-              icon={settingsBusy === "project" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
-              onClick={() => saveUserSettings("project")}
-              disabled={Boolean(settingsBusy)}
-              variant="primary"
-            >
-              Lưu
-            </IconButton>
-          </div>
-          {settingsStatus.project ? <div className="mini-note">{settingsStatus.project}</div> : null}
-        </section>
+        <nav className="side-nav" aria-label="App navigation">
+          <button className={appView === "run" ? "active" : ""} type="button" onClick={() => setAppView("run")}>
+            <Play size={16} />
+            <span>Generate Task</span>
+          </button>
+          <button className={appView === "settings" ? "active" : ""} type="button" onClick={() => setAppView("settings")}>
+            <Settings size={16} />
+            <span>Workspace Settings</span>
+          </button>
+        </nav>
 
-        <section className="panel compact">
-          <div className="panel-title">
-            <UploadCloud size={18} />
-            <h2>Jira auth</h2>
-          </div>
-          <Field label="User" value={credentials.user} onChange={(value) => setCredentialValue("user", value)} placeholder="name@example.com" error={validationErrors["credentials.user"]} />
-          <Field label="Password" value={credentials.password} type="password" onChange={(value) => setCredentialValue("password", value)} placeholder={secretStatus.jira.hasPassword ? "Đã lưu trên server, để trống nếu không đổi" : ""} error={validationErrors["credentials.password"]} />
-          <Field label="Token" value={credentials.token} type="password" onChange={(value) => setCredentialValue("token", value)} placeholder={secretStatus.jira.hasToken ? "Đã lưu trên server, để trống nếu không đổi" : ""} error={validationErrors["credentials.token"]} />
-          <div className="button-row">
-            <IconButton
-              icon={settingsBusy === "credentials" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
-              onClick={() => saveUserSettings("credentials")}
-              disabled={Boolean(settingsBusy)}
-              variant="primary"
-            >
-              Lưu
-            </IconButton>
-          </div>
-          {secretStatus.jira.hasPassword || secretStatus.jira.hasToken ? (
-            <div className="mini-note">Jira secret đã lưu chỉ dùng ở server; browser không đọc lại token/password đã lưu.</div>
-          ) : null}
-          {settingsStatus.credentials ? <div className="mini-note">{settingsStatus.credentials}</div> : null}
-          {defaults ? (
-            <div className="status-stack">
-              <StatusBadge ok={defaults.wrappers.jiraExists} text="Jira wrapper" />
-              <StatusBadge ok={defaults.wrappers.xmindExists} text="XMind wrapper" />
-            </div>
-          ) : null}
-        </section>
+        <div className="sidebar-spacer" />
 
-        <section className="panel compact">
-          <div className="panel-title">
-            <FileText size={18} />
-            <h2>Confluence auth</h2>
-          </div>
-          <Field label="User" value={confluenceCredentials.user} onChange={(value) => setConfluenceCredentialValue("user", value)} placeholder="name@example.com" required={Boolean(confluenceLinks.trim())} error={validationErrors["confluence.user"]} />
-          <Field label="Password" value={confluenceCredentials.password} type="password" onChange={(value) => setConfluenceCredentialValue("password", value)} placeholder={secretStatus.confluence.hasPassword ? "Đã lưu trên server, để trống nếu không đổi" : ""} required={Boolean(confluenceLinks.trim())} error={validationErrors["confluence.password"]} />
-          <Field label="Token" value={confluenceCredentials.token} type="password" onChange={(value) => setConfluenceCredentialValue("token", value)} placeholder={secretStatus.confluence.hasToken ? "Đã lưu trên server, để trống nếu không đổi" : ""} required={Boolean(confluenceLinks.trim())} error={validationErrors["confluence.token"]} />
-          <div className="button-row">
-            <IconButton
-              icon={settingsBusy === "confluence" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
-              onClick={() => saveUserSettings("confluence")}
-              disabled={Boolean(settingsBusy)}
-              variant="primary"
+        <div className="sidebar-user">
+          <div className="user-menu" ref={userMenuRef}>
+            <button
+              className="user-menu-trigger"
+              type="button"
+              onClick={() => setUserMenuOpen((current) => !current)}
+              aria-expanded={userMenuOpen}
+              aria-haspopup="menu"
+              aria-label="User menu"
             >
-              Lưu
-            </IconButton>
+              <User size={16} />
+              <span>{authUser || "User"}</span>
+              <ChevronDown size={14} />
+            </button>
+            {userMenuOpen ? (
+              <div className="user-menu-popover" role="menu">
+                {authUser ? <div className="user-menu-email">{authUser}</div> : null}
+                <button
+                  className="user-menu-item"
+                  type="button"
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    setPasswordDialogOpen(true);
+                  }}
+                  disabled={isWorking}
+                  role="menuitem"
+                >
+                  <KeyRound size={16} />
+                  <span>Đổi mật khẩu</span>
+                </button>
+                <button className="user-menu-item danger" type="button" onClick={logout} disabled={isWorking} role="menuitem">
+                  <LogOut size={16} />
+                  <span>Logout</span>
+                </button>
+              </div>
+            ) : null}
           </div>
-          {secretStatus.confluence.hasPassword || secretStatus.confluence.hasToken ? (
-            <div className="mini-note">Confluence secret đã lưu chỉ dùng ở server; browser không đọc lại token/password đã lưu.</div>
-          ) : null}
-          {settingsStatus.confluence ? <div className="mini-note">{settingsStatus.confluence}</div> : null}
-          <div className="mini-note">
-            Chỉ lưu thông tin đăng nhập. Base URL nhập riêng theo từng task ở mục Jira task.
-          </div>
-        </section>
-
-        <section className="panel compact">
-          <div className="panel-title">
-            <Wand2 size={18} />
-            <h2>AI Settings</h2>
-          </div>
-          <p className="panel-help">
-            Khi bật và có API key/model, app gọi AI provider riêng của user với prompt mặc định của skill và guideline bên dưới. Khi tắt, app dùng generator mặc định trong app.
-          </p>
-          <label className="checkbox-field">
-            <input
-              type="checkbox"
-              checked={aiSettings.enabled}
-              onChange={(event) => setAiSettingValue("enabled", event.target.checked)}
-            />
-            <span className="checkbox-copy">
-              <strong>Áp dụng AI Settings khi generate</strong>
-              <small>Bật: gọi AI provider bằng key riêng. Tắt: dùng fallback local không gọi AI.</small>
-            </span>
-          </label>
-          <label className="field">
-            <span>Provider</span>
-            <select value={aiSettings.provider} onChange={(event) => setAiSettingValue("provider", event.target.value)}>
-              <option value="openai">OpenAI</option>
-              <option value="openai-compatible">OpenAI compatible</option>
-              <option value="azure-openai">Azure OpenAI</option>
-              <option value="custom">Custom endpoint</option>
-            </select>
-          </label>
-          <Field
-            label="Base URL"
-            value={aiSettings.baseUrl}
-            onChange={(value) => setAiSettingValue("baseUrl", value)}
-            placeholder="https://api.openai.com/v1"
-            required={aiSettings.enabled}
-            error={validationErrors["ai.baseUrl"]}
-          />
-          <Field
-            label="Model"
-            value={aiSettings.model}
-            onChange={(value) => setAiSettingValue("model", value)}
-            placeholder="Nhập model mà user muốn dùng"
-            required={aiSettings.enabled}
-            error={validationErrors["ai.model"]}
-          />
-          <Field
-            label="API key"
-            value={aiSettings.apiKey}
-            type="password"
-            onChange={(value) => setAiSettingValue("apiKey", value)}
-            placeholder={secretStatus.ai.hasApiKey ? "Đã lưu trên server, để trống nếu không đổi" : "Key riêng của từng user"}
-            required={aiSettings.enabled}
-            error={validationErrors["ai.apiKey"]}
-          />
-          <Field
-            label="Phong cách viết"
-            value={aiSettings.writingStyle}
-            onChange={(value) => setAiSettingValue("writingStyle", value)}
-            textarea
-            rows={4}
-            placeholder="Ví dụ: viết ngắn gọn, rõ precondition, expected result dạng bullet..."
-          />
-          <Field
-            label="Cách viết test case"
-            value={aiSettings.testCaseGuidelines}
-            onChange={(value) => setAiSettingValue("testCaseGuidelines", value)}
-            textarea
-            rows={5}
-            placeholder="Các đầu mục, format step, rule đặt tên, priority, coverage tag..."
-          />
-          <Field
-            label="Cách làm test design"
-            value={aiSettings.testDesignGuidelines}
-            onChange={(value) => setAiSettingValue("testDesignGuidelines", value)}
-            textarea
-            rows={5}
-            placeholder="Cách chia branch, rule Out of scope, risk lens, edge case..."
-          />
-          <Field
-            label="Improve skill notes"
-            value={aiSettings.improvementNotes}
-            onChange={(value) => setAiSettingValue("improvementNotes", value)}
-            textarea
-            rows={5}
-            placeholder="Những điều user đã chỉnh và muốn app ghi nhớ cho lần sau"
-          />
-          {secretStatus.ai.hasApiKey ? (
-            <div className="mini-note">AI API key đã lưu chỉ dùng ở server; browser không đọc lại key đã lưu.</div>
-          ) : null}
-          <div className="button-row">
-            <IconButton
-              icon={settingsBusy === "ai" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
-              onClick={() => saveUserSettings("ai")}
-              disabled={Boolean(settingsBusy)}
-              variant="primary"
-            >
-              Lưu
-            </IconButton>
-          </div>
-          {settingsStatus.ai ? <div className="mini-note">{settingsStatus.ai}</div> : null}
-          <div className="mini-note">
-            API key và guideline được lưu mã hoá theo account. Base URL chính thức `api.openai.com` dùng Responses API; các OpenAI-compatible/custom proxy như llmproxy dùng Chat Completions. Khi bật AI Settings, app bắt buộc gọi AI provider thành công; nếu lỗi sẽ báo lỗi thay vì dùng fallback local.
-          </div>
-        </section>
+        </div>
       </aside>
 
       <main className="workspace">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">QC / QA automation workspace</p>
-            <h2>{issue.key || "Nhập Jira task để bắt đầu"}</h2>
-          </div>
-          <div className="top-actions">
-            <div className="user-menu" ref={userMenuRef}>
-              <button
-                className="user-menu-trigger"
-                type="button"
-                onClick={() => setUserMenuOpen((current) => !current)}
-                aria-expanded={userMenuOpen}
-                aria-haspopup="menu"
-                aria-label="User menu"
-              >
-                <User size={16} />
-                <span>User</span>
-                <ChevronDown size={14} />
-              </button>
-              {userMenuOpen ? (
-                <div className="user-menu-popover" role="menu">
-                  {authUser ? <div className="user-menu-email">{authUser}</div> : null}
-                  <button
-                    className="user-menu-item"
-                    type="button"
-                    onClick={() => {
-                      setUserMenuOpen(false);
-                      setPasswordDialogOpen(true);
-                    }}
-                    disabled={isWorking}
-                    role="menuitem"
-                  >
-                    <KeyRound size={16} />
-                    <span>Đổi mật khẩu</span>
-                  </button>
-                  <button className="user-menu-item danger" type="button" onClick={logout} disabled={isWorking} role="menuitem">
-                    <LogOut size={16} />
-                    <span>Logout</span>
-                  </button>
-                </div>
-              ) : null}
-            </div>
-            <select value={archetypeKey} onChange={(event) => setArchetypeKey(event.target.value)}>
-              <option value="auto">Auto archetype</option>
-              {defaults
-                ? Object.entries(defaults.archetypes).map(([key, archetype]) => (
-                    <option value={key} key={key}>
-                      {archetype.label}
-                    </option>
-                  ))
-                : null}
-            </select>
-            <IconButton icon={busy === "draft" ? <Loader2 className="spin" size={16} /> : <Wand2 size={16} />} onClick={generateDraft} disabled={isWorking} variant="primary">
-              Generate draft
-            </IconButton>
-          </div>
-        </header>
-
-        <GenerationBanner status={generationStatus} />
-
         {passwordDialogOpen ? (
           <ChangePasswordDialog
             busy={passwordBusy}
@@ -1726,6 +1593,310 @@ function App() {
             onSubmit={changePassword}
           />
         ) : null}
+
+        {appView === "settings" ? (
+          <>
+            <header className="topbar">
+              <div>
+                <p className="eyebrow">Workspace configuration</p>
+                <h2>Workspace Settings</h2>
+              </div>
+            </header>
+
+            <section className="settings-layout">
+              <aside className="settings-section-nav" aria-label="Workspace settings sections">
+                <button className={activeSettingsSection === "project" ? "active" : ""} type="button" onClick={() => setActiveSettingsSection("project")}>
+                  <Settings size={16} />
+                  <span>Project</span>
+                </button>
+                <button className={activeSettingsSection === "credentials" ? "active" : ""} type="button" onClick={() => setActiveSettingsSection("credentials")}>
+                  <UploadCloud size={16} />
+                  <span>Jira auth</span>
+                </button>
+                <button className={activeSettingsSection === "confluence" ? "active" : ""} type="button" onClick={() => setActiveSettingsSection("confluence")}>
+                  <FileText size={16} />
+                  <span>Confluence</span>
+                </button>
+                <button className={activeSettingsSection === "ai" ? "active" : ""} type="button" onClick={() => setActiveSettingsSection("ai")}>
+                  <Wand2 size={16} />
+                  <span>AI Settings</span>
+                </button>
+              </aside>
+
+              <div className="settings-content">
+              {activeSettingsSection === "project" ? (
+              <section className="panel settings-panel">
+                <div className="panel-title">
+                  <Settings size={18} />
+                  <h2>Project config</h2>
+                </div>
+                <div className="form-grid">
+                  <Field label="Jira base URL" value={project.jiraBaseUrl} onChange={(value) => setProjectValue("jiraBaseUrl", value)} required error={validationErrors["project.jiraBaseUrl"]} />
+                  <Field label="Project key" value={project.projectKey} onChange={(value) => setProjectValue("projectKey", value)} required error={validationErrors["project.projectKey"]} />
+                  <Field label="Test case folder root" value={project.folderRoot} onChange={(value) => setProjectValue("folderRoot", value)} required error={validationErrors["project.folderRoot"]} />
+                  <Field label="Test cycle run root" value={project.runRoot} onChange={(value) => setProjectValue("runRoot", value)} required error={validationErrors["project.runRoot"]} />
+                </div>
+                <div className="label-policy">
+                  <div className="subhead">
+                    <span>Label policy</span>
+                  </div>
+                  <label className="field">
+                    <span>Mode</span>
+                    <select value={project.labelMode} onChange={(event) => setProjectValue("labelMode", event.target.value)}>
+                      <option value="custom">custom - thay bằng label dưới đây</option>
+                      <option value="passthrough">passthrough - giữ label từ skill</option>
+                      <option value="none">none - không gắn label tự động</option>
+                    </select>
+                  </label>
+                  <div className="form-grid">
+                    <Field
+                      label="Test case required labels"
+                      value={project.testcaseLabels}
+                      onChange={(value) => setProjectValue("testcaseLabels", value)}
+                      placeholder="QA_Testcases"
+                      required={project.labelMode === "custom"}
+                      error={validationErrors["project.testcaseLabels"]}
+                    />
+                    <Field
+                      label="Test design required labels"
+                      value={project.testdesignLabels}
+                      onChange={(value) => setProjectValue("testdesignLabels", value)}
+                      placeholder="QA_testdesign"
+                      required={project.labelMode === "custom"}
+                      error={validationErrors["project.testdesignLabels"]}
+                    />
+                  </div>
+                  <div className="form-grid two">
+                    <Field
+                      label="Test case status labels"
+                      value={project.testcaseStatusLabels}
+                      onChange={(value) => setProjectValue("testcaseStatusLabels", value)}
+                      textarea
+                      rows={5}
+                    />
+                    <Field
+                      label="Test design status labels"
+                      value={project.testdesignStatusLabels}
+                      onChange={(value) => setProjectValue("testdesignStatusLabels", value)}
+                      textarea
+                      rows={5}
+                    />
+                  </div>
+                </div>
+                <div className="button-row">
+                  <IconButton
+                    icon={settingsBusy === "project" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+                    onClick={() => saveUserSettings("project")}
+                    disabled={Boolean(settingsBusy)}
+                    variant="primary"
+                  >
+                    Lưu
+                  </IconButton>
+                </div>
+                {settingsStatus.project ? <div className="mini-note">{settingsStatus.project}</div> : null}
+              </section>
+              ) : null}
+
+              {activeSettingsSection === "credentials" ? (
+              <section className="panel settings-panel">
+                <div className="panel-title">
+                  <UploadCloud size={18} />
+                  <h2>Jira auth</h2>
+                </div>
+                <div className="form-grid">
+                  <Field label="User" value={credentials.user} onChange={(value) => setCredentialValue("user", value)} placeholder="name@example.com" error={validationErrors["credentials.user"]} />
+                  <Field label="Password" value={credentials.password} type="password" onChange={(value) => setCredentialValue("password", value)} placeholder={secretStatus.jira.hasPassword ? "Đã lưu trên server, để trống nếu không đổi" : ""} error={validationErrors["credentials.password"]} />
+                  <Field label="Token" value={credentials.token} type="password" onChange={(value) => setCredentialValue("token", value)} placeholder={secretStatus.jira.hasToken ? "Đã lưu trên server, để trống nếu không đổi" : ""} error={validationErrors["credentials.token"]} />
+                </div>
+                <div className="button-row">
+                  <IconButton
+                    icon={settingsBusy === "credentials" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+                    onClick={() => saveUserSettings("credentials")}
+                    disabled={Boolean(settingsBusy)}
+                    variant="primary"
+                  >
+                    Lưu
+                  </IconButton>
+                </div>
+                {secretStatus.jira.hasPassword || secretStatus.jira.hasToken ? (
+                  <div className="mini-note">Jira secret đã lưu chỉ dùng ở server; browser không đọc lại token/password đã lưu.</div>
+                ) : null}
+                {settingsStatus.credentials ? <div className="mini-note">{settingsStatus.credentials}</div> : null}
+                {defaults ? (
+                  <div className="status-stack">
+                    <StatusBadge ok={defaults.wrappers.jiraExists} text="Jira wrapper" />
+                    <StatusBadge ok={defaults.wrappers.xmindExists} text="XMind wrapper" />
+                  </div>
+                ) : null}
+              </section>
+              ) : null}
+
+              {activeSettingsSection === "confluence" ? (
+              <section className="panel settings-panel">
+                <div className="panel-title">
+                  <FileText size={18} />
+                  <h2>Confluence auth</h2>
+                </div>
+                <div className="form-grid">
+                  <Field label="User" value={confluenceCredentials.user} onChange={(value) => setConfluenceCredentialValue("user", value)} placeholder="name@example.com" required={Boolean(confluenceLinks.trim())} error={validationErrors["confluence.user"]} />
+                  <Field label="Password" value={confluenceCredentials.password} type="password" onChange={(value) => setConfluenceCredentialValue("password", value)} placeholder={secretStatus.confluence.hasPassword ? "Đã lưu trên server, để trống nếu không đổi" : ""} required={Boolean(confluenceLinks.trim())} error={validationErrors["confluence.password"]} />
+                  <Field label="Token" value={confluenceCredentials.token} type="password" onChange={(value) => setConfluenceCredentialValue("token", value)} placeholder={secretStatus.confluence.hasToken ? "Đã lưu trên server, để trống nếu không đổi" : ""} required={Boolean(confluenceLinks.trim())} error={validationErrors["confluence.token"]} />
+                </div>
+                <div className="button-row">
+                  <IconButton
+                    icon={settingsBusy === "confluence" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+                    onClick={() => saveUserSettings("confluence")}
+                    disabled={Boolean(settingsBusy)}
+                    variant="primary"
+                  >
+                    Lưu
+                  </IconButton>
+                </div>
+                {secretStatus.confluence.hasPassword || secretStatus.confluence.hasToken ? (
+                  <div className="mini-note">Confluence secret đã lưu chỉ dùng ở server; browser không đọc lại token/password đã lưu.</div>
+                ) : null}
+                {settingsStatus.confluence ? <div className="mini-note">{settingsStatus.confluence}</div> : null}
+                <div className="mini-note">Chỉ lưu thông tin đăng nhập. Base URL nhập riêng theo từng task ở mục Jira task.</div>
+              </section>
+              ) : null}
+
+              {activeSettingsSection === "ai" ? (
+              <section className="panel settings-panel">
+                <div className="panel-title">
+                  <Wand2 size={18} />
+                  <h2>AI Settings</h2>
+                </div>
+                <p className="panel-help">
+                  Khi bật và có API key/model, app gọi AI provider riêng của user với prompt mặc định của skill và guideline bên dưới. Khi tắt, app dùng generator mặc định trong app.
+                </p>
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={aiSettings.enabled}
+                    onChange={(event) => setAiSettingValue("enabled", event.target.checked)}
+                  />
+                  <span className="checkbox-copy">
+                    <strong>Áp dụng AI Settings khi generate</strong>
+                    <small>Bật: gọi AI provider bằng key riêng. Tắt: dùng fallback local không gọi AI.</small>
+                  </span>
+                </label>
+                <div className="form-grid">
+                  <label className="field">
+                    <span>Provider</span>
+                    <select value={aiSettings.provider} onChange={(event) => setAiSettingValue("provider", event.target.value)}>
+                      <option value="openai">OpenAI</option>
+                      <option value="openai-compatible">OpenAI compatible</option>
+                      <option value="azure-openai">Azure OpenAI</option>
+                      <option value="custom">Custom endpoint</option>
+                    </select>
+                  </label>
+                  <Field
+                    label="Base URL"
+                    value={aiSettings.baseUrl}
+                    onChange={(value) => setAiSettingValue("baseUrl", value)}
+                    placeholder="https://api.openai.com/v1"
+                    required={aiSettings.enabled}
+                    error={validationErrors["ai.baseUrl"]}
+                  />
+                  <Field
+                    label="Model"
+                    value={aiSettings.model}
+                    onChange={(value) => setAiSettingValue("model", value)}
+                    placeholder="Nhập model mà user muốn dùng"
+                    required={aiSettings.enabled}
+                    error={validationErrors["ai.model"]}
+                  />
+                  <Field
+                    label="API key"
+                    value={aiSettings.apiKey}
+                    type="password"
+                    onChange={(value) => setAiSettingValue("apiKey", value)}
+                    placeholder={secretStatus.ai.hasApiKey ? "Đã lưu trên server, để trống nếu không đổi" : "Key riêng của từng user"}
+                    required={aiSettings.enabled}
+                    error={validationErrors["ai.apiKey"]}
+                  />
+                </div>
+                <div className="form-grid two">
+                  <Field
+                    label="Phong cách viết"
+                    value={aiSettings.writingStyle}
+                    onChange={(value) => setAiSettingValue("writingStyle", value)}
+                    textarea
+                    rows={4}
+                    placeholder="Ví dụ: viết ngắn gọn, rõ precondition, expected result dạng bullet..."
+                  />
+                  <Field
+                    label="Improve skill notes"
+                    value={aiSettings.improvementNotes}
+                    onChange={(value) => setAiSettingValue("improvementNotes", value)}
+                    textarea
+                    rows={4}
+                    placeholder="Những điều user đã chỉnh và muốn app ghi nhớ cho lần sau"
+                  />
+                  <Field
+                    label="Cách viết test case"
+                    value={aiSettings.testCaseGuidelines}
+                    onChange={(value) => setAiSettingValue("testCaseGuidelines", value)}
+                    textarea
+                    rows={5}
+                    placeholder="Các đầu mục, format step, rule đặt tên, priority, coverage tag..."
+                  />
+                  <Field
+                    label="Cách làm test design"
+                    value={aiSettings.testDesignGuidelines}
+                    onChange={(value) => setAiSettingValue("testDesignGuidelines", value)}
+                    textarea
+                    rows={5}
+                    placeholder="Cách chia branch, rule Out of scope, risk lens, edge case..."
+                  />
+                </div>
+                {secretStatus.ai.hasApiKey ? (
+                  <div className="mini-note">AI API key đã lưu chỉ dùng ở server; browser không đọc lại key đã lưu.</div>
+                ) : null}
+                <div className="button-row">
+                  <IconButton
+                    icon={settingsBusy === "ai" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+                    onClick={() => saveUserSettings("ai")}
+                    disabled={Boolean(settingsBusy)}
+                    variant="primary"
+                  >
+                    Lưu
+                  </IconButton>
+                </div>
+                {settingsStatus.ai ? <div className="mini-note">{settingsStatus.ai}</div> : null}
+                <div className="mini-note">
+                  API key và guideline được lưu mã hoá theo account. Base URL chính thức `api.openai.com` dùng Responses API; các OpenAI-compatible/custom proxy như llmproxy dùng Chat Completions. Khi bật AI Settings, app bắt buộc gọi AI provider thành công; nếu lỗi sẽ báo lỗi thay vì dùng fallback local.
+                </div>
+              </section>
+              ) : null}
+              </div>
+            </section>
+          </>
+        ) : (
+          <>
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">QC / QA automation workspace</p>
+            <h2>{issue.key || "Nhập Jira task để bắt đầu"}</h2>
+          </div>
+          <div className="top-actions">
+            <select value={archetypeKey} onChange={(event) => setArchetypeKey(event.target.value)}>
+              <option value="auto">Auto archetype</option>
+              {defaults
+                ? Object.entries(defaults.archetypes).map(([key, archetype]) => (
+                    <option value={key} key={key}>
+                      {archetype.label}
+                    </option>
+                  ))
+                : null}
+            </select>
+            <IconButton icon={busy === "draft" ? <Loader2 className="spin" size={16} /> : <Wand2 size={16} />} onClick={generateDraft} disabled={isWorking} variant="success">
+              Generate draft
+            </IconButton>
+          </div>
+        </header>
+
+        <GenerationBanner status={generationStatus} />
 
         <section className="issue-grid">
           <div className="panel">
@@ -1752,7 +1923,7 @@ function App() {
                   setConfluenceBaseUrl(inferredBaseUrl);
                   clearValidationErrors(["confluenceBaseUrl"]);
                 }
-                clearFetchedDocs(value.trim() ? "Doc link thủ công đã được ghi nhận. Khi Fetch Jira task tìm thấy doc link, app sẽ tự fetch docs vào Task context." : "");
+                clearFetchedDocs(value.trim() ? "Doc link thủ công đã được ghi nhận. Nhấn Fetch để đọc Jira task và fetch doc vào Task context." : "");
               }}
               textarea
               rows={3}
@@ -2059,6 +2230,8 @@ function App() {
             </div>
           </section>
         ) : null}
+          </>
+        )}
       </main>
     </div>
   );
