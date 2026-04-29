@@ -932,9 +932,40 @@ function asText(value) {
   return String(value ?? "").trim();
 }
 
+const URL_TEXT_PATTERN = /\b(?:https?:\/\/|www\.)\S+/gi;
+const MARKDOWN_LINK_PATTERN = /\[([^\]]+)\]\((?:https?:\/\/|www\.)[^)]+\)/gi;
+
+function stripReferenceUrls(value) {
+  return asText(value)
+    .replace(MARKDOWN_LINK_PATTERN, "$1")
+    .replace(URL_TEXT_PATTERN, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isReferenceOnlyLine(value) {
+  const text = asText(value);
+  const normalized = normalizeSearchText(stripReferenceUrls(text))
+    .replace(/[:：|()[\]{}<>]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return /(?:https?:\/\/|www\.)/i.test(text);
+  if (
+    /^(repo|repository|source|source code|gitlab|github|link|links|url|urls|pr|mr|merge request|pull request|document link|doc link|docs|jira link|task link|attachment|attachments|screenshot|image|page id)(\s+[\w./-]+)?$/.test(
+      normalized,
+    )
+  ) {
+    return true;
+  }
+  return /^(repo|repository|source|link|url|pr|mr|docs?)\s*[:：-]\s*(?:https?:\/\/|www\.)/i.test(text);
+}
+
 function cleanContextLine(line) {
+  if (isReferenceOnlyLine(line)) return "";
   let text = asText(line)
     .replace(/<[^>]+>/g, " ")
+    .replace(MARKDOWN_LINK_PATTERN, "$1")
+    .replace(URL_TEXT_PATTERN, " ")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/__([^_]+)__/g, "$1")
     .replace(/`([^`]+)`/g, "$1")
@@ -954,6 +985,12 @@ function cleanContextLine(line) {
       "pham vi",
       "tai lieu",
       "document",
+      "repo",
+      "repository",
+      "source",
+      "source code",
+      "link",
+      "url",
       "note",
       "ghi chu",
       "requirement",
@@ -2210,7 +2247,7 @@ function shortText(value, limit = 96) {
 }
 
 function titleFromIntent(value, fallback = "Kiểm tra behavior chính") {
-  let text = asText(value)
+  let text = stripReferenceUrls(value)
     .replace(/^user story\s*[:：-]\s*/i, "")
     .replace(/^acceptance criteria\s*[:：-]\s*/i, "")
     .replace(/^expected\s*[:：-]\s*/i, "")
@@ -2224,8 +2261,10 @@ function titleFromIntent(value, fallback = "Kiểm tra behavior chính") {
     .replace(/^hiển thị\s+/i, "Hiển thị ")
     .replace(/\s+/g, " ")
     .trim();
+  if (isReferenceOnlyLine(text)) text = "";
   text = text.replace(/[.:;,\s]+$/g, "");
   if (!text) text = fallback;
+  if (isReferenceOnlyLine(text)) text = "Kiểm tra behavior chính";
   const words = text.split(/\s+/).slice(0, 12).join(" ");
   return shortText(words.charAt(0).toUpperCase() + words.slice(1), 86);
 }
@@ -3366,6 +3405,173 @@ function numberedQuotedLines(items) {
     .join("\n");
 }
 
+const CASE_SELECTION_META_TAGS = new Set([
+  "adaptive_qa_plan",
+  "confluence_reference",
+  "doc_grounding",
+  "jira_description",
+  "risk_based",
+]);
+
+const CASE_SELECTION_STRONG_SCENARIOS = new Set([
+  "boundary",
+  "decision_table",
+  "fallback",
+  "mapping",
+  "missing_data",
+  "reference_doc",
+  "regression",
+  "retry",
+  "state_transition",
+  "ui_regression",
+]);
+
+function caseCandidateTags(item = {}) {
+  return Array.isArray(item.tags) ? item.tags.map(asText).filter(Boolean) : [];
+}
+
+function semanticCaseFamily(item = {}) {
+  const tags = caseCandidateTags(item);
+  const text = normalizeSearchText(`${item.title || ""} ${item.objective || ""} ${item.risk || ""} ${tags.join(" ")}`);
+  if (/thiếu dữ liệu|required|missing|null|empty|rỗng|rong/.test(text)) return "missing_required_data";
+  if (/fallback|timeout|partial|dependency|empty error/.test(text)) return "fallback_recovery";
+  if (/retry|duplicate|idempotency|trùng|trung/.test(text)) return "retry_duplicate";
+  if (/regression|luồng cũ|luong cu|side effect/.test(text)) return "nearby_regression";
+  if (/mapping|field|payload|source of truth|contract/.test(text)) return "mapping_contract";
+  if (/boundary|threshold|ngưỡng|nguong|limit/.test(text)) return "boundary_threshold";
+  if (/out of scope|ngoài scope|ngoai scope/.test(text)) return "out_of_scope";
+  return "";
+}
+
+function caseCoverageDimensions(item = {}) {
+  const tags = caseCandidateTags(item)
+    .map((tag) => normalizeSearchText(tag))
+    .filter((tag) => tag && !CASE_SELECTION_META_TAGS.has(tag));
+  const dimensions = new Set([
+    normalizeSearchText(item.scenario || ""),
+    normalizeSearchText(item.technique || ""),
+    semanticCaseFamily(item),
+    ...tags,
+  ]);
+  return [...dimensions].filter(Boolean);
+}
+
+function caseCoverageSignature(item = {}) {
+  const scenario = normalizeSearchText(item.scenario || "coverage") || "coverage";
+  const tags = caseCandidateTags(item)
+    .map((tag) => normalizeSearchText(tag))
+    .filter((tag) => tag && !CASE_SELECTION_META_TAGS.has(tag));
+  const family = semanticCaseFamily(item);
+  const titleKey = normalizeSearchText(stripTestCasePrefix(item.title || ""))
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 6)
+    .join("_");
+  if (tags.includes("jira_requirement")) return `${scenario}:${titleKey || "jira_requirement"}`;
+  const primaryTag = tags[0] || family;
+  if (primaryTag) return `${scenario}:${primaryTag}`;
+  return `${scenario}:${titleKey || "case"}`;
+}
+
+function caseCandidateScore(item = {}) {
+  const tags = caseCandidateTags(item);
+  const scenario = asText(item.scenario);
+  const priority = asText(item.priority).toLowerCase();
+  let score = 0;
+  if (tags.includes("happy_path")) score += 120;
+  if (priority === "high") score += 60;
+  else if (priority === "normal") score += 20;
+  if (tags.includes("adaptive_qa_plan")) score += 55;
+  if (tags.includes("confluence_reference")) score += 35;
+  if (tags.includes("risk_based")) score += 20;
+  if (CASE_SELECTION_STRONG_SCENARIOS.has(scenario)) score += 35;
+  if (tags.includes("doc_grounding")) score -= 15;
+  if (scenario === "requirement_coverage") score += 10;
+  return score;
+}
+
+function isMustHaveCaseCandidate(item = {}) {
+  const tags = caseCandidateTags(item);
+  const scenario = asText(item.scenario);
+  if (tags.includes("happy_path")) return true;
+  if (tags.includes("adaptive_qa_plan")) return true;
+  if (tags.includes("confluence_reference") && !tags.includes("doc_grounding")) return true;
+  if (tags.includes("risk_based") && CASE_SELECTION_STRONG_SCENARIOS.has(scenario)) return true;
+  return asText(item.priority).toLowerCase() === "high" && scenario !== "requirement_coverage";
+}
+
+function selectCoverageDrivenCases(candidates = [], qaPlan = null) {
+  const targetCount = clampNumber(Number(qaPlan?.case_strategy?.target_count) || candidates.length || 0, 0, 32);
+  const minimumCount = clampNumber(
+    Number(qaPlan?.case_strategy?.minimum_count) || Math.max(5, targetCount - 2),
+    0,
+    Math.max(targetCount, 0),
+  );
+  const maximumCount = clampNumber(
+    Number(qaPlan?.case_strategy?.maximum_count) || targetCount + 4,
+    Math.max(targetCount, minimumCount),
+    32,
+  );
+  const selected = [];
+  const selectedIdentities = new Set();
+  const selectedSignatures = new Set();
+  const selectedDimensions = new Set();
+  const enriched = candidates.map((item, index) => ({
+    ...item,
+    _order: Number.isFinite(item._order) ? item._order : index,
+    _score: caseCandidateScore(item),
+    _signature: caseCoverageSignature(item),
+    _dimensions: caseCoverageDimensions(item),
+    _mustHave: isMustHaveCaseCandidate(item),
+  }));
+
+  const tryAdd = (item, { requireNewCoverage = true, allowAboveTarget = false } = {}) => {
+    if (selected.length >= maximumCount) return false;
+    if (!allowAboveTarget && selected.length >= targetCount) return false;
+    const identity = normalizedCaseIdentity({
+      title: item.title,
+      scenario_type: item.scenario,
+      coverage_tags: item.tags,
+    });
+    if (identity && selectedIdentities.has(identity)) return false;
+    if (selectedSignatures.has(item._signature)) return false;
+    const addsCoverage = item._dimensions.some((dimension) => !selectedDimensions.has(dimension));
+    if (requireNewCoverage && !addsCoverage && !caseCandidateTags(item).includes("happy_path")) return false;
+    selected.push(item);
+    if (identity) selectedIdentities.add(identity);
+    selectedSignatures.add(item._signature);
+    item._dimensions.forEach((dimension) => selectedDimensions.add(dimension));
+    return true;
+  };
+
+  enriched
+    .filter((item) => item._mustHave)
+    .sort((left, right) => right._score - left._score || left._order - right._order)
+    .forEach((item) => tryAdd(item, { requireNewCoverage: true, allowAboveTarget: true }));
+
+  enriched
+    .sort((left, right) => right._score - left._score || left._order - right._order)
+    .forEach((item) => {
+      if (selected.length >= minimumCount) return;
+      tryAdd(item, { requireNewCoverage: true, allowAboveTarget: false });
+    });
+
+  enriched
+    .sort((left, right) => right._score - left._score || left._order - right._order)
+    .forEach((item) => {
+      if (selected.length >= targetCount) return;
+      if (item._score < 95) return;
+      tryAdd(item, { requireNewCoverage: true, allowAboveTarget: false });
+    });
+
+  enriched
+    .filter((item) => item._mustHave && item._score >= 95)
+    .sort((left, right) => right._score - left._score || left._order - right._order)
+    .forEach((item) => tryAdd(item, { requireNewCoverage: true, allowAboveTarget: true }));
+
+  return selected.sort((left, right) => left._order - right._order);
+}
+
 function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = null, qaPlan = null) {
   const archetype = ARCHETYPES[archetypeKey] || ARCHETYPES.general;
   const key = issue.key || "JIRA-TASK";
@@ -3606,6 +3812,7 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
       technique: archetype.primary[0],
       tags: [],
       scenario: "coverage",
+      _order: candidates.length,
       ...item,
     });
   };
@@ -3897,20 +4104,7 @@ function buildCases(issue, archetypeKey, sourceInput = {}, aiCustomization = nul
       });
     });
 
-  const docCandidates = candidates.filter((item) => item.tags?.includes("confluence_reference"));
-  const nonDocCandidates = candidates.filter((item) => !item.tags?.includes("confluence_reference"));
-  const docQuota = context.docContextApplied ? Math.min(docCandidates.length, Math.max(4, Math.ceil(targetCount * 0.4))) : 0;
-  const coreCandidates = nonDocCandidates.slice(0, Math.max(0, targetCount - docQuota));
-  const coreLeadCount = context.docContextApplied ? Math.min(2, coreCandidates.length) : Math.min(3, coreCandidates.length);
-  const selected = [
-    ...coreCandidates.slice(0, coreLeadCount),
-    ...docCandidates.slice(0, docQuota),
-    ...coreCandidates.slice(coreLeadCount),
-  ];
-  for (const candidate of nonDocCandidates.slice(Math.max(0, targetCount - docQuota))) {
-    if (selected.length >= targetCount) break;
-    selected.push(candidate);
-  }
+  const selected = selectCoverageDrivenCases(candidates, qaPlan || { case_strategy: { target_count: targetCount } });
   return selected.map((item, index) => {
     const steps = makeStructuredSteps(item);
     const testData = testDataFor(item);
@@ -4251,21 +4445,39 @@ function normalizedCaseIdentity(testCase = {}) {
 }
 
 function completeAiCasesWithFallback(testCases = [], fallbackCases = [], qaPlan = null) {
-  const targetCount = clampNumber(
-    Number(qaPlan?.case_strategy?.target_count) || testCases.length || fallbackCases.length || 0,
+  const qualityFloor = clampNumber(
+    Number(qaPlan?.case_strategy?.minimum_count) || Math.min(testCases.length || fallbackCases.length || 0, 5),
     0,
     32,
   );
-  if (!targetCount || testCases.length >= targetCount || !fallbackCases.length) {
+  if (!qualityFloor || testCases.length >= qualityFloor || !fallbackCases.length) {
     return testCases;
   }
   const selected = [...testCases];
   const seen = new Set(selected.map(normalizedCaseIdentity).filter(Boolean));
+  const seenDimensions = new Set(selected.flatMap((testCase) => caseCoverageDimensions({
+    title: testCase.title,
+    objective: testCase.objective,
+    risk: testCase.risk,
+    tags: arrayFromMaybe(testCase.coverage_tags || testCase.coverageTags),
+    scenario: testCase.scenario_type || testCase.scenarioType,
+    technique: testCase.technique,
+  })));
   for (const fallbackCase of fallbackCases) {
-    if (selected.length >= targetCount) break;
+    if (selected.length >= qualityFloor) break;
     const key = normalizedCaseIdentity(fallbackCase);
     if (key && seen.has(key)) continue;
+    const dimensions = caseCoverageDimensions({
+      title: fallbackCase.title,
+      objective: fallbackCase.objective,
+      risk: fallbackCase.risk,
+      tags: arrayFromMaybe(fallbackCase.coverage_tags || fallbackCase.coverageTags),
+      scenario: fallbackCase.scenario_type || fallbackCase.scenarioType,
+      technique: fallbackCase.technique,
+    });
+    if (dimensions.length && dimensions.every((dimension) => seenDimensions.has(dimension))) continue;
     seen.add(key);
+    dimensions.forEach((dimension) => seenDimensions.add(dimension));
     selected.push(fallbackCase);
   }
   return selected;
@@ -4387,9 +4599,10 @@ function buildAiDraftMessages({
     "## Output rules",
     "- Output language: Vietnamese for `title`, `precondition`, `objective`, `risk`, `steps`, `test_data`, `expected_result`, and test-design branch items. Keep Jira keys, field names, API names, tool names, AMR/CE/AI terms, and code identifiers unchanged.",
     "- Do not mix generic English phrasing into Vietnamese content, for example avoid `Verify`, `Check`, `Open question`, `Happy path`, unless it is a deliberate testing-technique label.",
-    "- Do not create a fixed number of cases. Create as many as needed to cover the task well.",
-    "- Use `Adaptive QA plan.case_strategy`: generate at least `minimum_count`, aim for `target_count`, and stay under `maximum_count`. Do not collapse unrelated risk axes into one broad testcase just to keep the suite short.",
+    "- Do not create a fixed number of cases. Create as many as needed to cover the task well, and do not pad generic cases just to reach a count.",
+    "- Use `Adaptive QA plan.case_strategy` as quality guidance, not a quota: stay near `target_count` when risks are distinct, stay under `maximum_count`, and go below `target_count` when all meaningful risk axes are already covered. Treat `minimum_count` as a warning floor for complex tasks, not permission to merge unrelated risks.",
     "- Each testcase title must be concise, scenario-specific, and immediately explain what the case covers.",
+    "- Testcase titles must describe the purpose/risk being covered. Never use raw URLs, repo links, doc links, attachment names, or reference-only lines from Jira description as a title.",
     "- Never use generic titles such as `Mục tiêu`, `Bối cảnh`, `Context`, `Background`, `Description`, `Conversation bao phủ yêu cầu`, or `Yêu cầu Jira được đáp ứng`.",
     "- Always generate a fresh suite from the current Jira issue, current doc context, QA notes, and current AI Settings. Do not reuse old/generated/saved test cases as source content.",
     "- Use QC techniques deliberately: decision table, state transition, equivalence partitioning, boundary/null handling, regression, fallback/recovery, retry/idempotency, field mapping when relevant.",
