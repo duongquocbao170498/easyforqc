@@ -86,6 +86,19 @@ type BuiltDesignFiles = {
   xmind?: DownloadFileMeta | null;
   png?: DownloadFileMeta | null;
 };
+type SecretStatus = {
+  jira: {
+    hasPassword: boolean;
+    hasToken: boolean;
+  };
+  confluence: {
+    hasPassword: boolean;
+    hasToken: boolean;
+  };
+  ai: {
+    hasApiKey: boolean;
+  };
+};
 
 const emptyProject: ProjectConfig = {
   sourceRoot: "",
@@ -125,6 +138,12 @@ const emptyAiSettings: AiSettings = {
   testCaseGuidelines: "",
   testDesignGuidelines: "",
   improvementNotes: "",
+};
+
+const emptySecretStatus: SecretStatus = {
+  jira: { hasPassword: false, hasToken: false },
+  confluence: { hasPassword: false, hasToken: false },
+  ai: { hasApiKey: false },
 };
 
 const idleGenerationStatus: GenerationStatus = {
@@ -550,6 +569,7 @@ function App() {
   const [credentials, setCredentials] = useState<Credentials>(emptyCredentials);
   const [confluenceCredentials, setConfluenceCredentials] = useState<ConfluenceCredentials>(emptyConfluenceCredentials);
   const [aiSettings, setAiSettings] = useState<AiSettings>(emptyAiSettings);
+  const [secretStatus, setSecretStatus] = useState<SecretStatus>(emptySecretStatus);
   const [jiraUrl, setJiraUrl] = useState("");
   const [issue, setIssue] = useState<IssueSummary>(emptyIssue);
   const [confluenceBaseUrl, setConfluenceBaseUrl] = useState("");
@@ -588,6 +608,7 @@ function App() {
     let nextCredentials = emptyCredentials;
     let nextConfluenceCredentials = emptyConfluenceCredentials;
     let nextAiSettings = emptyAiSettings;
+    let nextSecretStatus = emptySecretStatus;
     const settingsResponse = await fetch("/api/user-settings");
     if (settingsResponse.ok) {
       const settings = (await settingsResponse.json()) as {
@@ -600,20 +621,43 @@ function App() {
         nextProject = { ...nextProject, ...settings.project };
       }
       if (settings.credentials) {
-        nextCredentials = { ...nextCredentials, ...settings.credentials };
+        const { saved, ...safeCredentials } = settings.credentials;
+        nextCredentials = { ...nextCredentials, ...safeCredentials, password: "", token: "" };
+        nextSecretStatus = {
+          ...nextSecretStatus,
+          jira: {
+            hasPassword: Boolean(saved?.hasPassword),
+            hasToken: Boolean(saved?.hasToken),
+          },
+        };
       }
       if (settings.confluenceCredentials) {
-        const { baseUrl: _taskBaseUrl, ...savedAuth } = settings.confluenceCredentials;
-        nextConfluenceCredentials = { ...nextConfluenceCredentials, ...savedAuth, baseUrl: "" };
+        const { baseUrl: _taskBaseUrl, saved, ...savedAuth } = settings.confluenceCredentials;
+        nextConfluenceCredentials = { ...nextConfluenceCredentials, ...savedAuth, baseUrl: "", password: "", token: "" };
+        nextSecretStatus = {
+          ...nextSecretStatus,
+          confluence: {
+            hasPassword: Boolean(saved?.hasPassword),
+            hasToken: Boolean(saved?.hasToken),
+          },
+        };
       }
       if (settings.aiSettings) {
-        nextAiSettings = { ...nextAiSettings, ...settings.aiSettings };
+        const { saved, ...safeAiSettings } = settings.aiSettings;
+        nextAiSettings = { ...nextAiSettings, ...safeAiSettings, apiKey: "" };
+        nextSecretStatus = {
+          ...nextSecretStatus,
+          ai: {
+            hasApiKey: Boolean(saved?.hasApiKey),
+          },
+        };
       }
     }
     setProject(nextProject);
     setCredentials(nextCredentials);
     setConfluenceCredentials(nextConfluenceCredentials);
     setAiSettings(nextAiSettings);
+    setSecretStatus(nextSecretStatus);
   }
 
   useEffect(() => {
@@ -698,8 +742,8 @@ function App() {
   }
 
   function addJiraAuthValidationErrors(errors: ValidationErrors, reason: string) {
-    const hasToken = Boolean(credentials.token.trim());
-    const hasUserPassword = Boolean(credentials.user.trim() && credentials.password.trim());
+    const hasToken = Boolean(credentials.token.trim() || secretStatus.jira.hasToken);
+    const hasUserPassword = Boolean(credentials.user.trim() && (credentials.password.trim() || secretStatus.jira.hasPassword));
     if (hasToken || hasUserPassword) return;
 
     const suffix = reason ? ` ${reason}` : "";
@@ -707,10 +751,10 @@ function App() {
       errors["credentials.user"] = `Cần nhập Jira User nếu không dùng Token.${suffix}`;
     }
     if (!credentials.password.trim()) {
-      errors["credentials.password"] = `Cần nhập Jira Password nếu không dùng Token.${suffix}`;
+      errors["credentials.password"] = `Cần nhập Jira Password nếu không dùng Token, hoặc lưu Jira password trước đó.${suffix}`;
     }
     if (!credentials.token.trim()) {
-      errors["credentials.token"] = `Cần nhập Jira Token hoặc đủ User + Password.${suffix}`;
+      errors["credentials.token"] = `Cần nhập Jira Token hoặc đủ User + Password, hoặc dùng token đã lưu.${suffix}`;
     }
   }
 
@@ -752,11 +796,11 @@ function App() {
     if (!confluenceCredentials.user.trim()) {
       errors["confluence.user"] = "Cần nhập Confluence User để fetch docs.";
     }
-    if (!confluenceCredentials.password.trim()) {
-      errors["confluence.password"] = "Cần nhập Confluence Password để fetch docs.";
+    if (!confluenceCredentials.password.trim() && !secretStatus.confluence.hasPassword) {
+      errors["confluence.password"] = "Cần nhập Confluence Password để fetch docs hoặc lưu password trước đó.";
     }
-    if (!confluenceCredentials.token.trim()) {
-      errors["confluence.token"] = "Cần nhập Confluence Token để fetch docs.";
+    if (!confluenceCredentials.token.trim() && !secretStatus.confluence.hasToken) {
+      errors["confluence.token"] = "Cần nhập Confluence Token để fetch docs hoặc lưu token trước đó.";
     }
     return errors;
   }
@@ -778,7 +822,7 @@ function App() {
     if (aiSettings.enabled) {
       if (!aiSettings.baseUrl.trim()) errors["ai.baseUrl"] = "Base URL bắt buộc khi bật AI Settings.";
       if (!aiSettings.model.trim()) errors["ai.model"] = "Model bắt buộc khi bật AI Settings.";
-      if (!aiSettings.apiKey.trim()) errors["ai.apiKey"] = "API key bắt buộc khi bật AI Settings.";
+      if (!aiSettings.apiKey.trim() && !secretStatus.ai.hasApiKey) errors["ai.apiKey"] = "API key bắt buộc khi bật AI Settings hoặc đã được lưu trước đó.";
     }
     return errors;
   }
@@ -951,6 +995,35 @@ function App() {
     setSettingsStatus((current) => ({ ...current, [section]: "" }));
     try {
       await apiPost("/api/user-settings", body);
+      if (section === "credentials") {
+        setSecretStatus((current) => ({
+          ...current,
+          jira: {
+            hasPassword: Boolean(credentials.password.trim() || current.jira.hasPassword),
+            hasToken: Boolean(credentials.token.trim() || current.jira.hasToken),
+          },
+        }));
+        setCredentials((current) => ({ ...current, password: "", token: "" }));
+      }
+      if (section === "confluence") {
+        setSecretStatus((current) => ({
+          ...current,
+          confluence: {
+            hasPassword: Boolean(confluenceCredentials.password.trim() || current.confluence.hasPassword),
+            hasToken: Boolean(confluenceCredentials.token.trim() || current.confluence.hasToken),
+          },
+        }));
+        setConfluenceCredentials((current) => ({ ...current, password: "", token: "" }));
+      }
+      if (section === "ai") {
+        setSecretStatus((current) => ({
+          ...current,
+          ai: {
+            hasApiKey: Boolean(aiSettings.apiKey.trim() || current.ai.hasApiKey),
+          },
+        }));
+        setAiSettings((current) => ({ ...current, apiKey: "" }));
+      }
       const text = `Đã lưu ${label} cho tài khoản này.`;
       setSettingsStatus((current) => ({ ...current, [section]: text }));
       setMessage(text);
@@ -1417,8 +1490,8 @@ function App() {
             <h2>Jira auth</h2>
           </div>
           <Field label="User" value={credentials.user} onChange={(value) => setCredentialValue("user", value)} placeholder="name@example.com" error={validationErrors["credentials.user"]} />
-          <Field label="Password" value={credentials.password} type="password" onChange={(value) => setCredentialValue("password", value)} error={validationErrors["credentials.password"]} />
-          <Field label="Token" value={credentials.token} type="password" onChange={(value) => setCredentialValue("token", value)} error={validationErrors["credentials.token"]} />
+          <Field label="Password" value={credentials.password} type="password" onChange={(value) => setCredentialValue("password", value)} placeholder={secretStatus.jira.hasPassword ? "Đã lưu trên server, để trống nếu không đổi" : ""} error={validationErrors["credentials.password"]} />
+          <Field label="Token" value={credentials.token} type="password" onChange={(value) => setCredentialValue("token", value)} placeholder={secretStatus.jira.hasToken ? "Đã lưu trên server, để trống nếu không đổi" : ""} error={validationErrors["credentials.token"]} />
           <div className="button-row">
             <IconButton
               icon={settingsBusy === "credentials" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
@@ -1429,6 +1502,9 @@ function App() {
               Lưu
             </IconButton>
           </div>
+          {secretStatus.jira.hasPassword || secretStatus.jira.hasToken ? (
+            <div className="mini-note">Jira secret đã lưu chỉ dùng ở server; browser không đọc lại token/password đã lưu.</div>
+          ) : null}
           {settingsStatus.credentials ? <div className="mini-note">{settingsStatus.credentials}</div> : null}
           {defaults ? (
             <div className="status-stack">
@@ -1444,8 +1520,8 @@ function App() {
             <h2>Confluence auth</h2>
           </div>
           <Field label="User" value={confluenceCredentials.user} onChange={(value) => setConfluenceCredentialValue("user", value)} placeholder="name@example.com" required={Boolean(confluenceLinks.trim())} error={validationErrors["confluence.user"]} />
-          <Field label="Password" value={confluenceCredentials.password} type="password" onChange={(value) => setConfluenceCredentialValue("password", value)} required={Boolean(confluenceLinks.trim())} error={validationErrors["confluence.password"]} />
-          <Field label="Token" value={confluenceCredentials.token} type="password" onChange={(value) => setConfluenceCredentialValue("token", value)} required={Boolean(confluenceLinks.trim())} error={validationErrors["confluence.token"]} />
+          <Field label="Password" value={confluenceCredentials.password} type="password" onChange={(value) => setConfluenceCredentialValue("password", value)} placeholder={secretStatus.confluence.hasPassword ? "Đã lưu trên server, để trống nếu không đổi" : ""} required={Boolean(confluenceLinks.trim())} error={validationErrors["confluence.password"]} />
+          <Field label="Token" value={confluenceCredentials.token} type="password" onChange={(value) => setConfluenceCredentialValue("token", value)} placeholder={secretStatus.confluence.hasToken ? "Đã lưu trên server, để trống nếu không đổi" : ""} required={Boolean(confluenceLinks.trim())} error={validationErrors["confluence.token"]} />
           <div className="button-row">
             <IconButton
               icon={settingsBusy === "confluence" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
@@ -1456,6 +1532,9 @@ function App() {
               Lưu
             </IconButton>
           </div>
+          {secretStatus.confluence.hasPassword || secretStatus.confluence.hasToken ? (
+            <div className="mini-note">Confluence secret đã lưu chỉ dùng ở server; browser không đọc lại token/password đã lưu.</div>
+          ) : null}
           {settingsStatus.confluence ? <div className="mini-note">{settingsStatus.confluence}</div> : null}
           <div className="mini-note">
             Chỉ lưu thông tin đăng nhập. Base URL nhập riêng theo từng task ở mục Jira task.
@@ -1511,7 +1590,7 @@ function App() {
             value={aiSettings.apiKey}
             type="password"
             onChange={(value) => setAiSettingValue("apiKey", value)}
-            placeholder="Key riêng của từng user"
+            placeholder={secretStatus.ai.hasApiKey ? "Đã lưu trên server, để trống nếu không đổi" : "Key riêng của từng user"}
             required={aiSettings.enabled}
             error={validationErrors["ai.apiKey"]}
           />
@@ -1547,6 +1626,9 @@ function App() {
             rows={5}
             placeholder="Những điều user đã chỉnh và muốn app ghi nhớ cho lần sau"
           />
+          {secretStatus.ai.hasApiKey ? (
+            <div className="mini-note">AI API key đã lưu chỉ dùng ở server; browser không đọc lại key đã lưu.</div>
+          ) : null}
           <div className="button-row">
             <IconButton
               icon={settingsBusy === "ai" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}

@@ -17,6 +17,10 @@ export type Credentials = {
   user: string;
   password: string;
   token: string;
+  saved?: {
+    hasPassword?: boolean;
+    hasToken?: boolean;
+  };
 };
 
 export type ConfluenceCredentials = {
@@ -24,6 +28,10 @@ export type ConfluenceCredentials = {
   user: string;
   password: string;
   token: string;
+  saved?: {
+    hasPassword?: boolean;
+    hasToken?: boolean;
+  };
 };
 
 export type AiSettings = {
@@ -36,6 +44,9 @@ export type AiSettings = {
   testCaseGuidelines: string;
   testDesignGuidelines: string;
   improvementNotes: string;
+  saved?: {
+    hasApiKey?: boolean;
+  };
 };
 
 export type RepoContextSettings = {

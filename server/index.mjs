@@ -21,7 +21,10 @@ const APP_PASSWORD = process.env.APP_PASSWORD || "";
 const APP_ADMIN_EMAIL = String(process.env.APP_ADMIN_EMAIL || APP_USER || "qa@example.local").trim().toLowerCase();
 const APP_ADMIN_PASSWORD = process.env.APP_ADMIN_PASSWORD || APP_PASSWORD;
 const APP_SESSION_SECRET = process.env.APP_SESSION_SECRET || APP_PASSWORD || crypto.randomBytes(32).toString("hex");
-const APP_COOKIE_SECURE = process.env.APP_COOKIE_SECURE === "true";
+const NODE_ENV = String(process.env.NODE_ENV || "").toLowerCase();
+const APP_COOKIE_SECURE = String(process.env.APP_COOKIE_SECURE || "").toLowerCase();
+const SETTINGS_ENCRYPTION_SECRET = process.env.SETTINGS_ENCRYPTION_SECRET || APP_SESSION_SECRET;
+const EXPOSE_DEBUG_DETAILS = process.env.EXPOSE_DEBUG_DETAILS === "true";
 const SESSION_COOKIE = "qa_studio_session";
 const SESSION_MAX_AGE_SECONDS = Number(process.env.APP_SESSION_MAX_AGE_SECONDS || 60 * 60 * 24 * 7);
 const DATABASE_URL = process.env.DATABASE_URL || "";
@@ -590,7 +593,17 @@ function readSession(req) {
   }
 }
 
-function sessionCookie(value, maxAgeSeconds = SESSION_MAX_AGE_SECONDS) {
+function shouldUseSecureCookie(req) {
+  if (APP_COOKIE_SECURE === "true") return true;
+  if (APP_COOKIE_SECURE === "false") return false;
+  const proto = String(req?.headers?.["x-forwarded-proto"] || "").toLowerCase();
+  if (req?.secure || proto.split(",").map((item) => item.trim()).includes("https")) return true;
+  const host = String(req?.headers?.host || "").split(":")[0].toLowerCase();
+  const isLocalHost = ["localhost", "127.0.0.1", "::1"].includes(host) || host.endsWith(".local");
+  return NODE_ENV === "production" && Boolean(host) && !isLocalHost;
+}
+
+function sessionCookie(value, maxAgeSeconds = SESSION_MAX_AGE_SECONDS, req = null) {
   const parts = [
     `${SESSION_COOKIE}=${encodeURIComponent(value)}`,
     "Path=/",
@@ -598,13 +611,13 @@ function sessionCookie(value, maxAgeSeconds = SESSION_MAX_AGE_SECONDS) {
     "SameSite=Lax",
     `Max-Age=${maxAgeSeconds}`,
   ];
-  if (APP_COOKIE_SECURE) {
+  if (shouldUseSecureCookie(req)) {
     parts.push("Secure");
   }
   return parts.join("; ");
 }
 
-function namedCookie(name, value, maxAgeSeconds) {
+function namedCookie(name, value, maxAgeSeconds, req = null) {
   const parts = [
     `${name}=${encodeURIComponent(value)}`,
     "Path=/",
@@ -612,7 +625,7 @@ function namedCookie(name, value, maxAgeSeconds) {
     "SameSite=Lax",
     `Max-Age=${maxAgeSeconds}`,
   ];
-  if (APP_COOKIE_SECURE) {
+  if (shouldUseSecureCookie(req)) {
     parts.push("Secure");
   }
   return parts.join("; ");
@@ -661,8 +674,12 @@ async function fetchGoogleProfile(code, redirectUri) {
   return profile;
 }
 
-function settingsCipherKey() {
-  return crypto.createHash("sha256").update(APP_SESSION_SECRET).digest();
+function settingsCipherKey(secret = SETTINGS_ENCRYPTION_SECRET) {
+  return crypto.createHash("sha256").update(secret || APP_SESSION_SECRET).digest();
+}
+
+function settingsCipherReadKeys() {
+  return dedupeStrings([SETTINGS_ENCRYPTION_SECRET, APP_SESSION_SECRET]).map((secret) => settingsCipherKey(secret));
 }
 
 function encryptSettingsJson(payload) {
@@ -686,17 +703,20 @@ function decryptSettingsJson(value) {
   if (version !== SETTINGS_CIPHER_VERSION || !ivText || !tagText || !encryptedText) {
     return {};
   }
-  try {
-    const decipher = crypto.createDecipheriv("aes-256-gcm", settingsCipherKey(), Buffer.from(ivText, "base64url"));
-    decipher.setAuthTag(Buffer.from(tagText, "base64url"));
-    const decrypted = Buffer.concat([
-      decipher.update(Buffer.from(encryptedText, "base64url")),
-      decipher.final(),
-    ]);
-    return JSON.parse(decrypted.toString("utf8"));
-  } catch {
-    return {};
+  for (const key of settingsCipherReadKeys()) {
+    try {
+      const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(ivText, "base64url"));
+      decipher.setAuthTag(Buffer.from(tagText, "base64url"));
+      const decrypted = Buffer.concat([
+        decipher.update(Buffer.from(encryptedText, "base64url")),
+        decipher.final(),
+      ]);
+      return JSON.parse(decrypted.toString("utf8"));
+    } catch {
+      continue;
+    }
   }
+  return {};
 }
 
 function requireSession(req, res, next) {
@@ -707,6 +727,164 @@ function requireSession(req, res, next) {
   }
   req.session = session;
   next();
+}
+
+const SECRET_KEY_PATTERN = /(password|token|secret|api[_-]?key|authorization|cookie)/i;
+
+function sensitiveEnvValues(extra = []) {
+  const values = [];
+  for (const [key, value] of Object.entries(process.env)) {
+    if (SECRET_KEY_PATTERN.test(key) && asText(value).length >= 4) {
+      values.push(asText(value));
+    }
+  }
+  for (const value of extra) {
+    const text = asText(value);
+    if (text.length >= 4) values.push(text);
+  }
+  return dedupeStrings(values).sort((a, b) => b.length - a.length);
+}
+
+function escapeRegExp(value) {
+  return asText(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function redactText(value, extraSecrets = []) {
+  let text = asText(value);
+  for (const secret of sensitiveEnvValues(extraSecrets)) {
+    text = text.replace(new RegExp(escapeRegExp(secret), "g"), "[redacted]");
+  }
+  return text
+    .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}/gi, "$1[redacted]")
+    .replace(/(Basic\s+)[A-Za-z0-9+/=]{8,}/gi, "$1[redacted]")
+    .replace(/((?:password|token|secret|api[_-]?key)[\"'\s:=]+)[^\"'\s,}]+/gi, "$1[redacted]");
+}
+
+function redactValue(value, extraSecrets = []) {
+  if (typeof value === "string") return redactText(value, extraSecrets);
+  if (Array.isArray(value)) return value.map((item) => redactValue(item, extraSecrets));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        SECRET_KEY_PATTERN.test(key) ? "[redacted]" : redactValue(item, extraSecrets),
+      ]),
+    );
+  }
+  return value;
+}
+
+function secretValuesFromAuth(...items) {
+  const values = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    values.push(item.password, item.jiraPassword, item.token, item.jiraToken, item.confluencePassword, item.confluenceToken, item.apiKey);
+  }
+  return values.map(asText).filter(Boolean);
+}
+
+function publicCredentials(credentials = {}) {
+  const normalized = normalizeCredentials(credentials);
+  return {
+    user: normalized.user,
+    password: "",
+    token: "",
+    saved: {
+      hasPassword: Boolean(normalized.password),
+      hasToken: Boolean(normalized.token),
+    },
+  };
+}
+
+function publicConfluenceCredentials(credentials = {}) {
+  const normalized = normalizeConfluenceCredentials(credentials);
+  return {
+    baseUrl: "",
+    user: normalized.user,
+    password: "",
+    token: "",
+    saved: {
+      hasPassword: Boolean(normalized.password),
+      hasToken: Boolean(normalized.token),
+    },
+  };
+}
+
+function publicAiSettings(settings = {}) {
+  const normalized = normalizeAiSettings(settings);
+  return {
+    ...normalized,
+    apiKey: "",
+    saved: {
+      hasApiKey: Boolean(normalized.apiKey),
+    },
+  };
+}
+
+function publicUserSettings(settings = {}) {
+  return {
+    project: settings.project || null,
+    credentials: settings.credentials ? publicCredentials(settings.credentials) : null,
+    confluenceCredentials: settings.confluenceCredentials ? publicConfluenceCredentials(settings.confluenceCredentials) : null,
+    aiSettings: settings.aiSettings ? publicAiSettings(settings.aiSettings) : null,
+    repoContext: settings.repoContext || null,
+  };
+}
+
+async function readUserSettings(email) {
+  if (!db || !email) {
+    return { project: null, credentials: {}, confluenceCredentials: {}, aiSettings: {}, repoContext: null };
+  }
+  const result = await db.query(
+    `
+      SELECT project_config, credentials_encrypted, confluence_credentials_encrypted, ai_settings_encrypted, repo_context_encrypted
+      FROM user_settings
+      WHERE user_email = $1
+    `,
+    [normalizeEmail(email)],
+  );
+  const row = result.rows[0];
+  return {
+    project: row?.project_config || null,
+    credentials: decryptSettingsJson(row?.credentials_encrypted),
+    confluenceCredentials: decryptSettingsJson(row?.confluence_credentials_encrypted),
+    aiSettings: decryptSettingsJson(row?.ai_settings_encrypted),
+    repoContext: decryptSettingsJson(row?.repo_context_encrypted),
+  };
+}
+
+async function requestUserSettings(req) {
+  return readUserSettings(req.session?.email);
+}
+
+function mergeCredentialsWithStored(incoming = {}, stored = {}) {
+  const current = normalizeCredentials(incoming);
+  const saved = normalizeCredentials(stored);
+  return {
+    user: current.user || saved.user,
+    password: current.password || saved.password,
+    token: current.token || saved.token,
+  };
+}
+
+function mergeConfluenceCredentialsWithStored(incoming = {}, stored = {}) {
+  const current = normalizeConfluenceCredentials(incoming);
+  const saved = normalizeConfluenceCredentials(stored);
+  return {
+    baseUrl: current.baseUrl || saved.baseUrl,
+    user: current.user || saved.user,
+    password: current.password || saved.password,
+    token: current.token || saved.token,
+  };
+}
+
+function mergeAiSettingsWithStored(incoming = {}, stored = {}) {
+  const current = normalizeAiSettings(incoming);
+  const saved = normalizeAiSettings(stored);
+  return {
+    ...current,
+    apiKey: current.apiKey || saved.apiKey,
+  };
 }
 
 app.get("/api/auth/status", (req, res) => {
@@ -734,7 +912,7 @@ app.post("/api/auth/login", authRateLimit, async (req, res) => {
       res.status(401).json({ error: "Email hoặc password không đúng." });
       return;
     }
-    res.setHeader("Set-Cookie", sessionCookie(createSessionToken(user)));
+    res.setHeader("Set-Cookie", sessionCookie(createSessionToken(user), SESSION_MAX_AGE_SECONDS, req));
     res.json({ authenticated: true, user: user.email, email: user.email });
     return;
   }
@@ -742,7 +920,7 @@ app.post("/api/auth/login", authRateLimit, async (req, res) => {
     res.status(401).json({ error: "Email hoặc password không đúng." });
     return;
   }
-  res.setHeader("Set-Cookie", sessionCookie(createSessionToken(email)));
+  res.setHeader("Set-Cookie", sessionCookie(createSessionToken(email), SESSION_MAX_AGE_SECONDS, req));
   res.json({ authenticated: true, user: email, email });
 });
 
@@ -762,7 +940,7 @@ app.get("/api/auth/google", authRateLimit, (req, res) => {
   authUrl.searchParams.set("scope", "openid email profile");
   authUrl.searchParams.set("state", state);
   authUrl.searchParams.set("prompt", "select_account");
-  res.setHeader("Set-Cookie", namedCookie(GOOGLE_OAUTH_STATE_COOKIE, state, 10 * 60));
+  res.setHeader("Set-Cookie", namedCookie(GOOGLE_OAUTH_STATE_COOKIE, state, 10 * 60, req));
   res.redirect(authUrl.toString());
 });
 
@@ -794,8 +972,8 @@ app.get("/api/auth/google/callback", async (req, res) => {
     }
     const user = await upsertGoogleUser(profile);
     res.setHeader("Set-Cookie", [
-      sessionCookie(createSessionToken(user)),
-      namedCookie(GOOGLE_OAUTH_STATE_COOKIE, "", 0),
+      sessionCookie(createSessionToken(user), SESSION_MAX_AGE_SECONDS, req),
+      namedCookie(GOOGLE_OAUTH_STATE_COOKIE, "", 0, req),
     ]);
     res.redirect("/");
   } catch (error) {
@@ -803,8 +981,8 @@ app.get("/api/auth/google/callback", async (req, res) => {
   }
 });
 
-app.post("/api/auth/logout", (_req, res) => {
-  res.setHeader("Set-Cookie", sessionCookie("", 0));
+app.post("/api/auth/logout", (req, res) => {
+  res.setHeader("Set-Cookie", sessionCookie("", 0, req));
   res.json({ authenticated: false });
 });
 
@@ -843,22 +1021,7 @@ app.get("/api/user-settings", async (req, res) => {
       res.json({ project: null, credentials: null, confluenceCredentials: null, aiSettings: null, repoContext: null });
       return;
     }
-    const result = await db.query(
-      `
-        SELECT project_config, credentials_encrypted, confluence_credentials_encrypted, ai_settings_encrypted, repo_context_encrypted
-        FROM user_settings
-        WHERE user_email = $1
-      `,
-      [normalizeEmail(req.session.email)],
-    );
-    const row = result.rows[0];
-    res.json({
-      project: row?.project_config || null,
-      credentials: decryptSettingsJson(row?.credentials_encrypted),
-      confluenceCredentials: decryptSettingsJson(row?.confluence_credentials_encrypted),
-      aiSettings: decryptSettingsJson(row?.ai_settings_encrypted),
-      repoContext: decryptSettingsJson(row?.repo_context_encrypted),
-    });
+    res.json(publicUserSettings(await requestUserSettings(req)));
   } catch (error) {
     sendError(res, error);
   }
@@ -877,22 +1040,18 @@ app.post("/api/user-settings", async (req, res) => {
     const hasConfluenceCredentials = Object.prototype.hasOwnProperty.call(body, "confluenceCredentials");
     const hasAiSettings = Object.prototype.hasOwnProperty.call(body, "aiSettings");
     const hasRepoContext = Object.prototype.hasOwnProperty.call(body, "repoContext");
-    const existing = await db.query(
-      `
-        SELECT project_config, credentials_encrypted, confluence_credentials_encrypted, ai_settings_encrypted, repo_context_encrypted
-        FROM user_settings
-        WHERE user_email = $1
-      `,
-      [email],
-    );
-    const row = existing.rows[0];
-    const project = hasProject ? normalizeProject(body.project) : row?.project_config || {};
-    const credentials = hasCredentials ? normalizeCredentials(body.credentials) : decryptSettingsJson(row?.credentials_encrypted);
+    const stored = await readUserSettings(email);
+    const project = hasProject ? normalizeProject(body.project) : stored.project || {};
+    const credentials = hasCredentials
+      ? mergeCredentialsWithStored(body.credentials, stored.credentials)
+      : normalizeCredentials(stored.credentials);
     const confluenceCredentials = hasConfluenceCredentials
-      ? normalizeConfluenceCredentials(body.confluenceCredentials)
-      : decryptSettingsJson(row?.confluence_credentials_encrypted);
-    const aiSettings = hasAiSettings ? normalizeAiSettings(body.aiSettings) : decryptSettingsJson(row?.ai_settings_encrypted);
-    const repoContext = hasRepoContext ? normalizeRepoContext(body.repoContext) : decryptSettingsJson(row?.repo_context_encrypted);
+      ? mergeConfluenceCredentialsWithStored(body.confluenceCredentials, stored.confluenceCredentials)
+      : normalizeConfluenceCredentials(stored.confluenceCredentials);
+    const aiSettings = hasAiSettings
+      ? mergeAiSettingsWithStored(body.aiSettings, stored.aiSettings)
+      : normalizeAiSettings(stored.aiSettings);
+    const repoContext = hasRepoContext ? normalizeRepoContext(body.repoContext) : stored.repoContext || {};
     await db.query(
       `
         INSERT INTO user_settings (user_email, project_config, credentials_encrypted, confluence_credentials_encrypted, ai_settings_encrypted, repo_context_encrypted)
@@ -915,14 +1074,7 @@ app.post("/api/user-settings", async (req, res) => {
         encryptSettingsJson(repoContext),
       ],
     );
-    res.json({
-      saved: true,
-      project,
-      credentials,
-      confluenceCredentials,
-      aiSettings,
-      repoContext,
-    });
+    res.json({ saved: true, ...publicUserSettings({ project, credentials, confluenceCredentials, aiSettings, repoContext }) });
   } catch (error) {
     sendError(res, error);
   }
@@ -2922,10 +3074,6 @@ function aiEndpointUrl(settings = {}, mode = "chat") {
   return `${baseUrl}/chat/completions`;
 }
 
-function escapeRegExp(value) {
-  return asText(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 function sanitizeProviderText(value, secrets = []) {
   let text = asText(value);
   for (const secret of secrets.map(asText).filter(Boolean)) {
@@ -3277,6 +3425,12 @@ function parseMaybeJson(text) {
 
 function runPython(script, args, options = {}) {
   return new Promise((resolve, reject) => {
+    const childSecrets = sensitiveEnvValues([
+      ...Object.entries(options.env || {})
+        .filter(([key]) => SECRET_KEY_PATTERN.test(key))
+        .map(([, value]) => value),
+      ...(options.secrets || []),
+    ]);
     const child = spawn("python3", [script, ...args], {
       cwd: ROOT_DIR,
       env: { ...process.env, ...(options.env || {}) },
@@ -3286,7 +3440,7 @@ function runPython(script, args, options = {}) {
     let stderr = "";
     const timer = setTimeout(() => {
       child.kill("SIGTERM");
-      reject(new Error(`Command timed out: python3 ${path.basename(script)} ${args.join(" ")}`));
+      reject(new Error(redactText(`Command timed out: python3 ${path.basename(script)} ${args.join(" ")}`, childSecrets)));
     }, options.timeoutMs || 300000);
 
     child.stdout.on("data", (chunk) => {
@@ -3303,13 +3457,24 @@ function runPython(script, args, options = {}) {
       clearTimeout(timer);
       const json = parseMaybeJson(stdout);
       if (code !== 0) {
-        const error = new Error(stderr || stdout || `Python command exited with ${code}`);
+        const error = new Error(redactText(stderr || stdout || `Python command exited with ${code}`, childSecrets));
         error.status = 500;
-        error.details = { code, stdout, stderr };
+        error.details = {
+          code,
+          stdout: redactText(stdout, childSecrets),
+          stderr: redactText(stderr, childSecrets),
+        };
         reject(error);
         return;
       }
-      resolve({ code, stdout, stderr, json });
+      resolve({
+        code,
+        stdout,
+        stderr,
+        safeStdout: redactText(stdout, childSecrets),
+        safeStderr: redactText(stderr, childSecrets),
+        json,
+      });
     });
   });
 }
@@ -4790,11 +4955,22 @@ function caseKeysFromResult(payload) {
   return created.map((item) => asText(item.key)).filter(Boolean);
 }
 
+function commandOutputForClient(result = {}) {
+  if (!EXPOSE_DEBUG_DETAILS) {
+    return { stdout: "", stderr: "" };
+  }
+  return {
+    stdout: asText(result.safeStdout || result.stdout),
+    stderr: asText(result.safeStderr || result.stderr),
+  };
+}
+
 function sendError(res, error) {
   const status = error.status || 500;
+  const details = EXPOSE_DEBUG_DETAILS ? redactValue(error.details || null) : null;
   res.status(status).json({
-    error: error.message || "Unexpected error",
-    details: error.details || null,
+    error: redactText(error.message || "Unexpected error"),
+    details,
   });
 }
 
@@ -4837,7 +5013,11 @@ app.post("/api/parse-jira", (req, res) => {
 
 app.post("/api/confluence-docs", async (req, res) => {
   try {
-    const confluenceCredentials = normalizeConfluenceCredentials(req.body?.confluenceCredentials);
+    const stored = await requestUserSettings(req);
+    const confluenceCredentials = mergeConfluenceCredentialsWithStored(
+      req.body?.confluenceCredentials,
+      stored.confluenceCredentials,
+    );
     const result = await fetchConfluenceDocuments(req.body?.links, confluenceCredentials);
     res.json(result);
   } catch (error) {
@@ -4853,15 +5033,17 @@ app.post("/api/issue", async (req, res) => {
     if (!issue.key) {
       throw Object.assign(new Error("Không tìm thấy issue key trong link Jira."), { status: 400 });
     }
+    const stored = await requestUserSettings(req);
+    const credentials = mergeCredentialsWithStored(req.body?.credentials, stored.credentials);
     const runDir = await makeRunDir(issue.key);
     const configPath = await writeConfig(runDir, project, { attachAll: false });
     const result = await runPython(
       XMIND_WRAPPER,
       ["--config-file", configPath, "issue", "--issue-key", issue.key],
-      { env: credentialEnv(project, req.body?.credentials) },
+      { env: credentialEnv(project, credentials), secrets: secretValuesFromAuth(credentials) },
     );
     const issueSummary = normalizeIssue(result.json, req.body?.jiraUrl);
-    const remoteDocs = await fetchJiraDocumentLinks(project, req.body?.credentials, issueSummary.key || issue.key);
+    const remoteDocs = await fetchJiraDocumentLinks(project, credentials, issueSummary.key || issue.key);
     const descriptionDocLinks = extractDocumentLinksFromText(`${issueSummary.description}\n${issueSummary.summary}`);
     issueSummary.doc_links = dedupeStrings([
       ...(issueSummary.doc_links || []),
@@ -4875,8 +5057,7 @@ app.post("/api/issue", async (req, res) => {
     res.json({
       issue: issueSummary,
       runDir,
-      stdout: result.stdout,
-      stderr: result.stderr,
+      ...commandOutputForClient(result),
     });
   } catch (error) {
     sendError(res, error);
@@ -4900,7 +5081,8 @@ app.post("/api/draft", async (req, res) => {
       docContext,
       repoContext: normalizeRepoContext(req.body?.repoContext),
     };
-    const aiSettings = normalizeAiSettings(req.body?.aiSettings);
+    const stored = await requestUserSettings(req);
+    const aiSettings = mergeAiSettingsWithStored(req.body?.aiSettings, stored.aiSettings);
     const aiCustomization = aiCustomizationFromSettings(aiSettings);
     const qaPlan = await buildQaPlan({
       issue,
@@ -5020,6 +5202,8 @@ app.post("/api/build-xmind", async (req, res) => {
       throw Object.assign(new Error("Outline không hợp lệ."), { status: 400 });
     }
     const project = normalizeProject(req.body?.project);
+    const stored = await requestUserSettings(req);
+    const credentials = mergeCredentialsWithStored(req.body?.credentials, stored.credentials);
     const issueKey = asText(outline.issue_key || req.body?.issueKey);
     const runDir = await makeRunDir(issueKey || "XMIND");
     const configPath = await writeConfig(runDir, project, {
@@ -5031,7 +5215,8 @@ app.post("/api/build-xmind", async (req, res) => {
     const args = ["--config-file", configPath, "build", "--outline-file", outlinePath];
     if (issueKey) args.push("--issue-key", issueKey);
     const result = await runPython(XMIND_WRAPPER, args, {
-      env: credentialEnv(project, req.body?.credentials),
+      env: credentialEnv(project, credentials),
+      secrets: secretValuesFromAuth(credentials),
       timeoutMs: 360000,
     });
     const outputPaths = result.json?.paths || {};
@@ -5044,8 +5229,7 @@ app.post("/api/build-xmind", async (req, res) => {
         xmind: outputPaths.xmind ? fileDownloadMeta(outputPaths.xmind) : null,
         png: outputPaths.png ? fileDownloadMeta(outputPaths.png) : null,
       },
-      stdout: result.stdout,
-      stderr: result.stderr,
+      ...commandOutputForClient(result),
     });
   } catch (error) {
     sendError(res, error);
@@ -5055,6 +5239,8 @@ app.post("/api/build-xmind", async (req, res) => {
 app.post("/api/create-suite", async (req, res) => {
   try {
     const project = normalizeProject(req.body?.project);
+    const stored = await requestUserSettings(req);
+    const credentials = mergeCredentialsWithStored(req.body?.credentials, stored.credentials);
     const issueKey = asText(req.body?.issueKey || req.body?.issue?.key).toUpperCase();
     if (!issueKey) {
       throw Object.assign(new Error("Cần issue key để tạo test suite."), { status: 400 });
@@ -5067,7 +5253,8 @@ app.post("/api/create-suite", async (req, res) => {
     const args = ["--config-file", configPath, "create-suite", "--issue-key", issueKey, "--cases-file", casesPath];
     if (req.body?.folderName) args.push("--folder-name", asText(req.body.folderName));
     const result = await runPython(JIRA_WRAPPER, args, {
-      env: credentialEnv(project, req.body?.credentials),
+      env: credentialEnv(project, credentials),
+      secrets: secretValuesFromAuth(credentials),
       timeoutMs: 420000,
     });
     res.json({
@@ -5076,8 +5263,7 @@ app.post("/api/create-suite", async (req, res) => {
       runDir,
       configPath,
       casesPath,
-      stdout: result.stdout,
-      stderr: result.stderr,
+      ...commandOutputForClient(result),
     });
   } catch (error) {
     sendError(res, error);
@@ -5087,6 +5273,8 @@ app.post("/api/create-suite", async (req, res) => {
 app.post("/api/create-cycle", async (req, res) => {
   try {
     const project = normalizeProject(req.body?.project);
+    const stored = await requestUserSettings(req);
+    const credentials = mergeCredentialsWithStored(req.body?.credentials, stored.credentials);
     const issueKey = asText(req.body?.issueKey || req.body?.issue?.key).toUpperCase();
     const rawKeys = Array.isArray(req.body?.caseKeys) ? req.body.caseKeys.join(",") : asText(req.body?.caseKeys);
     const caseKeys = rawKeys
@@ -5103,15 +5291,15 @@ app.post("/api/create-cycle", async (req, res) => {
     if (req.body?.folderName) args.push("--folder-name", asText(req.body.folderName));
     if (req.body?.cycleName) args.push("--cycle-name", asText(req.body.cycleName));
     const result = await runPython(JIRA_WRAPPER, args, {
-      env: credentialEnv(project, req.body?.credentials),
+      env: credentialEnv(project, credentials),
+      secrets: secretValuesFromAuth(credentials),
       timeoutMs: 420000,
     });
     res.json({
       result: result.json,
       runDir,
       configPath,
-      stdout: result.stdout,
-      stderr: result.stderr,
+      ...commandOutputForClient(result),
     });
   } catch (error) {
     sendError(res, error);
