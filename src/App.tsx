@@ -719,7 +719,6 @@ function App() {
     if (!project.projectKey.trim()) errors["project.projectKey"] = "Project key bắt buộc để map Jira project và tạo testcase/design.";
     if (!project.folderRoot.trim()) errors["project.folderRoot"] = "Test case folder root bắt buộc để biết nơi tạo testcase.";
     if (!project.runRoot.trim()) errors["project.runRoot"] = "Test cycle run root bắt buộc để biết nơi tạo test cycle.";
-    if (!project.sourceRoot.trim()) errors["project.sourceRoot"] = "Source root bắt buộc để đọc skill/template generate.";
     if (project.labelMode === "custom" && !project.testcaseLabels.trim()) {
       errors["project.testcaseLabels"] = "Label testcase bắt buộc khi mode là custom.";
     }
@@ -1356,7 +1355,6 @@ function App() {
           <Field label="Project key" value={project.projectKey} onChange={(value) => setProjectValue("projectKey", value)} required error={validationErrors["project.projectKey"]} />
           <Field label="Test case folder root" value={project.folderRoot} onChange={(value) => setProjectValue("folderRoot", value)} required error={validationErrors["project.folderRoot"]} />
           <Field label="Test cycle run root" value={project.runRoot} onChange={(value) => setProjectValue("runRoot", value)} required error={validationErrors["project.runRoot"]} />
-          <Field label="Source root" value={project.sourceRoot} onChange={(value) => setProjectValue("sourceRoot", value)} required error={validationErrors["project.sourceRoot"]} />
           <div className="label-policy">
             <div className="subhead">
               <span>Label policy</span>
@@ -1436,7 +1434,6 @@ function App() {
             <div className="status-stack">
               <StatusBadge ok={defaults.wrappers.jiraExists} text="Jira wrapper" />
               <StatusBadge ok={defaults.wrappers.xmindExists} text="XMind wrapper" />
-              <StatusBadge ok={defaults.wrappers.sourceRootExists} text="Source root" />
             </div>
           ) : null}
         </section>
