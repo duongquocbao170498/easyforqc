@@ -2760,24 +2760,6 @@ function App() {
                 </div>
                 <div className="label-policy">
                   <div className="subhead">
-                    <span>{ui.testCaseNumbering}</span>
-                  </div>
-                  <div className="form-grid">
-                    <Field
-                      label={ui.testCaseNumberTemplate}
-                      value={project.testCaseNumberTemplate}
-                      onChange={(value) => setProjectValue("testCaseNumberTemplate", value)}
-                      placeholder="TC_{0000}"
-                    />
-                    <div className="number-preview">
-                      <span>{ui.testCaseNumberPreview}</span>
-                      <strong>{testCaseTitlePrefix(project.testCaseNumberTemplate, 1)} Discovery tool chính cho bus booking</strong>
-                      <small>{ui.testCaseNumberTemplateHint}</small>
-                    </div>
-                  </div>
-                </div>
-                <div className="label-policy">
-                  <div className="subhead">
                     <span>{ui.labelPolicy}</span>
                   </div>
                   <label className="field">
@@ -2821,6 +2803,24 @@ function App() {
                       textarea
                       rows={5}
                     />
+                  </div>
+                </div>
+                <div className="label-policy">
+                  <div className="subhead">
+                    <span>{ui.testCaseNumbering}</span>
+                  </div>
+                  <div className="form-grid">
+                    <Field
+                      label={ui.testCaseNumberTemplate}
+                      value={project.testCaseNumberTemplate}
+                      onChange={(value) => setProjectValue("testCaseNumberTemplate", value)}
+                      placeholder="TC_{0000}"
+                    />
+                    <div className="number-preview">
+                      <span>{ui.testCaseNumberPreview}</span>
+                      <strong>{testCaseTitlePrefix(project.testCaseNumberTemplate, 1)} Discovery tool chính cho bus booking</strong>
+                      <small>{ui.testCaseNumberTemplateHint}</small>
+                    </div>
                   </div>
                 </div>
                 <div className="button-row">
