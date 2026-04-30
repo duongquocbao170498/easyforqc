@@ -630,214 +630,214 @@ const KNOWLEDGE_CONTENT: Record<LanguageMode, Record<StaticKnowledgeSection, Kno
     principles: {
       nav: "7 nguyên lý kiểm thử",
       title: "7 nguyên lý kiểm thử",
-      summary: "Dùng để nhắc QA không rơi vào bẫy test quá hẹp, test quá muộn hoặc tin rằng pass test đồng nghĩa sản phẩm không còn lỗi.",
+      summary: "Dùng để nhắc QA không rơi vào bẫy kiểm thử quá hẹp, kiểm thử quá muộn hoặc tin rằng toàn bộ ca đều đạt nghĩa là sản phẩm không còn lỗi.",
       cards: [
         {
           title: "Kiểm thử cho thấy lỗi có thể tồn tại",
-          description: "Test giúp phát hiện defect, nhưng không thể chứng minh hệ thống hoàn toàn sạch lỗi.",
-          points: ["Pass toàn bộ case chỉ nói rằng chưa tìm thấy lỗi trong phạm vi đã test.", "Khi risk cao, cần bổ sung exploratory, negative và regression thay vì chỉ tin vào happy path."],
-          example: "Một flow thanh toán pass 20 case vẫn có thể lỗi ở tổ hợp ngân hàng, timeout hoặc retry chưa được cover.",
+          description: "Kiểm thử giúp phát hiện lỗi, nhưng không thể chứng minh hệ thống hoàn toàn sạch lỗi.",
+          points: ["Toàn bộ ca kiểm thử đều đạt chỉ nói rằng chưa tìm thấy lỗi trong phạm vi đã kiểm.", "Khi rủi ro cao, cần bổ sung kiểm thử thăm dò, kiểm thử âm và hồi quy thay vì chỉ tin vào luồng thành công."],
+          example: "Một luồng thanh toán đạt 20 ca kiểm thử vẫn có thể lỗi ở tổ hợp ngân hàng, hết thời gian chờ hoặc thử lại chưa được bao phủ.",
         },
         {
           title: "Không thể kiểm thử vét cạn",
-          description: "Số tổ hợp input, trạng thái, thiết bị, quyền và dữ liệu thường quá lớn để test toàn bộ.",
-          points: ["Ưu tiên theo risk, impact và tần suất sử dụng.", "Dùng partition, boundary và pairwise để chọn đại diện thay vì liệt kê vô hạn case."],
+          description: "Số tổ hợp đầu vào, trạng thái, thiết bị, quyền và dữ liệu thường quá lớn để kiểm thử toàn bộ.",
+          points: ["Ưu tiên theo rủi ro, mức ảnh hưởng và tần suất sử dụng.", "Dùng phân vùng tương đương, giá trị biên và kiểm thử cặp để chọn đại diện thay vì liệt kê vô hạn ca."],
         },
         {
-          title: "Test càng sớm càng tiết kiệm",
-          description: "Review requirement, AC, design và API contract sớm giúp giảm chi phí sửa lỗi về sau.",
-          points: ["QA nên bắt đầu từ grooming/refinement, không đợi build xong.", "Case thiếu scope, wording mơ hồ và rule xung đột nên được raise trước khi dev triển khai."],
+          title: "Kiểm thử càng sớm càng tiết kiệm",
+          description: "Rà soát yêu cầu, tiêu chí chấp nhận, thiết kế và hợp đồng API sớm giúp giảm chi phí sửa lỗi về sau.",
+          points: ["QA nên bắt đầu từ giai đoạn làm rõ yêu cầu, không đợi bản dựng xong.", "Phạm vi thiếu, câu chữ mơ hồ và quy tắc xung đột nên được nêu ra trước khi lập trình viên triển khai."],
         },
         {
           title: "Lỗi thường tập trung theo cụm",
-          description: "Một vài module, integration hoặc rule phức tạp thường chứa phần lớn defect.",
-          points: ["Theo dõi defect history để chọn vùng cần regression sâu.", "Module hay lỗi cần thêm test data, log, monitoring và checklist riêng."],
+          description: "Một vài mô-đun, điểm tích hợp hoặc quy tắc phức tạp thường chứa phần lớn lỗi.",
+          points: ["Theo dõi lịch sử lỗi để chọn vùng cần kiểm thử hồi quy sâu.", "Mô-đun hay lỗi cần thêm dữ liệu kiểm thử, nhật ký, giám sát và danh sách kiểm tra riêng."],
         },
         {
-          title: "Case cũ sẽ mất hiệu quả nếu không được làm mới",
-          description: "Một bộ test lặp lại mãi có thể không còn bắt được lỗi mới.",
-          points: ["Cập nhật case theo bug mới, thay đổi business rule và hành vi user thật.", "Thêm exploratory charter sau các release có thay đổi lớn."],
+          title: "Ca kiểm thử cũ sẽ mất hiệu quả nếu không được làm mới",
+          description: "Một bộ kiểm thử lặp lại mãi có thể không còn bắt được lỗi mới.",
+          points: ["Cập nhật ca kiểm thử theo lỗi mới, thay đổi quy tắc nghiệp vụ và hành vi người dùng thật.", "Thêm mục tiêu kiểm thử thăm dò sau các bản phát hành có thay đổi lớn."],
         },
         {
           title: "Kiểm thử phụ thuộc ngữ cảnh",
-          description: "Chiến lược test cho payment, chatbot, UI admin hay batch job không giống nhau.",
-          points: ["Task high-risk cần negative, security, retry, audit và data consistency.", "Task UI nhỏ có thể tập trung visual state, validation, empty/error/loading state."],
+          description: "Chiến lược kiểm thử cho thanh toán, chatbot, giao diện quản trị hay tác vụ chạy lô không giống nhau.",
+          points: ["Tác vụ rủi ro cao cần kiểm thử âm, bảo mật, thử lại, kiểm toán và tính nhất quán dữ liệu.", "Tác vụ giao diện nhỏ có thể tập trung trạng thái hiển thị, xác thực dữ liệu, trạng thái rỗng/lỗi/đang tải."],
         },
         {
-          title: "Không có lỗi code vẫn có thể sai nhu cầu",
-          description: "Sản phẩm có thể chạy đúng spec nhưng spec không giải quyết đúng vấn đề người dùng.",
-          points: ["QA cần so expected result với mục tiêu business, không chỉ so với implementation.", "Nếu AC thiếu rule quan trọng, ghi assumption hoặc open question trước khi sign-off."],
+          title: "Không có lỗi lập trình vẫn có thể sai nhu cầu",
+          description: "Sản phẩm có thể chạy đúng đặc tả nhưng đặc tả không giải quyết đúng vấn đề người dùng.",
+          points: ["QA cần so kết quả mong đợi với mục tiêu nghiệp vụ, không chỉ so với cách triển khai.", "Nếu tiêu chí chấp nhận thiếu quy tắc quan trọng, ghi giả định hoặc câu hỏi mở trước khi xác nhận hoàn tất."],
         },
       ],
     },
     process: {
       nav: "Quy trình kiểm thử",
       title: "Quy trình kiểm thử chuẩn",
-      summary: "Một vòng test tốt không bắt đầu từ lúc bấm test và không kết thúc ngay khi pass case.",
+      summary: "Một vòng kiểm thử tốt không bắt đầu từ lúc bấm chạy kiểm thử và không kết thúc ngay khi ca kiểm thử đạt.",
       cards: [
         {
-          title: "Test planning",
-          description: "Xác định scope, objective, risk, resource, môi trường, entry/exit criteria và cách báo cáo.",
-          points: ["Đọc Jira summary, description, AC, doc link và dependency.", "Chọn mức test phù hợp: smoke, functional, integration, regression hoặc exploratory."],
+          title: "Lập kế hoạch kiểm thử",
+          description: "Xác định phạm vi, mục tiêu, rủi ro, nguồn lực, môi trường, tiêu chí bắt đầu/kết thúc và cách báo cáo.",
+          points: ["Đọc tóm tắt Jira, mô tả, tiêu chí chấp nhận, liên kết tài liệu và phụ thuộc.", "Chọn mức kiểm thử phù hợp: smoke test, chức năng, tích hợp, hồi quy hoặc thăm dò."],
         },
         {
-          title: "Test monitoring & control",
-          description: "Theo dõi tiến độ, blocker, defect trend và điều chỉnh test khi risk thay đổi.",
-          points: ["Nếu build lỗi hoặc thiếu data, cập nhật status sớm.", "Nếu phát hiện area risk mới, thêm case thay vì cố chạy đúng checklist cũ."],
+          title: "Giám sát và điều khiển kiểm thử",
+          description: "Theo dõi tiến độ, điểm nghẽn, xu hướng lỗi và điều chỉnh kiểm thử khi rủi ro thay đổi.",
+          points: ["Nếu bản dựng lỗi hoặc thiếu dữ liệu, cập nhật trạng thái sớm.", "Nếu phát hiện vùng rủi ro mới, thêm ca kiểm thử thay vì cố chạy đúng danh sách cũ."],
         },
         {
-          title: "Test analysis",
+          title: "Phân tích kiểm thử",
           description: "Phân tích test basis để xác định điều kiện kiểm thử.",
-          points: ["Tách rule bắt buộc, optional, exception, permission, state và data constraint.", "Tìm chỗ mơ hồ: thiếu default, thiếu timeout, thiếu fallback, thiếu audit."],
+          points: ["Tách quy tắc bắt buộc, tùy chọn, ngoại lệ, quyền, trạng thái và ràng buộc dữ liệu.", "Tìm chỗ mơ hồ: thiếu giá trị mặc định, hết thời gian chờ, phương án dự phòng hoặc kiểm toán."],
         },
         {
-          title: "Test design",
-          description: "Biến test condition thành test case, test data và expected result cụ thể.",
-          points: ["Mỗi case nên cover một scenario rõ mục đích.", "Expected result phải kiểm được, tránh câu chung như hoạt động đúng."],
+          title: "Thiết kế kiểm thử",
+          description: "Biến điều kiện kiểm thử thành ca kiểm thử, dữ liệu kiểm thử và kết quả mong đợi cụ thể.",
+          points: ["Mỗi ca nên bao phủ một kịch bản rõ mục đích.", "Kết quả mong đợi phải kiểm được, tránh câu chung như hoạt động đúng."],
         },
         {
-          title: "Test implementation & execution",
-          description: "Chuẩn bị data/env, chạy test, ghi evidence và log defect khi actual khác expected.",
-          points: ["Luôn ghi data đã dùng, account, environment, version và timestamp khi cần trace.", "Bug report tốt cần steps, actual, expected, evidence, impact và frequency."],
+          title: "Triển khai và thực thi kiểm thử",
+          description: "Chuẩn bị dữ liệu/môi trường, chạy kiểm thử, ghi bằng chứng và báo lỗi khi kết quả thực tế khác mong đợi.",
+          points: ["Luôn ghi dữ liệu đã dùng, tài khoản, môi trường, phiên bản và thời điểm khi cần truy vết.", "Báo cáo lỗi tốt cần bước thực hiện, kết quả thực tế, kết quả mong đợi, bằng chứng, mức ảnh hưởng và tần suất."],
         },
         {
-          title: "Test completion",
-          description: "Tổng kết kết quả, defect còn mở, risk còn lại và bài học cho regression sau này.",
-          points: ["Không chỉ ghi pass/fail; cần nêu risk chưa cover và lý do.", "Case tạo từ bug production nên đưa vào regression nếu còn giá trị."],
+          title: "Hoàn tất kiểm thử",
+          description: "Tổng kết kết quả, lỗi còn mở, rủi ro còn lại và bài học cho kiểm thử hồi quy sau này.",
+          points: ["Không chỉ ghi đạt/không đạt; cần nêu rủi ro chưa bao phủ và lý do.", "Ca tạo từ lỗi production nên đưa vào hồi quy nếu còn giá trị."],
         },
       ],
     },
     techniques: {
-      nav: "Kỹ thuật thiết kế test",
-      title: "Kỹ thuật thiết kế test case",
-      summary: "Các kỹ thuật này giúp chọn case có sức bắt lỗi cao mà không cần tăng số lượng một cách máy móc.",
+      nav: "Kỹ thuật thiết kế kiểm thử",
+      title: "Kỹ thuật thiết kế ca kiểm thử",
+      summary: "Các kỹ thuật này giúp chọn ca kiểm thử có sức bắt lỗi cao mà không cần tăng số lượng một cách máy móc.",
       cards: [
         {
-          title: "Equivalence Partitioning",
-          description: "Chia input/output thành nhóm tương đương; mỗi nhóm chọn đại diện để test.",
-          points: ["Dùng cho rule theo nhóm tuổi, loại vé, trạng thái đơn, role user.", "Cần có cả partition hợp lệ và không hợp lệ."],
+          title: "Phân vùng tương đương",
+          description: "Chia đầu vào/đầu ra thành nhóm tương đương; mỗi nhóm chọn đại diện để kiểm thử.",
+          points: ["Dùng cho quy tắc theo nhóm tuổi, loại vé, trạng thái đơn, vai trò người dùng.", "Cần có cả phân vùng hợp lệ và không hợp lệ."],
           example: "Tuổi khách: dưới 6, 6-11, từ 12 trở lên, giá trị rỗng hoặc chữ.",
         },
         {
-          title: "Boundary Value Analysis",
+          title: "Phân tích giá trị biên",
           description: "Tập trung quanh điểm biên vì lỗi thường xuất hiện tại giá trị ngay trước, đúng tại và ngay sau ngưỡng.",
-          points: ["Dùng cho min/max, thời hạn, số lượng, trọng lượng, giá tiền.", "Nếu rule là >= 24h, test 23h59, 24h00 và 24h01."],
+          points: ["Dùng cho giá trị nhỏ nhất/lớn nhất, thời hạn, số lượng, trọng lượng, giá tiền.", "Nếu quy tắc là >= 24h, kiểm 23h59, 24h00 và 24h01."],
         },
         {
-          title: "Decision Table Testing",
-          description: "Dùng bảng điều kiện - kết quả khi nhiều rule kết hợp với nhau.",
-          points: ["Phù hợp cho pricing, permission, policy, promotion, routing.", "Giúp tránh bỏ sót tổ hợp điều kiện quan trọng."],
+          title: "Kiểm thử bảng quyết định",
+          description: "Dùng bảng điều kiện - kết quả khi nhiều quy tắc kết hợp với nhau.",
+          points: ["Phù hợp cho định giá, phân quyền, chính sách, khuyến mãi và điều hướng xử lý.", "Giúp tránh bỏ sót tổ hợp điều kiện quan trọng."],
         },
         {
-          title: "State Transition Testing",
-          description: "Kiểm tra hệ thống chuyển trạng thái đúng và chặn transition không hợp lệ.",
-          points: ["Dùng cho booking, payment, ticket lifecycle, workflow approval.", "Test cả đường đi hợp lệ, quay lại, retry, cancel và thao tác ở state cuối."],
+          title: "Kiểm thử chuyển trạng thái",
+          description: "Kiểm tra hệ thống chuyển trạng thái đúng và chặn chuyển trạng thái không hợp lệ.",
+          points: ["Dùng cho đặt chỗ, thanh toán, vòng đời vé và quy trình phê duyệt.", "Kiểm cả đường đi hợp lệ, quay lại, thử lại, hủy và thao tác ở trạng thái cuối."],
         },
         {
-          title: "Use Case / Scenario Testing",
-          description: "Mô phỏng luồng người dùng đầu-cuối để kiểm tra business flow thực tế.",
-          points: ["Dùng cho booking, checkout, onboarding, chatbot multi-turn.", "Cần cover main success path, alternate path và exception path."],
+          title: "Kiểm thử ca sử dụng / kịch bản",
+          description: "Mô phỏng luồng người dùng đầu-cuối để kiểm tra luồng nghiệp vụ thực tế.",
+          points: ["Dùng cho đặt chỗ, thanh toán, hướng dẫn người dùng mới và chatbot nhiều lượt.", "Cần bao phủ luồng thành công chính, luồng thay thế và luồng ngoại lệ."],
         },
         {
-          title: "White-box coverage",
-          description: "Dựa trên cấu trúc code/API để kiểm tra statement, branch hoặc path quan trọng.",
-          points: ["Hữu ích khi review logic if/else, mapper, parser, retry và fallback.", "Không thay thế business testing, nhưng giúp bắt nhánh code bị bỏ sót."],
+          title: "Kiểm thử hộp trắng",
+          description: "Dựa trên cấu trúc mã nguồn/API để kiểm tra câu lệnh, nhánh hoặc đường đi quan trọng.",
+          points: ["Hữu ích khi rà soát logic if/else, bộ ánh xạ, bộ phân tích cú pháp, thử lại và dự phòng.", "Không thay thế kiểm thử nghiệp vụ, nhưng giúp bắt nhánh mã bị bỏ sót."],
         },
         {
-          title: "Experience-based testing",
-          description: "Dựa trên kinh nghiệm, defect history và hiểu biết domain để tìm lỗi khó thấy trong spec.",
-          points: ["Error guessing: thử null, duplicate, timeout, stale data, permission sai.", "Exploratory testing: vừa học hệ thống, vừa thiết kế và thực thi test có mục tiêu."],
+          title: "Kiểm thử dựa trên kinh nghiệm",
+          description: "Dựa trên kinh nghiệm, lịch sử lỗi và hiểu biết miền nghiệp vụ để tìm lỗi khó thấy trong đặc tả.",
+          points: ["Đoán lỗi: thử giá trị rỗng, trùng lặp, hết thời gian chờ, dữ liệu cũ, quyền sai.", "Kiểm thử thăm dò: vừa học hệ thống, vừa thiết kế và thực thi kiểm thử có mục tiêu."],
         },
       ],
     },
     levels: {
-      nav: "Cấp độ & loại test",
-      title: "Test level và test type",
-      summary: "Phân biệt level/type giúp QA không nhầm giữa phạm vi test, mục tiêu test và kỹ thuật test.",
+      nav: "Cấp độ & loại kiểm thử",
+      title: "Cấp độ kiểm thử và loại kiểm thử",
+      summary: "Phân biệt cấp độ/loại kiểm thử giúp QA không nhầm giữa phạm vi kiểm thử, mục tiêu kiểm thử và kỹ thuật kiểm thử.",
       cards: [
         {
-          title: "Component testing",
-          description: "Kiểm tra một đơn vị nhỏ như function, component, module hoặc service logic.",
-          points: ["Thường gần code và có nhiều mock.", "Tập trung rule nội bộ, edge input và branch logic."],
+          title: "Kiểm thử thành phần",
+          description: "Kiểm tra một đơn vị nhỏ như hàm, thành phần, mô-đun hoặc logic dịch vụ.",
+          points: ["Thường gần mã nguồn và có nhiều giả lập.", "Tập trung quy tắc nội bộ, đầu vào biên và logic phân nhánh."],
         },
         {
-          title: "Integration testing",
+          title: "Kiểm thử tích hợp",
           description: "Kiểm tra các module/service kết nối đúng với nhau.",
-          points: ["Tập trung API contract, mapping field, auth, retry, timeout, idempotency.", "Rất quan trọng với Jira, Confluence, Chatwoot, RAG, n8n hoặc payment gateway."],
+          points: ["Tập trung hợp đồng API, ánh xạ trường, xác thực, thử lại, hết thời gian chờ và tính không đổi kết quả khi gọi lặp.", "Rất quan trọng với Jira, Confluence, Chatwoot, RAG, n8n hoặc cổng thanh toán."],
         },
         {
-          title: "System testing",
+          title: "Kiểm thử hệ thống",
           description: "Kiểm tra hệ thống hoàn chỉnh từ góc nhìn user hoặc business.",
-          points: ["Cover end-to-end workflow, data persistence, notification, audit.", "Nên có smoke suite cho release nhanh."],
+          points: ["Bao phủ quy trình đầu-cuối, lưu dữ liệu, thông báo và kiểm toán.", "Nên có bộ kiểm thử khói cho bản phát hành nhanh."],
         },
         {
-          title: "Acceptance testing",
+          title: "Kiểm thử chấp nhận",
           description: "Xác nhận hệ thống đáp ứng nhu cầu business và acceptance criteria.",
-          points: ["Có thể là UAT, alpha/beta hoặc operational acceptance.", "QA cần đối chiếu với mục tiêu task, không chỉ check UI/API hoạt động."],
+          points: ["Có thể là UAT, alpha/beta hoặc kiểm thử chấp nhận vận hành.", "QA cần đối chiếu với mục tiêu tác vụ, không chỉ kiểm giao diện/API hoạt động."],
         },
         {
-          title: "Functional vs non-functional",
-          description: "Functional kiểm behavior nghiệp vụ; non-functional kiểm chất lượng như performance, usability, security, reliability.",
-          points: ["Task nhỏ vẫn có thể cần non-functional nếu ảnh hưởng tốc độ, bảo mật hoặc khả dụng.", "Ví dụ: không leak token, không timeout khi doc dài, UI không vỡ ở màn nhỏ."],
+          title: "Kiểm thử chức năng và phi chức năng",
+          description: "Kiểm thử chức năng kiểm hành vi nghiệp vụ; kiểm thử phi chức năng kiểm chất lượng như hiệu năng, tính dễ dùng, bảo mật, độ tin cậy.",
+          points: ["Tác vụ nhỏ vẫn có thể cần phi chức năng nếu ảnh hưởng tốc độ, bảo mật hoặc khả dụng.", "Ví dụ: không lộ token, không hết thời gian chờ khi tài liệu dài, giao diện không vỡ ở màn nhỏ."],
         },
         {
-          title: "Confirmation & regression",
-          description: "Confirmation xác nhận bug fix; regression xác nhận phần liên quan không bị ảnh hưởng.",
-          points: ["Bug fix cần case tái hiện lỗi gốc và case xác nhận fix.", "Regression nên chọn area gần logic thay đổi, không chạy tràn lan nếu không có risk."],
+          title: "Kiểm thử xác nhận và hồi quy",
+          description: "Kiểm thử xác nhận kiểm lại lỗi đã sửa; kiểm thử hồi quy xác nhận phần liên quan không bị ảnh hưởng.",
+          points: ["Sửa lỗi cần ca tái hiện lỗi gốc và ca xác nhận đã sửa.", "Hồi quy nên chọn vùng gần logic thay đổi, không chạy tràn lan nếu không có rủi ro."],
         },
       ],
     },
     reviews: {
-      nav: "Review & kiểm thử tĩnh",
-      title: "Static testing và review",
-      summary: "Static testing tìm lỗi trước khi chạy phần mềm, đặc biệt hiệu quả với requirement, API contract và test case.",
+      nav: "Rà soát & kiểm thử tĩnh",
+      title: "Kiểm thử tĩnh và rà soát",
+      summary: "Kiểm thử tĩnh tìm lỗi trước khi chạy phần mềm, đặc biệt hiệu quả với yêu cầu, hợp đồng API và ca kiểm thử.",
       cards: [
         {
-          title: "Review requirement / AC",
-          description: "Tìm mơ hồ, thiếu rule, mâu thuẫn, assumption ẩn và thiếu exception.",
-          points: ["Câu hỏi tốt: ai được làm, khi nào được làm, dữ liệu thiếu thì sao, lỗi downstream thì sao.", "AC tốt phải có expected result kiểm được."],
+          title: "Rà soát yêu cầu / tiêu chí chấp nhận",
+          description: "Tìm mơ hồ, thiếu quy tắc, mâu thuẫn, giả định ẩn và thiếu ngoại lệ.",
+          points: ["Câu hỏi tốt: ai được làm, khi nào được làm, dữ liệu thiếu thì sao, lỗi hệ thống phía sau thì sao.", "Tiêu chí chấp nhận tốt phải có kết quả mong đợi kiểm được."],
         },
         {
-          title: "Review test case",
+          title: "Rà soát ca kiểm thử",
           description: "Đảm bảo mỗi case có mục tiêu rõ, dữ liệu test đủ và expected result cụ thể.",
-          points: ["Không gom nhiều scenario rời rạc vào một case.", "Title phải nói rõ case cover vấn đề gì, không chỉ copy Jira link hoặc description."],
+          points: ["Không gom nhiều kịch bản rời rạc vào một ca.", "Tiêu đề phải nói rõ ca bao phủ vấn đề gì, không chỉ copy liên kết Jira hoặc mô tả."],
         },
         {
-          title: "Review API / event contract",
-          description: "Kiểm field required, optional, enum, nullability, backward compatibility và data ownership.",
-          points: ["Với event-driven flow, phải test payload tối thiểu, duplicate, retry và ordering.", "Log/audit cần đủ context để debug sau production."],
+          title: "Rà soát API / hợp đồng sự kiện",
+          description: "Kiểm trường bắt buộc, tùy chọn, enum, khả năng nhận null, tương thích ngược và quyền sở hữu dữ liệu.",
+          points: ["Với luồng theo sự kiện, phải kiểm payload tối thiểu, trùng lặp, thử lại và thứ tự xử lý.", "Nhật ký/kiểm toán cần đủ ngữ cảnh để gỡ lỗi sau production."],
         },
         {
-          title: "BDD / Example mapping",
-          description: "Dùng ví dụ cụ thể để làm rõ rule business trước khi code.",
-          points: ["Given/When/Then nên diễn tả behavior, không mô tả implementation.", "Example tốt phải có data cụ thể và expected outcome rõ ràng."],
+          title: "BDD / lập bản đồ ví dụ",
+          description: "Dùng ví dụ cụ thể để làm rõ quy tắc nghiệp vụ trước khi viết mã.",
+          points: ["Given/When/Then nên diễn tả hành vi, không mô tả cách triển khai.", "Ví dụ tốt phải có dữ liệu cụ thể và kết quả mong đợi rõ ràng."],
         },
       ],
     },
     defects: {
-      nav: "Bug & báo cáo",
-      title: "Defect reporting và thói quen QA tốt",
-      summary: "Bug report tốt giúp dev tái hiện nhanh, PM hiểu impact và team quyết định release rõ ràng.",
+      nav: "Lỗi & báo cáo",
+      title: "Báo cáo lỗi và thói quen QA tốt",
+      summary: "Báo cáo lỗi tốt giúp lập trình viên tái hiện nhanh, PM hiểu mức ảnh hưởng và team quyết định phát hành rõ ràng.",
       cards: [
         {
-          title: "Bug report tối thiểu",
-          description: "Một bug nên có title rõ, environment, version/build, precondition, steps, actual, expected, evidence và impact.",
-          points: ["Title nên nêu triệu chứng + điều kiện, không viết chung chung.", "Evidence nên gồm screenshot/video/log/API response nếu có."],
+          title: "Báo cáo lỗi tối thiểu",
+          description: "Một lỗi nên có tiêu đề rõ, môi trường, phiên bản/bản dựng, tiền điều kiện, bước thực hiện, thực tế, mong đợi, bằng chứng và mức ảnh hưởng.",
+          points: ["Tiêu đề nên nêu triệu chứng + điều kiện, không viết chung chung.", "Bằng chứng nên gồm ảnh chụp, video, nhật ký hoặc phản hồi API nếu có."],
         },
         {
-          title: "Severity và priority",
-          description: "Severity nói mức ảnh hưởng kỹ thuật/business; priority nói thứ tự cần xử lý.",
-          points: ["Crash payment production thường severity cao.", "Typo nhỏ ở màn ít dùng có thể severity thấp nhưng priority vẫn tăng nếu sắp demo."],
+          title: "Mức độ nghiêm trọng và mức ưu tiên",
+          description: "Mức độ nghiêm trọng nói mức ảnh hưởng kỹ thuật/nghiệp vụ; mức ưu tiên nói thứ tự cần xử lý.",
+          points: ["Lỗi sập luồng thanh toán production thường có mức độ nghiêm trọng cao.", "Lỗi chính tả nhỏ ở màn ít dùng có thể nghiêm trọng thấp nhưng ưu tiên vẫn tăng nếu sắp demo."],
         },
         {
-          title: "Reproducibility",
+          title: "Khả năng tái hiện",
           description: "QA cần chỉ rõ lỗi luôn xảy ra, thỉnh thoảng xảy ra hay chỉ xảy ra với data/state cụ thể.",
-          points: ["Ghi account, role, data ID, browser/device, time và feature flag nếu liên quan.", "Lỗi flaky cần log và pattern, không chỉ ghi không ổn định."],
+          points: ["Ghi tài khoản, vai trò, ID dữ liệu, trình duyệt/thiết bị, thời điểm và cờ tính năng nếu liên quan.", "Lỗi chập chờn cần nhật ký và mẫu xảy ra, không chỉ ghi không ổn định."],
         },
         {
-          title: "Regression memory",
-          description: "Bug quan trọng nên trở thành kiến thức regression cho các task sau.",
-          points: ["Gắn defect với test case hoặc checklist để không quên.", "Nếu bug do requirement mơ hồ, cập nhật guideline/test design để tránh lặp lại."],
+          title: "Ghi nhớ hồi quy",
+          description: "Lỗi quan trọng nên trở thành kiến thức hồi quy cho các tác vụ sau.",
+          points: ["Gắn lỗi với ca kiểm thử hoặc danh sách kiểm tra để không quên.", "Nếu lỗi do yêu cầu mơ hồ, cập nhật hướng dẫn/thiết kế kiểm thử để tránh lặp lại."],
         },
       ],
     },
@@ -923,9 +923,199 @@ const KNOWLEDGE_CONTENT: Record<LanguageMode, Record<StaticKnowledgeSection, Kno
 };
 
 const KNOWLEDGE_SOURCE_LINKS = [
-  { label: "ISTQB CTFL v4.0.1 Syllabus", url: "https://www.istqb.org/certifications/certified-tester-foundation-level" },
+  { label: "ISTQB CTFL v4.0.1 Syllabus", url: "https://www.istqb.org/wp-content/uploads/2024/11/ISTQB_CTFL_Syllabus_v4.0.1.pdf" },
   { label: "ISTQB Glossary", url: "https://glossary.istqb.org/" },
 ];
+
+const VI_KNOWLEDGE_DEEP_DIVE: Partial<Record<StaticKnowledgeSection, Record<string, string[]>>> = {
+  principles: {
+    "Kiểm thử cho thấy lỗi có thể tồn tại": [
+      "Theo ISTQB, kiểm thử giúp phát hiện lỗi và cung cấp thông tin về chất lượng, nhưng không phải bằng chứng tuyệt đối rằng hệ thống không còn lỗi.",
+      "Khi báo cáo kết quả, QA nên ghi rõ phạm vi đã kiểm, dữ liệu đã dùng, môi trường và rủi ro còn lại để tránh hiểu nhầm “đạt = không còn lỗi”.",
+      "Với tính năng có mức ảnh hưởng cao, luôn bổ sung luồng âm, quyền truy cập, hết thời gian chờ, thử lại, dữ liệu biên và hồi quy gần vùng thay đổi.",
+    ],
+    "Không thể kiểm thử vét cạn": [
+      "Kiểm thử vét cạn chỉ khả thi với bài toán cực nhỏ; sản phẩm thật thường có quá nhiều đầu vào, trạng thái, vai trò, trình duyệt, thiết bị và phụ thuộc.",
+      "QA cần chọn ca bằng kiểm thử dựa trên rủi ro: ưu tiên nơi có xác suất lỗi cao, mức ảnh hưởng lớn, nghiệp vụ trọng yếu hoặc được người dùng dùng thường xuyên.",
+      "Các kỹ thuật như phân vùng tương đương, phân tích giá trị biên, bảng quyết định và kiểm thử cặp giúp giảm số ca nhưng vẫn giữ độ bao phủ có ý nghĩa.",
+    ],
+    "Kiểm thử càng sớm càng tiết kiệm": [
+      "Lỗi yêu cầu hoặc tiêu chí chấp nhận nếu phát hiện ở giai đoạn làm rõ/rà soát thường rẻ hơn nhiều so với phát hiện sau khi dev đã code, deploy và tạo dữ liệu kiểm thử.",
+      "QA nên rà soát sớm các quy tắc như giá trị mặc định, xác thực dữ liệu, quyền, kiểm toán, dự phòng, hết thời gian chờ và hành vi khi hệ thống phía sau lỗi.",
+      "Một ca kiểm thử tốt có thể bắt đầu từ câu hỏi đúng: “Nếu trường này rỗng?”, “Nếu API hết thời gian chờ?”, “Nếu người dùng không đủ quyền?”, “Nếu dữ liệu bị trùng?”.",
+    ],
+    "Lỗi thường tập trung theo cụm": [
+      "Lỗi thường dồn vào mô-đun phức tạp, mã mới, điểm tích hợp nhiều phụ thuộc hoặc khu vực từng có lỗi trước đó.",
+      "Khi có lỗi mới, QA nên hỏi lỗi này thuộc cụm nào: phân tích cú pháp, ánh xạ dữ liệu, phân quyền, chuyển trạng thái, thử lại, cache hay xác thực giao diện.",
+      "Kiểm thử hồi quy nên đào sâu vùng liên quan đến cụm lỗi thay vì chạy lan man toàn hệ thống mà không dựa trên rủi ro.",
+    ],
+    "Ca kiểm thử cũ sẽ mất hiệu quả nếu không được làm mới": [
+      "Nghịch lý thuốc trừ sâu nhắc rằng một bộ ca lặp lại mãi sẽ quen với lỗi cũ và dễ bỏ sót lỗi mới sinh ra từ thay đổi mới.",
+      "Sau mỗi lỗi production hoặc lỗi nghiêm trọng, QA nên cập nhật ca/danh sách kiểm tra để biến lỗi đó thành kiến thức hồi quy.",
+      "Khi quy tắc nghiệp vụ đổi, cần rà soát lại tiêu đề, tiền điều kiện, dữ liệu kiểm thử và kết quả mong đợi; không chỉ copy bộ ca cũ sang sprint mới.",
+    ],
+    "Kiểm thử phụ thuộc ngữ cảnh": [
+      "Kiểm thử phụ thuộc ngữ cảnh nghĩa là chiến lược kiểm thử phụ thuộc miền nghiệp vụ, rủi ro, kiến trúc, hạn chót, người dùng, dữ liệu và hậu quả khi lỗi xảy ra.",
+      "Chatbot cần ngữ cảnh nhiều lượt và hợp đồng công cụ; thanh toán cần tính không đổi kết quả khi gọi lặp và bảo mật; giao diện quản trị cần vai trò/quyền; quy trình n8n cần thử lại và kiểm toán.",
+      "Một tác vụ nhỏ vẫn có thể cần độ bao phủ sâu nếu chạm xác thực, token, thanh toán, dữ liệu khách hàng, tác vụ production hoặc luồng nhiều hệ thống.",
+    ],
+    "Không có lỗi lập trình vẫn có thể sai nhu cầu": [
+      "Ngụy biện “không thấy lỗi” xảy ra khi phần mềm chạy đúng đặc tả nhưng đặc tả không giải quyết đúng nhu cầu nghiệp vụ/người dùng.",
+      "QA cần đối chiếu kết quả mong đợi với mục tiêu Jira, tiêu chí chấp nhận, hành vi người dùng và rủi ro vận hành, không chỉ xác nhận giao diện/API trả 200.",
+      "Nếu yêu cầu thiếu quy tắc quan trọng, nên ghi giả định/câu hỏi mở và yêu cầu xác nhận trước khi xác nhận hoàn tất.",
+    ],
+  },
+  process: {
+    "Lập kế hoạch kiểm thử": [
+      "Lập kế hoạch xác định mục tiêu kiểm thử, phạm vi trong/ngoài, rủi ro chính, môi trường, dữ liệu, công cụ, người phụ trách và tiêu chí dừng/hoàn thành.",
+      "Với tác vụ Jira, QA nên tách rõ phần phải kiểm, phần hồi quy gần liên quan và phần ngoài phạm vi để tránh bộ ca bị phình không kiểm soát.",
+      "Kết quả thực tế có thể là hướng kiểm thử ngắn, danh sách rủi ro, bộ ca kiểm thử ưu tiên hoặc mindmap thiết kế kiểm thử.",
+    ],
+    "Giám sát và điều khiển kiểm thử": [
+      "Giám sát là theo dõi trạng thái kiểm thử: ca đã chạy, lỗi còn mở, điểm nghẽn, môi trường, dữ liệu, độ bao phủ và rủi ro còn lại.",
+      "Điều khiển là điều chỉnh kế hoạch khi có thay đổi: bản dựng lỗi, yêu cầu đổi, phát hiện rủi ro mới hoặc hạn chót bị rút ngắn.",
+      "Báo cáo tốt không chỉ ghi số đạt/không đạt mà phải nói vùng nào chưa kiểm, lý do chưa kiểm và mức ảnh hưởng nếu phát hành.",
+    ],
+    "Phân tích kiểm thử": [
+      "Phân tích biến cơ sở kiểm thử như Jira, tiêu chí chấp nhận, thiết kế, hợp đồng API, nhật ký hoặc tài liệu thành các điều kiện kiểm thử có thể kiểm.",
+      "QA cần bóc tách quy tắc theo tác nhân, trạng thái, đầu vào, đầu ra, xác thực dữ liệu, ngoại lệ, quyền, kiểm toán và phụ thuộc.",
+      "Dấu hiệu cần hỏi lại: từ mơ hồ như “hợp lý”, “đầy đủ”, “nhanh”, “tự động”, thiếu kết quả mong đợi hoặc thiếu quy tắc khi lỗi xảy ra.",
+    ],
+    "Thiết kế kiểm thử": [
+      "Thiết kế chọn kỹ thuật phù hợp và biến điều kiện kiểm thử thành kịch bản, dữ liệu kiểm thử, bước thực hiện và kết quả mong đợi cụ thể.",
+      "Một ca tốt nên có tiêu đề nói rõ mục đích, tiền điều kiện đủ thiết lập, dữ liệu đủ tái hiện và kết quả mong đợi kiểm được bằng giao diện/API/nhật ký.",
+      "Nếu có nhiều quy tắc kết hợp, dùng bảng quyết định; nếu có trạng thái, dùng chuyển trạng thái; nếu có ngưỡng, dùng giá trị biên.",
+    ],
+    "Triển khai và thực thi kiểm thử": [
+      "Triển khai chuẩn bị bộ kiểm thử, dữ liệu, tài khoản, giả lập, môi trường, script tự động hoặc danh sách kiểm tra trước khi chạy.",
+      "Thực thi phải ghi kết quả thực tế, bằng chứng, liên kết lỗi và dữ liệu đã dùng để người khác tái hiện được.",
+      "Khi thực tế khác mong đợi, QA cần phân biệt lỗi sản phẩm, lỗi dữ liệu, lỗi môi trường, lỗi ca kiểm thử hay yêu cầu chưa rõ.",
+    ],
+    "Hoàn tất kiểm thử": [
+      "Hoàn tất kiểm thử tổng kết độ bao phủ, lỗi còn mở, rủi ro còn lại, bài học rút ra và tài sản kiểm thử cần giữ cho hồi quy.",
+      "Nên lưu lại ca hiệu quả, dữ liệu seed, mẫu lỗi, truy vấn/nhật ký hữu ích và ghi chú môi trường để sprint sau tái sử dụng.",
+      "Nếu không thể kiểm hết, báo cáo phải nêu rõ phần chưa kiểm và lý do: thiếu dữ liệu, thiếu quyền, phụ thuộc lỗi hoặc ngoài phạm vi.",
+    ],
+  },
+  techniques: {
+    "Phân vùng tương đương": [
+      "Chia dữ liệu thành nhóm mà hệ thống dự kiến xử lý giống nhau; kiểm một đại diện tốt cho mỗi nhóm thay vì kiểm tất cả giá trị.",
+      "Luôn tách phân vùng hợp lệ và không hợp lệ, ví dụ vai trò hợp lệ/vai trò không đủ quyền, trạng thái đơn đúng/sai, định dạng ngày đúng/sai.",
+      "Rủi ro thường gặp là chia phân vùng quá rộng làm mất lỗi; nếu quy tắc nghiệp vụ khác nhau thì phải tách thành phân vùng riêng.",
+    ],
+    "Phân tích giá trị biên": [
+      "Giá trị biên phù hợp khi quy tắc có ngưỡng: nhỏ nhất/lớn nhất, dưới/trên, trước/sau, số lượng, thời gian, trọng lượng, tiền hoặc độ dài chuỗi.",
+      "Tối thiểu nên kiểm ngay dưới biên, đúng biên và ngay trên biên; với biên kép thì kiểm cả biên dưới và biên trên.",
+      "Lỗi hay nằm ở toán tử >, >=, <, <=, múi giờ, làm tròn, đơn vị đo hoặc phân tích định dạng thời gian.",
+    ],
+    "Kiểm thử bảng quyết định": [
+      "Bảng quyết định giúp nhìn rõ tổ hợp điều kiện và kết quả, đặc biệt khi quy tắc có nhiều if/else hoặc nhiều chính sách chồng nhau.",
+      "Mỗi cột thường là một quy tắc/kịch bản; mỗi dòng là điều kiện hoặc hành động/kết quả mong đợi.",
+      "Sau khi lập bảng, QA nên loại tổ hợp bất khả thi nhưng giữ các tổ hợp rủi ro cao như xung đột quy tắc, thiếu dữ liệu và ghi đè.",
+    ],
+    "Kiểm thử chuyển trạng thái": [
+      "Dùng khi đối tượng có vòng đời trạng thái: đặt chỗ, thanh toán, vé, quy trình phê duyệt, hội thoại hoặc hàng đợi tác vụ.",
+      "Cần kiểm chuyển trạng thái hợp lệ, chuyển trạng thái bị chặn, thao tác lặp lại, hoàn tác, thử lại, hủy và tải lại sau khi đổi trạng thái.",
+      "Kết quả mong đợi nên kiểm cả trạng thái giao diện, trạng thái API/lưu DB, nhật ký/kiểm toán và tác động phụ như thông báo hoặc tác vụ phía sau.",
+    ],
+    "Kiểm thử ca sử dụng / kịch bản": [
+      "Mô phỏng cách người dùng đạt mục tiêu thật, thường đi qua nhiều màn hình, API, dịch vụ hoặc lượt chat.",
+      "Một kịch bản tốt có tác nhân, mục tiêu, tác nhân kích hoạt, tiền điều kiện, luồng chính, luồng thay thế và luồng ngoại lệ.",
+      "Không nên chỉ kiểm luồng thành công; cần thêm người dùng hủy giữa chừng, thiếu thông tin, đổi lựa chọn, tải lại hoặc quay lại bước trước.",
+    ],
+    "Kiểm thử hộp trắng": [
+      "Kiểm thử hộp trắng dựa trên hiểu biết cấu trúc mã nguồn để tìm nhánh chưa được kiểm, điều kiện chưa bao phủ hoặc đường dự phòng bị bỏ quên.",
+      "Rất hữu ích với bộ phân tích cú pháp, bộ ánh xạ, kiểm tra quyền, thử lại/dự phòng, cờ tính năng, migration hoặc bộ xử lý sự kiện.",
+      "Độ bao phủ mã nguồn cao không đảm bảo đúng nghiệp vụ, nên cần kết hợp với kiểm thử hộp đen và kiểm thử chấp nhận.",
+    ],
+    "Kiểm thử dựa trên kinh nghiệm": [
+      "Dựa trên kinh nghiệm miền nghiệp vụ, lịch sử lỗi, trực giác và mục tiêu kiểm thử thăm dò để tìm lỗi không viết rõ trong đặc tả.",
+      "Đoán lỗi nên thử giá trị null, rỗng, trùng lặp, dữ liệu cũ, quyền sai, mạng hết thời gian chờ, thao tác đồng thời và dữ liệu rất dài.",
+      "Kiểm thử thăm dò tốt cần giới hạn thời gian, mục tiêu rõ, ghi chú phát hiện, bằng chứng và ca theo dõi nếu tìm được lỗi/rủi ro mới.",
+    ],
+  },
+  levels: {
+    "Kiểm thử thành phần": [
+      "Mục tiêu là kiểm tra đơn vị nhỏ nhất có thể kiểm độc lập, thường do dev viết bằng kiểm thử đơn vị/thành phần.",
+      "Nên bao phủ quy tắc nội bộ, logic phân nhánh, xác thực dữ liệu, xử lý lỗi và hợp đồng của hàm/thành phần.",
+      "Giả lập/stub giúp cô lập phụ thuộc, nhưng QA vẫn cần nhớ giả lập có thể che mất lỗi tích hợp thật.",
+    ],
+    "Kiểm thử tích hợp": [
+      "Tập trung vào giao diện kết nối giữa các thành phần/dịch vụ: yêu cầu/phản hồi, schema, xác thực, ánh xạ, hết thời gian chờ và tác động phụ.",
+      "Với hệ thống nhiều công cụ như Jira/Confluence/Chatwoot/RAG/n8n, kiểm thử tích hợp phải kiểm payload thật và lỗi từ hệ thống phía sau.",
+      "Ca quan trọng: thiếu trường bắt buộc, sai enum, sự kiện trùng, thử lại nhiều lần, tính không đổi kết quả khi gọi lặp và tương thích ngược.",
+    ],
+    "Kiểm thử hệ thống": [
+      "Kiểm toàn hệ thống đã tích hợp từ góc nhìn người dùng cuối/nghiệp vụ, thường trên môi trường gần production hơn.",
+      "Nên bao phủ luồng đầu-cuối, dữ liệu lưu lại, quyền, thông báo, kiểm toán, báo cáo và hành vi sau tải lại/thử lại.",
+      "Kiểm thử khói ở cấp hệ thống giúp quyết định bản dựng có đủ ổn để kiểm sâu hơn hay phải trả lại dev ngay.",
+    ],
+    "Kiểm thử chấp nhận": [
+      "Kiểm thử chấp nhận xác nhận sản phẩm đáp ứng nhu cầu nghiệp vụ, tiêu chí chấp nhận và mức sẵn sàng để sử dụng/vận hành.",
+      "UAT tập trung người dùng/nghiệp vụ; kiểm thử chấp nhận vận hành có thể kiểm sao lưu, giám sát, quyền, runbook hoặc luồng hỗ trợ.",
+      "QA nên kiểm cả “đúng tính năng” và “đủ dùng cho mục tiêu tác vụ”, đặc biệt khi đặc tả thiếu kịch bản người dùng thật.",
+    ],
+    "Kiểm thử chức năng và phi chức năng": [
+      "Kiểm thử chức năng trả lời câu hỏi hệ thống làm đúng hành vi không; kiểm thử phi chức năng trả lời hệ thống làm tốt đến mức nào.",
+      "Phi chức năng gồm hiệu năng, tính dễ dùng, khả năng tiếp cận, độ tin cậy, tương thích, bảo mật, khả năng bảo trì và khả năng di chuyển.",
+      "Không phải tác vụ nào cũng kiểm sâu phi chức năng, nhưng nếu chạm token, dữ liệu nhạy cảm, tệp lớn hoặc nhiều thiết bị thì phải có tiêu chí bảo vệ.",
+    ],
+    "Kiểm thử xác nhận và hồi quy": [
+      "Kiểm thử xác nhận chạy lại ca tái hiện lỗi để xác nhận bản sửa thật sự xử lý lỗi gốc.",
+      "Kiểm thử hồi quy chọn vùng có khả năng bị ảnh hưởng bởi thay đổi mã/cấu hình/dữ liệu, không phải chạy lại mọi thứ một cách máy móc.",
+      "Bản sửa lỗi tốt nên có ít nhất: ca tái hiện lỗi, ca xác nhận sửa lỗi và ca hồi quy gần logic thay đổi.",
+    ],
+  },
+  reviews: {
+    "Rà soát yêu cầu / tiêu chí chấp nhận": [
+      "Rà soát tĩnh có thể tìm lỗi trước khi có bản dựng, đặc biệt là lỗi trong yêu cầu, tiêu chí chấp nhận, luồng, dữ liệu và hợp đồng API.",
+      "Danh sách rà soát nên hỏi: tác nhân là ai, quy tắc áp dụng khi nào, ngoại lệ là gì, lỗi hệ thống phía sau xử lý sao, nhật ký/kiểm toán cần gì.",
+      "Nếu yêu cầu dùng từ mơ hồ, QA nên yêu cầu ví dụ cụ thể hoặc kết quả mong đợi đo/quan sát được.",
+    ],
+    "Rà soát ca kiểm thử": [
+      "Rà soát ca kiểm thử để đảm bảo ca đúng phạm vi, không trùng lặp, không quá rộng và có kết quả mong đợi kiểm chứng được.",
+      "Tiêu đề nên nói rõ rủi ro/kịch bản, ví dụ “Thiếu token Confluence hiển thị lỗi xác thực” thay vì “Kiểm Confluence”.",
+      "Tiền điều kiện không nên chứa bước hành động; bước thực hiện không nên chứa nhiều mục tiêu; kết quả mong đợi không nên viết chung chung.",
+    ],
+    "Rà soát API / hợp đồng sự kiện": [
+      "Rà soát hợp đồng cần kiểm trường bắt buộc/tùy chọn, kiểu dữ liệu, enum, khả năng nhận null, giá trị mặc định, phiên bản, tương thích ngược và quyền sở hữu.",
+      "Luồng theo sự kiện cần thêm quy tắc về trùng lặp, thứ tự xử lý, thử lại, tính không đổi kết quả khi gọi lặp, hàng đợi lỗi, mã truy vết và metadata kiểm toán.",
+      "Nếu payload dùng để hệ thống phía sau ra quyết định, cần kiểm thiếu ngữ cảnh, ngữ cảnh sai, nguồn tham chiếu rỗng và dữ liệu quá dài.",
+    ],
+    "BDD / lập bản đồ ví dụ": [
+      "BDD giúp team thống nhất hành vi bằng ví dụ cụ thể trước khi triển khai, tránh mỗi người hiểu tiêu chí chấp nhận theo một cách.",
+      "Given/When/Then nên viết ở ngôn ngữ nghiệp vụ; tránh nhét chi tiết triển khai như tên hàm hoặc truy vấn DB.",
+      "Lập bản đồ ví dụ tốt thường phát hiện quy tắc thiếu, ngoại lệ chưa nói rõ và câu hỏi cần PO/BA xác nhận.",
+    ],
+  },
+  defects: {
+    "Báo cáo lỗi tối thiểu": [
+      "Báo cáo lỗi tốt phải giúp người khác tái hiện mà không cần hỏi lại quá nhiều: môi trường, bản dựng, tài khoản/vai trò, tiền điều kiện, dữ liệu, bước thực hiện.",
+      "Kết quả thực tế nên mô tả hệ thống thật sự làm gì; kết quả mong đợi nên gắn với tiêu chí chấp nhận/đặc tả/quy tắc nghiệp vụ cụ thể.",
+      "Bằng chứng nên đủ để gỡ lỗi: ảnh chụp/video, yêu cầu/phản hồi, nhật ký console/network, mã truy vết, thời điểm hoặc ID bản ghi nếu có.",
+    ],
+    "Mức độ nghiêm trọng và mức ưu tiên": [
+      "Mức độ nghiêm trọng đo mức ảnh hưởng khi lỗi xảy ra: chặn hoàn toàn, nghiêm trọng, lớn, nhỏ hoặc không đáng kể tùy quy ước team.",
+      "Mức ưu tiên đo mức cần xử lý sớm: có thể cao vì hạn chót/demo/khách hàng dù mức độ nghiêm trọng không quá cao.",
+      "QA nên nêu mức ảnh hưởng rõ để PM/dev phân loại: ảnh hưởng bao nhiêu người dùng, có cách xử lý tạm không, có mất tiền/dữ liệu/bảo mật không.",
+    ],
+    "Khả năng tái hiện": [
+      "Luôn ghi tần suất: 100%, thỉnh thoảng, chỉ với dữ liệu cụ thể, chỉ trên trình duyệt/thiết bị/môi trường cụ thể.",
+      "Nếu lỗi chập chờn, cần gom mẫu xảy ra: thời điểm, kích thước dữ liệu, mạng, thao tác đồng thời, vai trò tài khoản, nhật ký hoặc mã truy vết.",
+      "Nếu chưa tái hiện lại được, báo cáo nên ghi rõ đã thử những gì và còn thiếu thông tin nào.",
+    ],
+    "Ghi nhớ hồi quy": [
+      "Lỗi quan trọng nên được chuyển thành ca hồi quy hoặc danh sách kiểm tra để tránh tái diễn ở sprint sau.",
+      "Nên lưu mẫu lỗi theo mô-đun/nguyên nhân gốc: xác thực dữ liệu, quyền, cache, ánh xạ, thử lại, tranh chấp đồng thời, múi giờ.",
+      "Khi tạo ca kiểm thử cho tác vụ mới, QA có thể dùng lịch sử lỗi để bổ sung ca biên gần vùng thay đổi.",
+    ],
+  },
+};
+
+function knowledgeCardDetailPoints(language: LanguageMode, section: StaticKnowledgeSection, card: KnowledgeCard) {
+  const deepDive = language === "vi" ? VI_KNOWLEDGE_DEEP_DIVE[section]?.[card.title] || [] : [];
+  return [...card.points, ...deepDive];
+}
 
 function projectFromDefaults(payload: DefaultsResponse): ProjectConfig {
   return {
@@ -1432,6 +1622,7 @@ function App() {
   const [appView, setAppView] = useState<AppView>("run");
   const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSection>("project");
   const [activeKnowledgeSection, setActiveKnowledgeSection] = useState<KnowledgeSection>("principles");
+  const [expandedKnowledgeCards, setExpandedKnowledgeCards] = useState<string[]>([]);
   const [themeMode, setThemeMode] = useState<ThemeMode>(initialThemeMode);
   const [languageMode, setLanguageMode] = useState<LanguageMode>(initialLanguageMode);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -1590,6 +1781,10 @@ function App() {
       // Ignore storage failures; the selected language still applies for this session.
     }
   }, [languageMode]);
+
+  useEffect(() => {
+    setExpandedKnowledgeCards([]);
+  }, [activeKnowledgeSection, languageMode]);
 
   useEffect(() => {
     const authError = new URLSearchParams(window.location.search).get("auth_error");
@@ -2691,20 +2886,45 @@ function App() {
                       </div>
                       <p className="panel-help">{ui.knowledgeIntro}</p>
                       <div className="knowledge-card-list">
-                        {activeKnowledge.cards.map((card) => (
-                          <article className="knowledge-card" key={card.title}>
-                            <div>
-                              <h3>{card.title}</h3>
-                              <p>{card.description}</p>
-                            </div>
-                            <ul>
-                              {card.points.map((point) => (
-                                <li key={point}>{point}</li>
-                              ))}
-                            </ul>
-                            {card.example ? <div className="knowledge-example">{card.example}</div> : null}
-                          </article>
-                        ))}
+                        {activeKnowledge.cards.map((card) => {
+                          const cardKey = `${activeKnowledgeSection}:${card.title}`;
+                          const isExpanded = expandedKnowledgeCards.includes(cardKey);
+                          const detailPoints = knowledgeCardDetailPoints(languageMode, activeKnowledgeSection as StaticKnowledgeSection, card);
+                          return (
+                            <article className="knowledge-card knowledge-card-collapsible" key={card.title}>
+                              <div className="knowledge-card-head">
+                                <div>
+                                  <h3>{card.title}</h3>
+                                  <p>{card.description}</p>
+                                </div>
+                                <button
+                                  className="tiny"
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedKnowledgeCards((current) =>
+                                      current.includes(cardKey) ? current.filter((item) => item !== cardKey) : [...current, cardKey],
+                                    )
+                                  }
+                                  aria-expanded={isExpanded}
+                                  title={isExpanded ? ui.caseCollapse : ui.caseDetails}
+                                >
+                                  {isExpanded ? <ChevronDown size={14} /> : <FileText size={14} />}
+                                  {isExpanded ? ui.caseCollapse : ui.caseDetails}
+                                </button>
+                              </div>
+                              {isExpanded ? (
+                                <div className="knowledge-card-body">
+                                  <ul>
+                                    {detailPoints.map((point) => (
+                                      <li key={point}>{point}</li>
+                                    ))}
+                                  </ul>
+                                  {card.example ? <div className="knowledge-example">{card.example}</div> : null}
+                                </div>
+                              ) : null}
+                            </article>
+                          );
+                        })}
                       </div>
                     </>
                   ) : null}

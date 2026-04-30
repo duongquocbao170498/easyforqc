@@ -377,6 +377,33 @@ button:disabled {
   padding: 14px;
 }
 
+.knowledge-card-collapsible {
+  padding: 12px 14px;
+}
+
+.knowledge-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.knowledge-card-head > div {
+  min-width: 0;
+}
+
+.knowledge-card-head .tiny {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.knowledge-card-body {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
+  padding-top: 11px;
+}
+
 .knowledge-card h3 {
   color: var(--ink);
   font-size: 15px;
