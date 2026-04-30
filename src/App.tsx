@@ -654,8 +654,8 @@ const KNOWLEDGE_CONTENT: Record<LanguageMode, Record<StaticKnowledgeSection, Kno
           points: ["Theo dõi lịch sử lỗi để chọn vùng cần kiểm thử hồi quy sâu.", "Mô-đun hay lỗi cần thêm dữ liệu kiểm thử, nhật ký, giám sát và danh sách kiểm tra riêng."],
         },
         {
-          title: "Ca kiểm thử cũ sẽ mất hiệu quả nếu không được làm mới",
-          description: "Một bộ kiểm thử lặp lại mãi có thể không còn bắt được lỗi mới.",
+          title: "Nghịch lý thuốc trừ sâu",
+          description: "Một bộ kiểm thử lặp lại mãi sẽ giảm dần hiệu quả trong việc phát hiện lỗi mới.",
           points: ["Cập nhật ca kiểm thử theo lỗi mới, thay đổi quy tắc nghiệp vụ và hành vi người dùng thật.", "Thêm mục tiêu kiểm thử thăm dò sau các bản phát hành có thay đổi lớn."],
         },
         {
@@ -949,7 +949,7 @@ const VI_KNOWLEDGE_DEEP_DIVE: Partial<Record<StaticKnowledgeSection, Record<stri
       "Khi có lỗi mới, QA nên hỏi lỗi này thuộc cụm nào: phân tích cú pháp, ánh xạ dữ liệu, phân quyền, chuyển trạng thái, thử lại, cache hay xác thực giao diện.",
       "Kiểm thử hồi quy nên đào sâu vùng liên quan đến cụm lỗi thay vì chạy lan man toàn hệ thống mà không dựa trên rủi ro.",
     ],
-    "Ca kiểm thử cũ sẽ mất hiệu quả nếu không được làm mới": [
+    "Nghịch lý thuốc trừ sâu": [
       "Nghịch lý thuốc trừ sâu nhắc rằng một bộ ca lặp lại mãi sẽ quen với lỗi cũ và dễ bỏ sót lỗi mới sinh ra từ thay đổi mới.",
       "Sau mỗi lỗi production hoặc lỗi nghiêm trọng, QA nên cập nhật ca/danh sách kiểm tra để biến lỗi đó thành kiến thức hồi quy.",
       "Khi quy tắc nghiệp vụ đổi, cần rà soát lại tiêu đề, tiền điều kiện, dữ liệu kiểm thử và kết quả mong đợi; không chỉ copy bộ ca cũ sang sprint mới.",
