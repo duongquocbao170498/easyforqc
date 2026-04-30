@@ -141,6 +141,7 @@ const DEFAULTS = {
   runRoot: "/AI Chatbot",
   jsonOutputDir: path.join(ROOT_DIR, "qa", "jira"),
   outputDir: path.join(ROOT_DIR, "qa", "xmind-test-design"),
+  testCaseNumberTemplate: "TC_{0000}",
   repoContext: {
     enabled: process.env.QA_REPO_CONTEXT_ENABLED === "true",
     productRepoRoot: process.env.QA_PRODUCT_REPO_ROOT || (fsSync.existsSync(LOCAL_OMNIAGENT_ROOT) ? LOCAL_OMNIAGENT_ROOT : ""),
@@ -427,6 +428,7 @@ async function initializeDatabase() {
       confluence_credentials_encrypted TEXT NOT NULL DEFAULT '',
       ai_settings_encrypted TEXT NOT NULL DEFAULT '',
       repo_context_encrypted TEXT NOT NULL DEFAULT '',
+      knowledge_articles JSONB NOT NULL DEFAULT '[]'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
@@ -434,6 +436,7 @@ async function initializeDatabase() {
   await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS confluence_credentials_encrypted TEXT NOT NULL DEFAULT ''");
   await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_settings_encrypted TEXT NOT NULL DEFAULT ''");
   await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS repo_context_encrypted TEXT NOT NULL DEFAULT ''");
+  await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS knowledge_articles JSONB NOT NULL DEFAULT '[]'::jsonb");
 
   const adminEmail = normalizeEmail(APP_ADMIN_EMAIL);
   if (!adminEmail || !APP_ADMIN_PASSWORD) {
@@ -815,8 +818,16 @@ function publicAiSettings(settings = {}) {
   return {
     ...normalized,
     apiKey: "",
+    knowledge: {
+      ...normalized.knowledge,
+      apiKey: "",
+      saved: {
+        hasApiKey: Boolean(normalized.knowledge?.apiKey),
+      },
+    },
     saved: {
       hasApiKey: Boolean(normalized.apiKey),
+      hasKnowledgeApiKey: Boolean(normalized.knowledge?.apiKey),
     },
   };
 }
@@ -828,16 +839,17 @@ function publicUserSettings(settings = {}) {
     confluenceCredentials: settings.confluenceCredentials ? publicConfluenceCredentials(settings.confluenceCredentials) : null,
     aiSettings: settings.aiSettings ? publicAiSettings(settings.aiSettings) : null,
     repoContext: settings.repoContext || null,
+    knowledgeArticles: normalizeKnowledgeArticles(settings.knowledgeArticles),
   };
 }
 
 async function readUserSettings(email) {
   if (!db || !email) {
-    return { project: null, credentials: {}, confluenceCredentials: {}, aiSettings: {}, repoContext: null };
+    return { project: null, credentials: {}, confluenceCredentials: {}, aiSettings: {}, repoContext: null, knowledgeArticles: [] };
   }
   const result = await db.query(
     `
-      SELECT project_config, credentials_encrypted, confluence_credentials_encrypted, ai_settings_encrypted, repo_context_encrypted
+      SELECT project_config, credentials_encrypted, confluence_credentials_encrypted, ai_settings_encrypted, repo_context_encrypted, knowledge_articles
       FROM user_settings
       WHERE user_email = $1
     `,
@@ -850,6 +862,7 @@ async function readUserSettings(email) {
     confluenceCredentials: decryptSettingsJson(row?.confluence_credentials_encrypted),
     aiSettings: decryptSettingsJson(row?.ai_settings_encrypted),
     repoContext: decryptSettingsJson(row?.repo_context_encrypted),
+    knowledgeArticles: normalizeKnowledgeArticles(row?.knowledge_articles),
   };
 }
 
@@ -884,6 +897,10 @@ function mergeAiSettingsWithStored(incoming = {}, stored = {}) {
   return {
     ...current,
     apiKey: current.apiKey || saved.apiKey,
+    knowledge: {
+      ...current.knowledge,
+      apiKey: current.knowledge.apiKey || saved.knowledge.apiKey,
+    },
   };
 }
 
@@ -1075,6 +1092,86 @@ app.post("/api/user-settings", async (req, res) => {
       ],
     );
     res.json({ saved: true, ...publicUserSettings({ project, credentials, confluenceCredentials, aiSettings, repoContext }) });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post("/api/knowledge/generate", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const topic = asText(body.topic);
+    if (!topic) {
+      res.status(400).json({ error: "Cần nhập chủ đề kiến thức QA cần tạo." });
+      return;
+    }
+    const stored = await requestUserSettings(req);
+    const storedKnowledgeSettings = normalizeAiSettings(stored.aiSettings).knowledge;
+    const incomingKnowledgeSettings = normalizeKnowledgeAiSettings(body.aiSettings);
+    const knowledgeAiSettings = {
+      ...incomingKnowledgeSettings,
+      apiKey: incomingKnowledgeSettings.apiKey || storedKnowledgeSettings.apiKey,
+    };
+    if (!knowledgeAiSettings.enabled || !aiProviderReady(knowledgeAiSettings)) {
+      res.status(400).json({
+        error: "Cần bật Knowledge AI Settings và cấu hình đủ model/API key trước khi tạo bài viết kiến thức.",
+      });
+      return;
+    }
+    const messages = buildKnowledgeArticleMessages({
+      topic,
+      category: asText(body.category),
+      audience: asText(body.audience),
+      notes: asText(body.notes),
+      language: body.language === "en" ? "en" : "vi",
+      settings: knowledgeAiSettings,
+    });
+    const result = await callOpenAiCompatible(knowledgeAiSettings, messages);
+    const article = normalizeGeneratedKnowledgeArticle(result.payload, {
+      topic,
+      category: asText(body.category),
+      language: body.language === "en" ? "en" : "vi",
+    });
+    res.json({
+      article,
+      aiProvider: aiProviderResponseMeta(knowledgeAiSettings, true, "", result.usage),
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post("/api/knowledge/articles", async (req, res) => {
+  try {
+    if (!db) {
+      res.status(400).json({ error: "Database chưa bật nên chưa thể lưu kiến thức QA." });
+      return;
+    }
+    const email = normalizeEmail(req.session.email);
+    const stored = await readUserSettings(email);
+    const article = normalizeKnowledgeArticle({
+      ...req.body?.article,
+      id: req.body?.article?.id || crypto.randomUUID(),
+      updatedAt: new Date().toISOString(),
+      createdAt: req.body?.article?.createdAt || new Date().toISOString(),
+    });
+    if (!article.title || !article.content) {
+      res.status(400).json({ error: "Cần title và content trước khi lưu kiến thức QA." });
+      return;
+    }
+    const currentArticles = normalizeKnowledgeArticles(stored.knowledgeArticles);
+    const nextArticles = [article, ...currentArticles.filter((item) => item.id !== article.id)].slice(0, 200);
+    await db.query(
+      `
+        INSERT INTO user_settings (user_email, knowledge_articles)
+        VALUES ($1, $2::jsonb)
+        ON CONFLICT (user_email)
+        DO UPDATE SET knowledge_articles = EXCLUDED.knowledge_articles,
+                      updated_at = NOW()
+      `,
+      [email, JSON.stringify(nextArticles)],
+    );
+    res.json({ saved: true, article, knowledgeArticles: nextArticles });
   } catch (error) {
     sendError(res, error);
   }
@@ -2722,6 +2819,7 @@ function normalizeProject(raw = {}, fallback = {}) {
     runRoot: asText(raw.runRoot) || asText(fallback.runRoot) || DEFAULTS.runRoot,
     jsonOutputDir: asText(raw.jsonOutputDir) || asText(fallback.jsonOutputDir) || DEFAULTS.jsonOutputDir,
     outputDir: asText(raw.outputDir) || asText(fallback.outputDir) || DEFAULTS.outputDir,
+    testCaseNumberTemplate: asText(raw.testCaseNumberTemplate) || asText(fallback.testCaseNumberTemplate) || DEFAULTS.testCaseNumberTemplate,
     labelMode: asText(raw.labelMode) || "custom",
     testcaseLabels: asText(raw.testcaseLabels) || DEFAULTS.labelPolicy.testcaseLabels,
     testdesignLabels: asText(raw.testdesignLabels) || DEFAULTS.labelPolicy.testdesignLabels,
@@ -2875,6 +2973,19 @@ function normalizeConfluenceCredentials(raw = {}) {
   };
 }
 
+function normalizeKnowledgeAiSettings(raw = {}) {
+  const baseUrl = asText(raw.baseUrl || raw.apiBaseUrl);
+  return {
+    enabled: raw.enabled === true || asText(raw.enabled).toLowerCase() === "true",
+    provider: asText(raw.provider) || "openai-compatible",
+    baseUrl: baseUrl || "https://api.openai.com/v1",
+    model: asText(raw.model),
+    apiKey: asText(raw.apiKey || raw.token),
+    writingStyle: asText(raw.writingStyle),
+    articleGuidelines: asText(raw.articleGuidelines || raw.knowledgeGuidelines || raw.guidelines),
+  };
+}
+
 function normalizeAiSettings(raw = {}) {
   const baseUrl = asText(raw.baseUrl || raw.apiBaseUrl);
   return {
@@ -2887,7 +2998,33 @@ function normalizeAiSettings(raw = {}) {
     testCaseGuidelines: asText(raw.testCaseGuidelines),
     testDesignGuidelines: asText(raw.testDesignGuidelines),
     improvementNotes: asText(raw.improvementNotes),
+    knowledge: normalizeKnowledgeAiSettings(raw.knowledge || raw.knowledgeAiSettings),
   };
+}
+
+function normalizeKnowledgeArticle(raw = {}) {
+  const id = asText(raw.id) || crypto.randomUUID();
+  const title = asText(raw.title);
+  const content = asText(raw.content || raw.content_markdown || raw.markdown);
+  return {
+    id,
+    title: title || "Untitled QA knowledge",
+    summary: asText(raw.summary || raw.description),
+    category: asText(raw.category),
+    content,
+    tags: Array.isArray(raw.tags) ? raw.tags.map(asText).filter(Boolean).slice(0, 12) : [],
+    createdAt: asText(raw.createdAt || raw.created_at) || new Date().toISOString(),
+    updatedAt: asText(raw.updatedAt || raw.updated_at) || new Date().toISOString(),
+    source: asText(raw.source) || "ai",
+  };
+}
+
+function normalizeKnowledgeArticles(raw = []) {
+  const items = Array.isArray(raw) ? raw : [];
+  return items
+    .map(normalizeKnowledgeArticle)
+    .filter((item) => item.title || item.content)
+    .slice(0, 200);
 }
 
 function normalizeRepoContext(raw = {}) {
@@ -2933,6 +3070,76 @@ function aiGuidanceText(aiCustomization) {
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function buildKnowledgeArticleMessages({ topic, category, audience, notes, language, settings }) {
+  const outputLanguage = language === "en" ? "English" : "Vietnamese with full diacritics";
+  const system = [
+    "You are a senior QA/QC knowledge editor.",
+    "Create practical tester knowledge articles grounded in widely accepted testing standards.",
+    "Use ISTQB CTFL v4.0.1 and ISTQB Glossary concepts as the baseline when relevant.",
+    "Do not invent hard facts, numbers, or definitions when unsure; mark them as needing confirmation.",
+    "Write for working QC/QA testers who need actionable guidance for test case design, review, risk analysis, and bug reporting.",
+    "Return only one valid JSON object.",
+  ].join("\n");
+  const user = [
+    `Output language: ${outputLanguage}`,
+    `Topic: ${topic}`,
+    category ? `Knowledge category: ${category}` : "",
+    audience ? `Audience/context: ${audience}` : "",
+    notes ? `User notes/scope:\n${truncateForPrompt(notes, 8000)}` : "",
+    settings?.writingStyle ? `Writing style:\n${truncateForPrompt(settings.writingStyle, 3000)}` : "",
+    settings?.articleGuidelines ? `Knowledge article guidelines:\n${truncateForPrompt(settings.articleGuidelines, 6000)}` : "",
+    "",
+    "Required JSON schema:",
+    JSON.stringify(
+      {
+        title: "Short article title",
+        summary: "1-2 sentence summary",
+        category: category || "QA knowledge category",
+        content: "Markdown content with ## headings, bullet points, and concrete QA examples",
+        tags: ["qa", "testing-technique"],
+      },
+      null,
+      2,
+    ),
+    "",
+    "Content requirements:",
+    "- Make each rule/check actionable and testable.",
+    "- Include examples when they help QA apply the concept.",
+    "- Avoid generic filler and marketing language.",
+    "- Keep terminology such as API, UI, Jira, Zephyr, BDD, AC, bug, regression, smoke test unchanged when appropriate.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ];
+}
+
+function normalizeGeneratedKnowledgeArticle(payload = {}, fallback = {}) {
+  const title = asText(payload.title) || fallback.topic || "QA knowledge article";
+  const content = asText(payload.content || payload.content_markdown || payload.markdown);
+  const summary = asText(payload.summary || payload.description);
+  const tags = Array.isArray(payload.tags) ? payload.tags.map(asText).filter(Boolean) : [];
+  return normalizeKnowledgeArticle({
+    id: crypto.randomUUID(),
+    title,
+    summary,
+    category: asText(payload.category) || fallback.category,
+    content:
+      content ||
+      [
+        `## ${title}`,
+        "",
+        summary || (fallback.language === "en" ? "Generated QA knowledge draft." : "Bản nháp kiến thức QA được tạo bằng AI."),
+      ].join("\n"),
+    tags,
+    source: "ai",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
 }
 
 function aiProviderReady(settings = {}) {
@@ -4385,7 +4592,7 @@ function buildOutline(issue, archetypeKey, cases = [], sourceInput = {}, aiCusto
   const axes = Array.isArray(qaPlan?.coverage_axes) ? qaPlan.coverage_axes : [];
   const caseTitles = Array.isArray(cases)
     ? cases
-        .map((testCase) => asText(testCase.title).replace(/^\[TC[_-]\d{4}\]\s*/, ""))
+        .map((testCase) => stripTestCasePrefix(testCase.title))
         .filter(Boolean)
         .slice(0, 8)
     : [];
@@ -4684,7 +4891,7 @@ function removeNonTestPreconditionNoise(value) {
   return lines.join("\n");
 }
 
-function polishDraftCases(cases = [], issue, qaPlan = null) {
+function polishDraftCases(cases = [], issue, qaPlan = null, project = {}) {
   const seen = new Map();
   return cases.map((testCase, index) => {
     const axis = qaPlan?.coverage_axes?.[index % Math.max(qaPlan.coverage_axes.length, 1)];
@@ -4701,7 +4908,7 @@ function polishDraftCases(cases = [], issue, qaPlan = null) {
     const expectedResult = ensureExpectedBullets(testCase.expected_result) || expectation("Kết quả thực tế khớp Jira description/AC.");
     return {
       ...testCase,
-      title: `[TC_${String(index + 1).padStart(4, "0")}] ${finalTitle}`,
+      title: `${testCaseTitlePrefix(project.testCaseNumberTemplate, index + 1)} ${finalTitle}`,
       objective: asText(testCase.objective) || `Xác nhận scenario: ${finalTitle}`,
       technique: asText(testCase.technique) || axis?.technique || qaPlan?.selected_techniques?.primary?.[0] || "Use-case / scenario flow",
       risk: asText(testCase.risk) || axis?.risk || "Thiếu coverage cho scenario này có thể làm task pass thiếu.",
@@ -4918,7 +5125,31 @@ function safeFileStem(value) {
 }
 
 function stripTestCasePrefix(title) {
-  return asText(title).replace(/^\[TC[_-]\d{4}\]\s*/, "");
+  return asText(title).replace(/^\[[^\]]{1,64}\]\s*/, "");
+}
+
+function normalizeTestCaseNumberTemplate(value) {
+  return asText(value).trim().replace(/^\[/, "").replace(/\]$/, "").trim() || DEFAULTS.testCaseNumberTemplate;
+}
+
+function renderTestCaseNumber(template, index) {
+  const safeIndex = Math.max(1, Math.floor(Number(index) || 1));
+  const normalized = normalizeTestCaseNumberTemplate(template);
+  const padded = (width) => String(safeIndex).padStart(Math.max(Number(width) || 1, 1), "0");
+  if (/\{0+\}/.test(normalized)) {
+    return normalized.replace(/\{0+\}/g, (match) => padded(match.length - 2));
+  }
+  if (/\{n\}/i.test(normalized)) {
+    return normalized.replace(/\{n\}/gi, String(safeIndex));
+  }
+  if (/\d+/.test(normalized)) {
+    return normalized.replace(/\d+(?!.*\d)/, (digits) => padded(digits.length));
+  }
+  return `${normalized}_${padded(4)}`;
+}
+
+function testCaseTitlePrefix(template, index) {
+  return `[${renderTestCaseNumber(template, index)}]`;
 }
 
 function savedTestCasesPayload(issue, outline, cases, archetypeKey) {
@@ -5103,7 +5334,7 @@ app.post("/api/draft", async (req, res) => {
       aiCustomization,
       project,
     });
-    let testCases = polishDraftCases(buildCases(issue, archetypeKey, sourceContext, aiCustomization, qaPlan), issue, qaPlan);
+    let testCases = polishDraftCases(buildCases(issue, archetypeKey, sourceContext, aiCustomization, qaPlan), issue, qaPlan, project);
     let outline = attachQaPlanToOutline(buildOutline(issue, archetypeKey, testCases, sourceContext, aiCustomization, qaPlan), qaPlan);
     let aiGenerationUsed = false;
     let aiGenerationError = "";
@@ -5127,7 +5358,7 @@ app.post("/api/draft", async (req, res) => {
           project,
           qaPlan,
         });
-        testCases = polishDraftCases(aiDraft.testCases, issue, qaPlan);
+        testCases = polishDraftCases(aiDraft.testCases, issue, qaPlan, project);
         outline = attachQaPlanToOutline(aiDraft.outline, qaPlan);
         aiGenerationUsed = true;
         aiUsage = aiDraft.usage;

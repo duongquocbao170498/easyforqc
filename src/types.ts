@@ -6,6 +6,7 @@ export type ProjectConfig = {
   runRoot: string;
   jsonOutputDir: string;
   outputDir: string;
+  testCaseNumberTemplate: string;
   labelMode: string;
   testcaseLabels: string;
   testdesignLabels: string;
@@ -44,8 +45,21 @@ export type AiSettings = {
   testCaseGuidelines: string;
   testDesignGuidelines: string;
   improvementNotes: string;
+  knowledge?: {
+    enabled: boolean;
+    provider: string;
+    baseUrl: string;
+    model: string;
+    apiKey: string;
+    writingStyle: string;
+    articleGuidelines: string;
+    saved?: {
+      hasApiKey?: boolean;
+    };
+  };
   saved?: {
     hasApiKey?: boolean;
+    hasKnowledgeApiKey?: boolean;
   };
 };
 
@@ -155,6 +169,7 @@ export type DefaultsResponse = {
     runRoot: string;
     jsonOutputDir: string;
     outputDir: string;
+    testCaseNumberTemplate: string;
     labelPolicy: {
       mode: string;
       testcaseLabels: string;
