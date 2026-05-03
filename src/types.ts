@@ -15,6 +15,7 @@ export type ProjectConfig = {
 };
 
 export type Credentials = {
+  enabled: boolean;
   user: string;
   password: string;
   token: string;
@@ -25,10 +26,27 @@ export type Credentials = {
 };
 
 export type ConfluenceCredentials = {
+  enabled: boolean;
   baseUrl: string;
   user: string;
   password: string;
   token: string;
+  saved?: {
+    hasPassword?: boolean;
+    hasToken?: boolean;
+  };
+};
+
+export type AuthEntry = {
+  id: string;
+  name: string;
+  baseUrl: string;
+  authType: "basic" | "bearer" | "apiKey";
+  user: string;
+  password: string;
+  token: string;
+  enabled: boolean;
+  notes: string;
   saved?: {
     hasPassword?: boolean;
     hasToken?: boolean;
@@ -61,6 +79,23 @@ export type AiSettings = {
     hasApiKey?: boolean;
     hasKnowledgeApiKey?: boolean;
   };
+};
+
+export type AiSettingsHistoryChange = {
+  field: string;
+  label: string;
+  before: string;
+  after: string;
+  secret?: boolean;
+};
+
+export type AiSettingsHistoryEntry = {
+  id: string;
+  createdAt: string;
+  section: "ai" | "knowledgeAi";
+  source: string;
+  summary: string;
+  changes: AiSettingsHistoryChange[];
 };
 
 export type RepoContextSettings = {

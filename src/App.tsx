@@ -38,7 +38,9 @@ import type { ReactNode } from "react";
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import type {
   AiSettings,
+  AiSettingsHistoryEntry,
   ArchetypeInfo,
+  AuthEntry,
   ConfluenceCredentials,
   Credentials,
   DefaultsResponse,
@@ -52,8 +54,8 @@ import type {
 } from "./types";
 
 type TabKey = "cases" | "design" | "run";
-type BusyKey = "issue" | "docs" | "draft" | "save" | "xmind" | "attach" | "suite" | "cycle" | "";
-type SettingsSection = "project" | "credentials" | "confluence" | "ai" | "knowledgeAi";
+type BusyKey = "issue" | "docs" | "draft" | "improve" | "promptImprove" | "save" | "xmind" | "attach" | "suite" | "cycle" | "";
+type SettingsSection = "project" | "auth" | "ai" | "knowledgeAi";
 type KnowledgeSection = "principles" | "process" | "techniques" | "levels" | "reviews" | "defects" | "aiWriter";
 type StaticKnowledgeSection = Exclude<KnowledgeSection, "aiWriter">;
 type AppView = "run" | "settings" | "knowledge";
@@ -91,6 +93,12 @@ type DraftResponse = {
   outline: TestDesignOutline;
   aiGenerationUsed?: boolean;
   aiGenerationError?: string;
+  aiProvider?: AiProviderInfo;
+};
+type PromptImproveResponse = {
+  improvedPrompt: string;
+  targetField?: string;
+  summary?: string;
   aiProvider?: AiProviderInfo;
 };
 type ConfluenceDocument = { title: string; url: string; text: string; error?: string };
@@ -146,17 +154,48 @@ const emptyProject: ProjectConfig = {
 };
 
 const emptyCredentials: Credentials = {
+  enabled: true,
   user: "",
   password: "",
   token: "",
 };
 
 const emptyConfluenceCredentials: ConfluenceCredentials = {
+  enabled: true,
   baseUrl: "",
   user: "",
   password: "",
   token: "",
 };
+
+function createEmptyAuthEntry(): AuthEntry {
+  return {
+    id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `auth-${Date.now()}`,
+    name: "",
+    baseUrl: "",
+    authType: "bearer",
+    user: "",
+    password: "",
+    token: "",
+    enabled: false,
+    notes: "",
+  };
+}
+
+function safeAuthEntry(entry: Partial<AuthEntry> = {}): AuthEntry {
+  const empty = createEmptyAuthEntry();
+  return {
+    ...empty,
+    ...entry,
+    id: entry.id || empty.id,
+    password: "",
+    token: "",
+    saved: entry.saved || {
+      hasPassword: false,
+      hasToken: false,
+    },
+  };
+}
 
 const emptyAiSettings: AiSettings = {
   enabled: false,
@@ -283,6 +322,7 @@ const UI_TEXT = {
     logout: "Đăng xuất",
     settingsEyebrow: "Cấu hình workspace",
     project: "Dự án",
+    authentication: "Xác thực",
     jiraAuth: "Xác thực Jira",
     confluence: "Confluence",
     aiSettings: "Cài đặt AI",
@@ -307,6 +347,24 @@ const UI_TEXT = {
     save: "Lưu",
     user: "User",
     confluenceAuth: "Xác thực Confluence",
+    authenticationPanelHelp: "Lưu các thông tin đăng nhập dùng để đọc Jira, Confluence và các hệ thống tài liệu khác. Secret đã lưu chỉ nằm ở server và không trả lại browser.",
+    coreAuth: "Xác thực chính",
+    customAuth: "Xác thực mở rộng",
+    customAuthHelp: "Tạo thêm cấu hình auth cho website/tool khác. Sau khi có auth, bật mục cần dùng để đánh dấu connector đó là cấu hình đang active.",
+    addAuth: "Tạo auth",
+    authName: "Tên auth",
+    authNamePlaceholder: "Ví dụ: Notion, Linear, GitLab Wiki...",
+    authBaseUrl: "Website / Base URL",
+    authBaseUrlPlaceholder: "https://example.company.com",
+    authType: "Kiểu auth",
+    authTypeBasic: "Basic user/password",
+    authTypeBearer: "Bearer token",
+    authTypeApiKey: "API key",
+    authEnabled: "Sử dụng auth này",
+    authNotes: "Ghi chú sử dụng",
+    authNotesPlaceholder: "Tool này dùng cho team nào, đọc tài liệu nào, lưu ý quyền truy cập...",
+    deleteAuth: "Xóa auth",
+    noCustomAuth: "Chưa có auth mở rộng. Nhấn Tạo auth để thêm cấu hình cho website khác.",
     jiraSecretNote: "Jira secret đã lưu chỉ dùng ở server; browser không đọc lại token/password đã lưu.",
     confluenceSecretNote: "Confluence secret đã lưu chỉ dùng ở server; browser không đọc lại token/password đã lưu.",
     confluenceAuthNote: "Chỉ lưu thông tin đăng nhập. Base URL nhập riêng theo từng task ở mục Jira task.",
@@ -333,6 +391,27 @@ const UI_TEXT = {
     runTitleEmpty: "Nhập Jira task để bắt đầu",
     autoArchetype: "Tự chọn archetype",
     generateDraft: "Tạo draft",
+    improveDraftTitle: "Tinh chỉnh draft bằng AI",
+    improveDraftHelp: "Nhập feedback cho draft hiện tại. AI sẽ viết lại hoặc bổ sung test case/test design dựa trên Jira/doc/context đang có.",
+    improveDraftInput: "Yêu cầu tinh chỉnh",
+    improveDraftPlaceholder: "Ví dụ: Bổ sung negative case cho thiếu auth Confluence, title viết rõ risk hơn, bỏ case trùng...",
+    improveDraftButton: "Tinh chỉnh draft",
+    improvePromptButton: "Improve prompt bằng AI",
+    improvePromptRequiresInput: "Cần nhập Yêu cầu tinh chỉnh trước khi Improve prompt.",
+    improvePromptDonePrefix: "Đã cải thiện prompt từ yêu cầu tinh chỉnh",
+    improvePromptSavedToAiSettings: "Đã thêm vào Ghi nhớ cải tiến. Vào Cài đặt AI để review và bấm Lưu trước khi dùng cho lần sau.",
+    improveRequiresDraft: "Cần tạo draft trước khi tinh chỉnh bằng AI.",
+    improveRequiresAi: "Cần bật AI Settings và có API key/model để dùng Improve draft.",
+    improveDonePrefix: "Đã chỉnh sửa theo yêu cầu tinh chỉnh",
+    aiSettingsPendingImprove: "AI vừa cập nhật Ghi nhớ cải tiến. Review nội dung rồi bấm Lưu để áp dụng cho các task sau.",
+    aiImprovedBadge: "AI cải thiện",
+    aiSettingsUnsavedGuard: "Prompt mới chỉ áp dụng sau khi bấm Lưu trong Cài đặt AI.",
+    aiSettingsHistory: "Lịch sử chỉnh sửa",
+    noAiSettingsHistory: "Chưa có lịch sử chỉnh sửa Cài đặt AI.",
+    historyBefore: "Trước",
+    historyAfter: "Sau",
+    historyManualSave: "Lưu thủ công",
+    historyAiPromptImprove: "AI improve prompt",
     taskContext: "Ngữ cảnh task",
     issueKey: "Issue key",
     status: "Trạng thái",
@@ -480,6 +559,7 @@ const UI_TEXT = {
     logout: "Logout",
     settingsEyebrow: "Workspace configuration",
     project: "Project",
+    authentication: "Authentication",
     jiraAuth: "Jira auth",
     confluence: "Confluence",
     aiSettings: "AI Settings",
@@ -504,6 +584,24 @@ const UI_TEXT = {
     save: "Save",
     user: "User",
     confluenceAuth: "Confluence auth",
+    authenticationPanelHelp: "Save credentials used to read Jira, Confluence, and other documentation systems. Saved secrets stay server-side and are never returned to the browser.",
+    coreAuth: "Core auth",
+    customAuth: "Custom auth",
+    customAuthHelp: "Create additional auth configs for other websites/tools. After an auth exists, enable the connectors that should be active.",
+    addAuth: "Add auth",
+    authName: "Auth name",
+    authNamePlaceholder: "Example: Notion, Linear, GitLab Wiki...",
+    authBaseUrl: "Website / Base URL",
+    authBaseUrlPlaceholder: "https://example.company.com",
+    authType: "Auth type",
+    authTypeBasic: "Basic user/password",
+    authTypeBearer: "Bearer token",
+    authTypeApiKey: "API key",
+    authEnabled: "Use this auth",
+    authNotes: "Usage notes",
+    authNotesPlaceholder: "Which team/tool/docs this auth is for, access notes...",
+    deleteAuth: "Delete auth",
+    noCustomAuth: "No custom auth yet. Click Create auth to add credentials for another website.",
     jiraSecretNote: "Saved Jira secrets are used only on the server; the browser cannot read saved tokens/passwords.",
     confluenceSecretNote: "Saved Confluence secrets are used only on the server; the browser cannot read saved tokens/passwords.",
     confluenceAuthNote: "Only credentials are saved here. Enter the task-specific Base URL in the Jira task section.",
@@ -530,6 +628,27 @@ const UI_TEXT = {
     runTitleEmpty: "Enter a Jira task to start",
     autoArchetype: "Auto archetype",
     generateDraft: "Generate draft",
+    improveDraftTitle: "Improve draft with AI",
+    improveDraftHelp: "Enter feedback for the current draft. AI rewrites or adds test cases/test design from the current Jira/docs/context.",
+    improveDraftInput: "Improve request",
+    improveDraftPlaceholder: "Example: Add negative cases for missing Confluence auth, make titles risk-specific, remove duplicates...",
+    improveDraftButton: "Improve draft",
+    improvePromptButton: "Improve prompt with AI",
+    improvePromptRequiresInput: "Enter an improve request before improving the prompt.",
+    improvePromptDonePrefix: "Improved prompt from refine request",
+    improvePromptSavedToAiSettings: "Added to Improve skill notes. Open AI Settings to review and Save before using it next time.",
+    improveRequiresDraft: "Generate a draft before improving it with AI.",
+    improveRequiresAi: "Enable AI Settings with API key/model before using Improve draft.",
+    improveDonePrefix: "Improved draft using request",
+    aiSettingsPendingImprove: "AI updated Improve skill notes. Review the content and Save to apply it to future tasks.",
+    aiImprovedBadge: "AI improved",
+    aiSettingsUnsavedGuard: "The new prompt applies only after saving AI Settings.",
+    aiSettingsHistory: "Revision history",
+    noAiSettingsHistory: "No AI Settings revision history yet.",
+    historyBefore: "Before",
+    historyAfter: "After",
+    historyManualSave: "Manual save",
+    historyAiPromptImprove: "AI prompt improve",
     taskContext: "Task context",
     issueKey: "Issue key",
     status: "Status",
@@ -610,6 +729,19 @@ const UI_TEXT = {
 } as const;
 
 type UiText = Record<keyof (typeof UI_TEXT)["vi"], string>;
+
+function formatHistoryDate(value: string, language: LanguageMode) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(language === "en" ? "en-US" : "vi-VN", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function aiHistorySourceLabel(source: string, ui: UiText) {
+  return source === "ai_prompt_improve" ? ui.historyAiPromptImprove : ui.historyManualSave;
+}
 
 type KnowledgeCard = {
   title: string;
@@ -1135,6 +1267,115 @@ function projectFromDefaults(payload: DefaultsResponse): ProjectConfig {
   };
 }
 
+function projectSettingsSnapshot(project: ProjectConfig) {
+  return JSON.stringify({
+    sourceRoot: project.sourceRoot,
+    jiraBaseUrl: project.jiraBaseUrl,
+    projectKey: project.projectKey,
+    folderRoot: project.folderRoot,
+    runRoot: project.runRoot,
+    jsonOutputDir: project.jsonOutputDir,
+    outputDir: project.outputDir,
+    testCaseNumberTemplate: project.testCaseNumberTemplate,
+    labelMode: project.labelMode,
+    testcaseLabels: project.testcaseLabels,
+    testdesignLabels: project.testdesignLabels,
+    testcaseStatusLabels: project.testcaseStatusLabels,
+    testdesignStatusLabels: project.testdesignStatusLabels,
+  });
+}
+
+function authSettingsSnapshot(credentials: Credentials, confluenceCredentials: ConfluenceCredentials, authEntries: AuthEntry[]) {
+  return JSON.stringify({
+    jira: {
+      enabled: credentials.enabled,
+      user: credentials.user,
+      password: credentials.password,
+      token: credentials.token,
+    },
+    confluence: {
+      enabled: confluenceCredentials.enabled,
+      user: confluenceCredentials.user,
+      password: confluenceCredentials.password,
+      token: confluenceCredentials.token,
+    },
+    custom: authEntries.map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      baseUrl: entry.baseUrl,
+      authType: entry.authType,
+      user: entry.user,
+      password: entry.password,
+      token: entry.token,
+      enabled: entry.enabled,
+      notes: entry.notes,
+    })),
+  });
+}
+
+function aiCoreSettingsSnapshot(aiSettings: AiSettings) {
+  return JSON.stringify({
+    enabled: aiSettings.enabled,
+    provider: aiSettings.provider,
+    baseUrl: aiSettings.baseUrl,
+    model: aiSettings.model,
+    apiKey: aiSettings.apiKey,
+    writingStyle: aiSettings.writingStyle,
+    testCaseGuidelines: aiSettings.testCaseGuidelines,
+    testDesignGuidelines: aiSettings.testDesignGuidelines,
+    improvementNotes: aiSettings.improvementNotes,
+  });
+}
+
+function knowledgeAiSettingsSnapshot(aiSettings: AiSettings) {
+  const knowledge = aiSettings.knowledge || emptyAiSettings.knowledge!;
+  return JSON.stringify({
+    enabled: knowledge.enabled,
+    provider: knowledge.provider,
+    baseUrl: knowledge.baseUrl,
+    model: knowledge.model,
+    apiKey: knowledge.apiKey,
+    writingStyle: knowledge.writingStyle,
+    articleGuidelines: knowledge.articleGuidelines,
+  });
+}
+
+function settingsSnapshots(
+  project: ProjectConfig,
+  credentials: Credentials,
+  confluenceCredentials: ConfluenceCredentials,
+  authEntries: AuthEntry[],
+  aiSettings: AiSettings,
+): Record<SettingsSection, string> {
+  return {
+    project: projectSettingsSnapshot(project),
+    auth: authSettingsSnapshot(credentials, confluenceCredentials, authEntries),
+    ai: aiCoreSettingsSnapshot(aiSettings),
+    knowledgeAi: knowledgeAiSettingsSnapshot(aiSettings),
+  };
+}
+
+function knowledgeArticleSnapshot(article: KnowledgeArticle | null) {
+  if (!article) return "";
+  return JSON.stringify({
+    id: article.id,
+    title: article.title,
+    summary: article.summary,
+    category: article.category,
+    content: article.content,
+    tags: article.tags || [],
+    source: article.source,
+  });
+}
+
+const initialSavedSettingsSnapshot = settingsSnapshots(
+  emptyProject,
+  emptyCredentials,
+  emptyConfluenceCredentials,
+  [],
+  emptyAiSettings,
+);
+
 const emptyIssue: IssueSummary = {
   key: "",
   summary: "",
@@ -1303,6 +1544,7 @@ function Field(props: {
   error?: string;
   savedIndicator?: boolean;
   savedIndicatorLabel?: string;
+  badge?: ReactNode;
 }) {
   const fieldId = useId();
   const [expanded, setExpanded] = useState(false);
@@ -1342,6 +1584,7 @@ function Field(props: {
       <label className="field-label" htmlFor={fieldId}>
         {props.label}
         {props.required ? <small className="required-mark"> *</small> : null}
+        {props.badge ? <span className="field-ai-badge">{props.badge}</span> : null}
       </label>
       <div className={`field-control-wrap ${canExpand ? "has-expand" : ""} ${showSavedIndicator ? "has-saved-secret" : ""}`}>
         {control}
@@ -1638,16 +1881,19 @@ function App() {
   const [settingsBusy, setSettingsBusy] = useState<SettingsSection | "">("");
   const [settingsStatus, setSettingsStatus] = useState<Record<SettingsSection, string>>({
     project: "",
-    credentials: "",
-    confluence: "",
+    auth: "",
     ai: "",
     knowledgeAi: "",
   });
+  const [savedSettingsSnapshot, setSavedSettingsSnapshot] = useState<Record<SettingsSection, string>>(initialSavedSettingsSnapshot);
   const [defaults, setDefaults] = useState<DefaultsResponse | null>(null);
   const [project, setProject] = useState<ProjectConfig>(emptyProject);
   const [credentials, setCredentials] = useState<Credentials>(emptyCredentials);
   const [confluenceCredentials, setConfluenceCredentials] = useState<ConfluenceCredentials>(emptyConfluenceCredentials);
+  const [authEntries, setAuthEntries] = useState<AuthEntry[]>([]);
   const [aiSettings, setAiSettings] = useState<AiSettings>(emptyAiSettings);
+  const [savedAiSettings, setSavedAiSettings] = useState<AiSettings>(emptyAiSettings);
+  const [aiSettingsHistory, setAiSettingsHistory] = useState<AiSettingsHistoryEntry[]>([]);
   const [secretStatus, setSecretStatus] = useState<SecretStatus>(emptySecretStatus);
   const [jiraUrl, setJiraUrl] = useState("");
   const [issue, setIssue] = useState<IssueSummary>(emptyIssue);
@@ -1663,6 +1909,13 @@ function App() {
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [detailCaseIndex, setDetailCaseIndex] = useState<number | null>(null);
   const [outline, setOutline] = useState<TestDesignOutline>(emptyOutline(emptyIssue));
+  const [improveInstruction, setImproveInstruction] = useState("");
+  const [lastImproveInstruction, setLastImproveInstruction] = useState("");
+  const [improveStatus, setImproveStatus] = useState("");
+  const [promptImproveStatus, setPromptImproveStatus] = useState("");
+  const [aiSettingsImprovePending, setAiSettingsImprovePending] = useState(false);
+  const [aiSettingsImprovedField, setAiSettingsImprovedField] = useState<"" | "improvementNotes">("");
+  const [pendingAiImproveHistory, setPendingAiImproveHistory] = useState<{ source: string; summary: string } | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("cases");
   const [busy, setBusy] = useState<BusyKey>("");
   const [message, setMessage] = useState("");
@@ -1676,6 +1929,7 @@ function App() {
   const [knowledgeAudience, setKnowledgeAudience] = useState("");
   const [knowledgeNotes, setKnowledgeNotes] = useState("");
   const [knowledgeArticleDraft, setKnowledgeArticleDraft] = useState<KnowledgeArticle | null>(null);
+  const [savedKnowledgeDraftSnapshot, setSavedKnowledgeDraftSnapshot] = useState("");
   const [knowledgeArticles, setKnowledgeArticles] = useState<KnowledgeArticle[]>([]);
   const [knowledgeBusy, setKnowledgeBusy] = useState<"generate" | "save" | "">("");
   const [knowledgeMessage, setKnowledgeMessage] = useState("");
@@ -1683,7 +1937,12 @@ function App() {
 
   function applyDefaults(payload: DefaultsResponse) {
     setDefaults(payload);
-    setProject(projectFromDefaults(payload));
+    const nextProject = projectFromDefaults(payload);
+    setProject(nextProject);
+    setSavedSettingsSnapshot((current) => ({
+      ...current,
+      project: projectSettingsSnapshot(nextProject),
+    }));
   }
 
   async function loadDefaults() {
@@ -1696,6 +1955,7 @@ function App() {
     let nextProject = projectFromDefaults(payload);
     let nextCredentials = emptyCredentials;
     let nextConfluenceCredentials = emptyConfluenceCredentials;
+    let nextAuthEntries: AuthEntry[] = [];
     let nextAiSettings = emptyAiSettings;
     let nextSecretStatus = emptySecretStatus;
     const settingsResponse = await fetch("/api/user-settings");
@@ -1704,7 +1964,9 @@ function App() {
         project?: Partial<ProjectConfig> | null;
         credentials?: Partial<Credentials> | null;
         confluenceCredentials?: Partial<ConfluenceCredentials> | null;
+        authEntries?: Partial<AuthEntry>[] | null;
         aiSettings?: Partial<AiSettings> | null;
+        aiSettingsHistory?: AiSettingsHistoryEntry[] | null;
         knowledgeArticles?: KnowledgeArticle[] | null;
       };
       if (settings.project) {
@@ -1732,6 +1994,9 @@ function App() {
           },
         };
       }
+      if (Array.isArray(settings.authEntries)) {
+        nextAuthEntries = settings.authEntries.map(safeAuthEntry);
+      }
       if (settings.aiSettings) {
         const { saved, knowledge, ...safeAiSettings } = settings.aiSettings;
         nextAiSettings = {
@@ -1756,12 +2021,22 @@ function App() {
       if (Array.isArray(settings.knowledgeArticles)) {
         setKnowledgeArticles(settings.knowledgeArticles);
       }
+      if (Array.isArray(settings.aiSettingsHistory)) {
+        setAiSettingsHistory(settings.aiSettingsHistory);
+      }
     }
     setProject(nextProject);
     setCredentials(nextCredentials);
     setConfluenceCredentials(nextConfluenceCredentials);
+    setAuthEntries(nextAuthEntries);
     setAiSettings(nextAiSettings);
+    setSavedAiSettings(nextAiSettings);
     setSecretStatus(nextSecretStatus);
+    setSavedSettingsSnapshot(settingsSnapshots(nextProject, nextCredentials, nextConfluenceCredentials, nextAuthEntries, nextAiSettings));
+    setAiSettingsImprovePending(false);
+    setAiSettingsImprovedField("");
+    setPendingAiImproveHistory(null);
+    setSavedKnowledgeDraftSnapshot("");
   }
 
   useEffect(() => {
@@ -1845,6 +2120,19 @@ function App() {
     { key: "reviews", icon: <ScanSearch size={16} /> },
     { key: "defects", icon: <Bug size={16} /> },
   ];
+  const settingsDirty = useMemo(
+    () => ({
+      project: projectSettingsSnapshot(project) !== savedSettingsSnapshot.project,
+      auth: authSettingsSnapshot(credentials, confluenceCredentials, authEntries) !== savedSettingsSnapshot.auth,
+      ai: aiCoreSettingsSnapshot(aiSettings) !== savedSettingsSnapshot.ai,
+      knowledgeAi: knowledgeAiSettingsSnapshot(aiSettings) !== savedSettingsSnapshot.knowledgeAi,
+    }),
+    [project, credentials, confluenceCredentials, authEntries, aiSettings, savedSettingsSnapshot],
+  );
+  const knowledgeDraftDirty = useMemo(
+    () => Boolean(knowledgeArticleDraft && knowledgeArticleSnapshot(knowledgeArticleDraft) !== savedKnowledgeDraftSnapshot),
+    [knowledgeArticleDraft, savedKnowledgeDraftSnapshot],
+  );
 
   function toggleLanguageMode() {
     const nextLanguage = languageMode === "vi" ? "en" : "vi";
@@ -1865,7 +2153,7 @@ function App() {
     confluenceCredentials: taskConfluenceCredentials,
     confluenceLinks,
     docContext: docIssueKey === issue.key ? docContext : "",
-    aiSettings,
+    aiSettings: savedAiSettings,
     notes,
     archetype: archetypeKey === "auto" ? undefined : archetypeKey,
   };
@@ -1885,6 +2173,10 @@ function App() {
   }
 
   function addJiraAuthValidationErrors(errors: ValidationErrors, reason: string) {
+    if (credentials.enabled === false) {
+      errors["credentials.user"] = `Cần bật ${ui.jiraAuth} để đọc Jira link/task.`;
+      return;
+    }
     const hasToken = Boolean(credentials.token.trim() || secretStatus.jira.hasToken);
     const hasUserPassword = Boolean(credentials.user.trim() && (credentials.password.trim() || secretStatus.jira.hasPassword));
     if (hasToken || hasUserPassword) return;
@@ -1937,6 +2229,10 @@ function App() {
     if (!fetchInput.baseUrlText.trim()) {
       errors.confluenceBaseUrl = "Cần Confluence Base URL cho task này trước khi Fetch docs.";
     }
+    if (confluenceCredentials.enabled === false) {
+      errors["confluence.user"] = `Cần bật ${ui.confluenceAuth} để fetch docs.`;
+      return errors;
+    }
     if (!confluenceCredentials.user.trim()) {
       errors["confluence.user"] = "Cần nhập Confluence User để fetch docs.";
     }
@@ -1980,10 +2276,10 @@ function App() {
       addJiraAuthValidationErrors(errors, "Cần auth để Fetch Jira task trước khi Generate nếu chưa có context.");
     }
     addRequiredProjectErrors(errors);
-    if (aiSettings.enabled) {
-      if (!aiSettings.baseUrl.trim()) errors["ai.baseUrl"] = "Base URL bắt buộc khi bật AI Settings.";
-      if (!aiSettings.model.trim()) errors["ai.model"] = "Model bắt buộc khi bật AI Settings.";
-      if (!aiSettings.apiKey.trim() && !secretStatus.ai.hasApiKey) errors["ai.apiKey"] = "API key bắt buộc khi bật AI Settings hoặc đã được lưu trước đó.";
+    if (savedAiSettings.enabled) {
+      if (!savedAiSettings.baseUrl.trim()) errors["ai.baseUrl"] = "Base URL bắt buộc khi bật AI Settings.";
+      if (!savedAiSettings.model.trim()) errors["ai.model"] = "Model bắt buộc khi bật AI Settings.";
+      if (!savedAiSettings.apiKey.trim() && !secretStatus.ai.hasApiKey) errors["ai.apiKey"] = "API key bắt buộc khi bật AI Settings hoặc đã được lưu trước đó.";
     }
     return errors;
   }
@@ -1993,14 +2289,36 @@ function App() {
     setProject((current) => ({ ...current, [key]: value }));
   }
 
-  function setCredentialValue(key: keyof Credentials, value: string) {
+  function setCredentialValue(key: "user" | "password" | "token", value: string) {
     clearValidationErrors(["credentials.user", "credentials.password", "credentials.token"]);
     setCredentials((current) => ({ ...current, [key]: value }));
   }
 
-  function setConfluenceCredentialValue(key: keyof ConfluenceCredentials, value: string) {
+  function setJiraAuthEnabled(enabled: boolean) {
+    clearValidationErrors(["credentials.user", "credentials.password", "credentials.token"]);
+    setCredentials((current) => ({ ...current, enabled }));
+  }
+
+  function setConfluenceCredentialValue(key: "user" | "password" | "token", value: string) {
     clearValidationErrors([`confluence.${key}`]);
     setConfluenceCredentials((current) => ({ ...current, [key]: value }));
+  }
+
+  function setConfluenceAuthEnabled(enabled: boolean) {
+    clearValidationErrors(["confluence.user", "confluence.password", "confluence.token"]);
+    setConfluenceCredentials((current) => ({ ...current, enabled }));
+  }
+
+  function setAuthEntryValue<K extends keyof AuthEntry>(id: string, key: K, value: AuthEntry[K]) {
+    setAuthEntries((current) => current.map((entry) => (entry.id === id ? { ...entry, [key]: value } : entry)));
+  }
+
+  function addAuthEntry() {
+    setAuthEntries((current) => [...current, createEmptyAuthEntry()]);
+  }
+
+  function removeAuthEntry(id: string) {
+    setAuthEntries((current) => current.filter((entry) => entry.id !== id));
   }
 
   function setAiSettingValue<K extends keyof AiSettings>(key: K, value: AiSettings[K]) {
@@ -2019,6 +2337,24 @@ function App() {
     }));
   }
 
+  function appendImproveNote(existing: string, instruction: string) {
+    const newItems = instruction
+      .split(/\r?\n/)
+      .map((line) => line.trim().replace(/^[-•]\s*/, "").trim())
+      .filter(Boolean);
+    if (!newItems.length) return existing;
+    const lines = existing.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const seen = new Set(lines.map((line) => line.replace(/^[-•]\s*/, "").trim().toLowerCase()));
+    const nextLines = [...lines];
+    for (const item of newItems) {
+      const key = item.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      nextLines.push(`- ${item}`);
+    }
+    return nextLines.join("\n");
+  }
+
   function resetGeneratedDraft(nextIssueKey: string) {
     const nextIssue = { ...emptyIssue, key: nextIssueKey };
     setTestCases([]);
@@ -2029,6 +2365,10 @@ function App() {
     setSavedFiles(null);
     setBuiltDesignFiles(null);
     setQaPlan(null);
+    setImproveInstruction("");
+    setLastImproveInstruction("");
+    setImproveStatus("");
+    setPromptImproveStatus("");
     setGenerationStatus(idleGenerationStatus);
     setActiveTab("cases");
   }
@@ -2117,6 +2457,12 @@ function App() {
     setAuthenticated(false);
     setAuthUser(null);
     setDefaults(null);
+    setAiSettings(emptyAiSettings);
+    setSavedAiSettings(emptyAiSettings);
+    setAiSettingsHistory([]);
+    setSavedSettingsSnapshot(initialSavedSettingsSnapshot);
+    setAiSettingsImprovePending(false);
+    setPendingAiImproveHistory(null);
     setOutput("");
     setMessage("");
     setSavedFiles(null);
@@ -2147,50 +2493,98 @@ function App() {
   }
 
   async function saveUserSettings(section: SettingsSection) {
+    if (!settingsDirty[section]) return;
     const savedConfluenceCredentials = { ...confluenceCredentials, baseUrl: "" };
+    const aiSettingsForSave =
+      section === "ai"
+        ? {
+            ...savedAiSettings,
+            enabled: aiSettings.enabled,
+            provider: aiSettings.provider,
+            baseUrl: aiSettings.baseUrl,
+            model: aiSettings.model,
+            apiKey: aiSettings.apiKey,
+            writingStyle: aiSettings.writingStyle,
+            testCaseGuidelines: aiSettings.testCaseGuidelines,
+            testDesignGuidelines: aiSettings.testDesignGuidelines,
+            improvementNotes: aiSettings.improvementNotes,
+            knowledge: savedAiSettings.knowledge || emptyAiSettings.knowledge!,
+          }
+        : section === "knowledgeAi"
+          ? {
+              ...savedAiSettings,
+              knowledge: aiSettings.knowledge || emptyAiSettings.knowledge!,
+            }
+          : aiSettings;
     const body =
       section === "project"
         ? { project }
-        : section === "credentials"
-          ? { credentials }
-          : section === "confluence"
-            ? { confluenceCredentials: savedConfluenceCredentials }
-            : { aiSettings };
+        : section === "auth"
+          ? { credentials, confluenceCredentials: savedConfluenceCredentials, authEntries }
+          : { aiSettings: aiSettingsForSave };
     const label =
       section === "project"
         ? "Project config"
-        : section === "credentials"
-          ? "Jira auth"
-          : section === "confluence"
-            ? "Confluence auth"
-            : section === "knowledgeAi"
-              ? "Knowledge AI Settings"
-              : "AI Settings";
+        : section === "auth"
+          ? "Authentication"
+          : section === "knowledgeAi"
+            ? "Knowledge AI Settings"
+            : "AI Settings";
+    const historyMeta =
+      section === "ai" && pendingAiImproveHistory
+        ? pendingAiImproveHistory
+        : { source: "manual_save", summary: label };
     setSettingsBusy(section);
     setSettingsStatus((current) => ({ ...current, [section]: "" }));
     try {
-      await apiPost("/api/user-settings", body);
-      if (section === "credentials") {
+      const payload = await apiPost<{ aiSettingsHistory?: AiSettingsHistoryEntry[] }>("/api/user-settings", {
+        ...body,
+        settingsSection: section,
+        historyMeta,
+      });
+      if (Array.isArray(payload.aiSettingsHistory)) {
+        setAiSettingsHistory(payload.aiSettingsHistory);
+      }
+      if (section === "project") {
+        setSavedSettingsSnapshot((current) => ({
+          ...current,
+          project: projectSettingsSnapshot(project),
+        }));
+      }
+      if (section === "auth") {
+        const nextCredentials = { ...credentials, password: "", token: "" };
+        const nextConfluenceCredentials = { ...confluenceCredentials, baseUrl: "", password: "", token: "" };
+        const nextAuthEntries = authEntries.map((entry) => ({
+          ...entry,
+          password: "",
+          token: "",
+          saved: {
+            hasPassword: Boolean(entry.password.trim() || entry.saved?.hasPassword),
+            hasToken: Boolean(entry.token.trim() || entry.saved?.hasToken),
+          },
+        }));
         setSecretStatus((current) => ({
           ...current,
           jira: {
             hasPassword: Boolean(credentials.password.trim() || current.jira.hasPassword),
             hasToken: Boolean(credentials.token.trim() || current.jira.hasToken),
           },
-        }));
-        setCredentials((current) => ({ ...current, password: "", token: "" }));
-      }
-      if (section === "confluence") {
-        setSecretStatus((current) => ({
-          ...current,
           confluence: {
             hasPassword: Boolean(confluenceCredentials.password.trim() || current.confluence.hasPassword),
             hasToken: Boolean(confluenceCredentials.token.trim() || current.confluence.hasToken),
           },
         }));
-        setConfluenceCredentials((current) => ({ ...current, password: "", token: "" }));
+        setCredentials(nextCredentials);
+        setConfluenceCredentials(nextConfluenceCredentials);
+        setAuthEntries(nextAuthEntries);
+        setSavedSettingsSnapshot((current) => ({
+          ...current,
+          auth: authSettingsSnapshot(nextCredentials, nextConfluenceCredentials, nextAuthEntries),
+        }));
       }
       if (section === "ai") {
+        const nextSavedAiSettings = { ...aiSettingsForSave, apiKey: "" };
+        const nextFormAiSettings = { ...aiSettings, apiKey: "" };
         setSecretStatus((current) => ({
           ...current,
           ai: {
@@ -2198,9 +2592,31 @@ function App() {
             hasApiKey: Boolean(aiSettings.apiKey.trim() || current.ai.hasApiKey),
           },
         }));
-        setAiSettings((current) => ({ ...current, apiKey: "" }));
+        setAiSettings(nextFormAiSettings);
+        setSavedAiSettings(nextSavedAiSettings);
+        setSavedSettingsSnapshot((current) => ({
+          ...current,
+          ai: aiCoreSettingsSnapshot(nextFormAiSettings),
+        }));
+        setAiSettingsImprovePending(false);
+        setAiSettingsImprovedField("");
+        setPendingAiImproveHistory(null);
       }
       if (section === "knowledgeAi") {
+        const nextSavedAiSettings = {
+          ...savedAiSettings,
+          knowledge: {
+            ...(aiSettings.knowledge || emptyAiSettings.knowledge!),
+            apiKey: "",
+          },
+        };
+        const nextFormAiSettings = {
+          ...aiSettings,
+          knowledge: {
+            ...(aiSettings.knowledge || emptyAiSettings.knowledge!),
+            apiKey: "",
+          },
+        };
         setSecretStatus((current) => ({
           ...current,
           ai: {
@@ -2208,12 +2624,11 @@ function App() {
             hasKnowledgeApiKey: Boolean(aiSettings.knowledge?.apiKey?.trim() || current.ai.hasKnowledgeApiKey),
           },
         }));
-        setAiSettings((current) => ({
+        setAiSettings(nextFormAiSettings);
+        setSavedAiSettings(nextSavedAiSettings);
+        setSavedSettingsSnapshot((current) => ({
           ...current,
-          knowledge: {
-            ...(current.knowledge || emptyAiSettings.knowledge!),
-            apiKey: "",
-          },
+          knowledgeAi: knowledgeAiSettingsSnapshot(nextFormAiSettings),
         }));
       }
       const text = `Đã lưu ${label} cho tài khoản này.`;
@@ -2370,14 +2785,19 @@ function App() {
       setBuiltDesignFiles(null);
       setOutput("");
       setQaPlan(null);
+      setImproveInstruction("");
+      setLastImproveInstruction("");
+      setImproveStatus("");
+      setPromptImproveStatus("");
+      const generationAiSettings = savedAiSettings;
       setGenerationStatus({
         state: "running",
-        title: aiSettings.enabled ? "Đang gọi AI provider" : "Đang generate bằng fallback local",
-        detail: aiSettings.enabled
+        title: generationAiSettings.enabled ? "Đang gọi AI provider" : "Đang generate bằng fallback local",
+        detail: generationAiSettings.enabled
           ? [
-              aiSettings.provider ? `Provider: ${aiSettings.provider}` : "",
-              aiSettings.model ? `Model: ${aiSettings.model}` : "",
-              aiSettings.baseUrl ? `Base URL: ${aiSettings.baseUrl}` : "",
+              generationAiSettings.provider ? `Provider: ${generationAiSettings.provider}` : "",
+              generationAiSettings.model ? `Model: ${generationAiSettings.model}` : "",
+              generationAiSettings.baseUrl ? `Base URL: ${generationAiSettings.baseUrl}` : "",
             ]
               .filter(Boolean)
               .join(" · ")
@@ -2396,11 +2816,11 @@ function App() {
         const text = error instanceof Error ? error.message : "Generate draft lỗi.";
         setGenerationStatus({
           state: "error",
-          title: aiSettings.enabled ? "AI provider lỗi" : "Generate draft lỗi",
+          title: generationAiSettings.enabled ? "AI provider lỗi" : "Generate draft lỗi",
           detail: text.split("\n")[0],
-          provider: aiSettings.provider,
-          model: aiSettings.model,
-          endpoint: aiSettings.baseUrl,
+          provider: generationAiSettings.provider,
+          model: generationAiSettings.model,
+          endpoint: generationAiSettings.baseUrl,
         });
         throw error;
       }
@@ -2418,6 +2838,120 @@ function App() {
           ? `Đã tạo ${payload.testCases.length} test case và test design draft ${generationMode}. ${payload.aiGenerationError}`
           : `Đã tạo ${payload.testCases.length} test case và test design draft ${generationMode}.`,
       );
+    });
+  }
+
+  function improveDraft() {
+    const trimmedInstruction = improveInstruction.trim();
+    const activeAiSettings = savedAiSettings;
+    if (!testCases.length || !outline.branches.length) {
+      setMessage(ui.improveRequiresDraft);
+      setImproveStatus(ui.improveRequiresDraft);
+      return;
+    }
+    if (!activeAiSettings.enabled || (!activeAiSettings.apiKey.trim() && !secretStatus.ai.hasApiKey) || !activeAiSettings.model.trim()) {
+      setMessage(ui.improveRequiresAi);
+      setImproveStatus(ui.improveRequiresAi);
+      return;
+    }
+    if (!trimmedInstruction) {
+      setMessage(ui.improveDraftPlaceholder);
+      setImproveStatus(ui.improveDraftPlaceholder);
+      return;
+    }
+    setBusyRun("improve", async () => {
+      setImproveStatus("");
+      setGenerationStatus({
+        state: "running",
+        title: ui.improveDraftTitle,
+        detail: trimmedInstruction,
+        provider: activeAiSettings.provider,
+        model: activeAiSettings.model,
+        endpoint: activeAiSettings.baseUrl,
+      });
+      const effectiveIssueKey = issueKeyFromText(jiraUrl) || issue.key;
+      const effectiveIssue = { ...issue, key: effectiveIssueKey };
+      const shouldUseConfluenceDocs = Boolean(docContext.trim() && (!docIssueKey || docIssueKey === effectiveIssueKey));
+      const payload = await apiPost<DraftResponse & { improveInstruction?: string }>("/api/improve-draft", {
+        ...requestBody,
+        issue: effectiveIssue,
+        archetype: archetypeKey,
+        qaPlan,
+        testCases,
+        outline,
+        improveInstruction: trimmedInstruction,
+        confluenceLinks: shouldUseConfluenceDocs ? confluenceLinks : "",
+        docContext: shouldUseConfluenceDocs ? docContext : "",
+      }).catch((error) => {
+        const errorMessage = error instanceof Error ? error.message : "Không tinh chỉnh được draft.";
+        setImproveStatus(errorMessage);
+        throw error;
+      });
+      setArchetypeKey(payload.archetypeKey);
+      setQaPlan(payload.qaPlan || qaPlan);
+      setTestCases(payload.testCases);
+      setDetailCaseIndex(null);
+      setOutline(payload.outline);
+      setActiveTab("cases");
+      setSavedFiles(null);
+      setBuiltDesignFiles(null);
+      setOutput(JSON.stringify(payload, null, 2));
+      setGenerationStatus(generationStatusFromPayload({ ...payload, aiGenerationUsed: true }));
+      setImproveInstruction("");
+      setLastImproveInstruction(trimmedInstruction);
+      const successText = `${ui.improveDonePrefix}: "${trimmedInstruction}".`;
+      setImproveStatus(successText);
+      setMessage(successText);
+    });
+  }
+
+  function improvePromptWithAi() {
+    const trimmedInstruction = improveInstruction.trim() || lastImproveInstruction.trim();
+    const activeAiSettings = savedAiSettings;
+    if (!trimmedInstruction) {
+      setMessage(ui.improvePromptRequiresInput);
+      setPromptImproveStatus(ui.improvePromptRequiresInput);
+      return;
+    }
+    if (!activeAiSettings.enabled || (!activeAiSettings.apiKey.trim() && !secretStatus.ai.hasApiKey) || !activeAiSettings.model.trim()) {
+      setMessage(ui.improveRequiresAi);
+      setPromptImproveStatus(ui.improveRequiresAi);
+      return;
+    }
+    setBusyRun("promptImprove", async () => {
+      setPromptImproveStatus("");
+      const payload = await apiPost<PromptImproveResponse>("/api/improve-prompt", {
+        instruction: trimmedInstruction,
+        jiraUrl,
+        issue,
+        aiSettings: activeAiSettings,
+        currentImprovementNotes: activeAiSettings.improvementNotes,
+        testCases,
+        outline,
+        language: languageMode,
+      }).catch((error) => {
+        const errorMessage = error instanceof Error ? error.message : "Không cải thiện được prompt.";
+        setPromptImproveStatus(errorMessage);
+        throw error;
+      });
+      const improvedPrompt = payload.improvedPrompt.trim();
+      if (!improvedPrompt) {
+        throw new Error("AI chưa trả về prompt cải thiện hợp lệ.");
+      }
+      setAiSettings((current) => ({
+        ...current,
+        improvementNotes: appendImproveNote(current.improvementNotes, improvedPrompt),
+      }));
+      setAiSettingsImprovePending(true);
+      setAiSettingsImprovedField("improvementNotes");
+      setPendingAiImproveHistory({
+        source: "ai_prompt_improve",
+        summary: `AI improve prompt từ yêu cầu: ${trimmedInstruction.slice(0, 140)}`,
+      });
+      setSettingsStatus((current) => ({ ...current, ai: "" }));
+      const successText = `${ui.improvePromptDonePrefix}: "${trimmedInstruction}". ${ui.improvePromptSavedToAiSettings} ${ui.aiSettingsUnsavedGuard}`;
+      setPromptImproveStatus(successText);
+      setMessage(successText);
     });
   }
 
@@ -2509,9 +3043,10 @@ function App() {
         audience: knowledgeAudience,
         notes: knowledgeNotes,
         language: languageMode,
-        aiSettings: knowledgeAiSettings,
+        aiSettings: savedKnowledgeAiSettings,
       });
       setKnowledgeArticleDraft(payload.article);
+      setSavedKnowledgeDraftSnapshot("");
       setKnowledgeMessage(languageMode === "en" ? "AI draft created. Review before saving." : "Đã tạo bản nháp AI. Hãy review trước khi lưu.");
     } catch (error) {
       setKnowledgeMessage(error instanceof Error ? error.message : languageMode === "en" ? "Could not generate knowledge article." : "Không tạo được bài kiến thức.");
@@ -2529,6 +3064,7 @@ function App() {
         article: knowledgeArticleDraft,
       });
       setKnowledgeArticleDraft(payload.article);
+      setSavedKnowledgeDraftSnapshot(knowledgeArticleSnapshot(payload.article));
       setKnowledgeArticles(payload.knowledgeArticles);
       setKnowledgeMessage(languageMode === "en" ? "Saved to Knowledge." : "Đã lưu vào Knowledge.");
     } catch (error) {
@@ -2600,6 +3136,7 @@ function App() {
 
   const isWorking = Boolean(busy);
   const knowledgeAiSettings = aiSettings.knowledge || emptyAiSettings.knowledge!;
+  const savedKnowledgeAiSettings = savedAiSettings.knowledge || emptyAiSettings.knowledge!;
 
   if (!authChecked) {
     return (
@@ -2698,6 +3235,11 @@ function App() {
           <button className={appView === "settings" ? "active" : ""} type="button" onClick={() => setAppView("settings")}>
             <Settings size={16} />
             <span>{ui.workspaceSettings}</span>
+            {aiSettingsImprovePending ? (
+              <span className="nav-badge" title={ui.aiSettingsPendingImprove} aria-label={ui.aiSettingsPendingImprove}>
+                <Wand2 size={11} />
+              </span>
+            ) : null}
           </button>
         </nav>
 
@@ -2834,7 +3376,7 @@ function App() {
                         <IconButton
                           icon={knowledgeBusy === "save" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
                           onClick={saveKnowledgeArticle}
-                          disabled={Boolean(knowledgeBusy) || !knowledgeArticleDraft}
+                          disabled={Boolean(knowledgeBusy) || !knowledgeArticleDraft || !knowledgeDraftDirty}
                           variant="primary"
                         >
                           {ui.saveKnowledge}
@@ -2947,17 +3489,18 @@ function App() {
                   <Settings size={16} />
                   <span>{ui.project}</span>
                 </button>
-                <button className={activeSettingsSection === "credentials" ? "active" : ""} type="button" onClick={() => setActiveSettingsSection("credentials")}>
-                  <UploadCloud size={16} />
-                  <span>{ui.jiraAuth}</span>
-                </button>
-                <button className={activeSettingsSection === "confluence" ? "active" : ""} type="button" onClick={() => setActiveSettingsSection("confluence")}>
-                  <FileText size={16} />
-                  <span>{ui.confluence}</span>
+                <button className={activeSettingsSection === "auth" ? "active" : ""} type="button" onClick={() => setActiveSettingsSection("auth")}>
+                  <ShieldCheck size={16} />
+                  <span>{ui.authentication}</span>
                 </button>
                 <button className={activeSettingsSection === "ai" ? "active" : ""} type="button" onClick={() => setActiveSettingsSection("ai")}>
                   <Wand2 size={16} />
                   <span>{ui.aiSettings}</span>
+                  {aiSettingsImprovePending ? (
+                    <span className="nav-badge" title={ui.aiSettingsPendingImprove} aria-label={ui.aiSettingsPendingImprove}>
+                      <Wand2 size={11} />
+                    </span>
+                  ) : null}
                 </button>
                 <button className={activeSettingsSection === "knowledgeAi" ? "active" : ""} type="button" onClick={() => setActiveSettingsSection("knowledgeAi")}>
                   <BookOpen size={16} />
@@ -3047,7 +3590,7 @@ function App() {
                   <IconButton
                     icon={settingsBusy === "project" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
                     onClick={() => saveUserSettings("project")}
-                    disabled={Boolean(settingsBusy)}
+                    disabled={Boolean(settingsBusy) || !settingsDirty.project}
                     variant="primary"
                   >
                     {ui.save}
@@ -3057,31 +3600,136 @@ function App() {
               </section>
               ) : null}
 
-              {activeSettingsSection === "credentials" ? (
+              {activeSettingsSection === "auth" ? (
               <section className="panel settings-panel">
                 <div className="panel-title">
-                  <UploadCloud size={18} />
-                  <h2>{ui.jiraAuth}</h2>
+                  <ShieldCheck size={18} />
+                  <h2>{ui.authentication}</h2>
                 </div>
-                <div className="form-grid">
-                  <Field label={ui.user} value={credentials.user} onChange={(value) => setCredentialValue("user", value)} placeholder="name@example.com" error={validationErrors["credentials.user"]} />
-                  <Field label={ui.password} value={credentials.password} type="password" onChange={(value) => setCredentialValue("password", value)} savedIndicator={secretStatus.jira.hasPassword} error={validationErrors["credentials.password"]} />
-                  <Field label="Token" value={credentials.token} type="password" onChange={(value) => setCredentialValue("token", value)} savedIndicator={secretStatus.jira.hasToken} error={validationErrors["credentials.token"]} />
+                <p className="panel-help">{ui.authenticationPanelHelp}</p>
+                <div className="auth-settings-stack">
+                  <div className="label-policy auth-block">
+                    <div className="subhead">
+                      <span>{ui.coreAuth}</span>
+                    </div>
+                    <article className="auth-config-card">
+                      <div className="auth-config-head">
+                        <div>
+                          <h3>{ui.jiraAuth}</h3>
+                          <small>{ui.jiraSecretNote}</small>
+                        </div>
+                        <label className="auth-use-toggle">
+                          <input
+                            type="checkbox"
+                            checked={credentials.enabled}
+                            onChange={(event) => setJiraAuthEnabled(event.target.checked)}
+                          />
+                          <span>{ui.authEnabled}</span>
+                        </label>
+                      </div>
+                      <div className="form-grid">
+                        <Field label={ui.user} value={credentials.user} onChange={(value) => setCredentialValue("user", value)} placeholder="name@example.com" error={validationErrors["credentials.user"]} />
+                        <Field label={ui.password} value={credentials.password} type="password" onChange={(value) => setCredentialValue("password", value)} savedIndicator={secretStatus.jira.hasPassword} error={validationErrors["credentials.password"]} />
+                        <Field label="Token" value={credentials.token} type="password" onChange={(value) => setCredentialValue("token", value)} savedIndicator={secretStatus.jira.hasToken} error={validationErrors["credentials.token"]} />
+                      </div>
+                    </article>
+                    <article className="auth-config-card">
+                      <div className="auth-config-head">
+                        <div>
+                          <h3>{ui.confluenceAuth}</h3>
+                          <small>{ui.confluenceAuthNote}</small>
+                        </div>
+                        <label className="auth-use-toggle">
+                          <input
+                            type="checkbox"
+                            checked={confluenceCredentials.enabled}
+                            onChange={(event) => setConfluenceAuthEnabled(event.target.checked)}
+                          />
+                          <span>{ui.authEnabled}</span>
+                        </label>
+                      </div>
+                      <div className="form-grid">
+                        <Field label={ui.user} value={confluenceCredentials.user} onChange={(value) => setConfluenceCredentialValue("user", value)} placeholder="name@example.com" required={Boolean(confluenceLinks.trim())} error={validationErrors["confluence.user"]} />
+                        <Field label={ui.password} value={confluenceCredentials.password} type="password" onChange={(value) => setConfluenceCredentialValue("password", value)} required={Boolean(confluenceLinks.trim())} savedIndicator={secretStatus.confluence.hasPassword} error={validationErrors["confluence.password"]} />
+                        <Field label="Token" value={confluenceCredentials.token} type="password" onChange={(value) => setConfluenceCredentialValue("token", value)} required={Boolean(confluenceLinks.trim())} savedIndicator={secretStatus.confluence.hasToken} error={validationErrors["confluence.token"]} />
+                      </div>
+                    </article>
+                  </div>
+                  <div className="label-policy auth-block">
+                    <div className="subhead auth-subhead">
+                      <span>{ui.customAuth}</span>
+                      <button className="button secondary" type="button" onClick={addAuthEntry}>
+                        <Plus size={16} />
+                        <span>{ui.addAuth}</span>
+                      </button>
+                    </div>
+                    <p className="panel-help">{ui.customAuthHelp}</p>
+                    {authEntries.length ? (
+                      <div className="auth-entry-list">
+                        {authEntries.map((entry, index) => (
+                          <article className="auth-config-card" key={entry.id}>
+                            <div className="auth-config-head">
+                              <div>
+                                <h3>{entry.name || `${ui.customAuth} ${index + 1}`}</h3>
+                                <small>{entry.baseUrl || ui.authBaseUrlPlaceholder}</small>
+                              </div>
+                              <div className="auth-card-actions">
+                                <label className="auth-use-toggle">
+                                  <input
+                                    type="checkbox"
+                                    checked={entry.enabled}
+                                    onChange={(event) => setAuthEntryValue(entry.id, "enabled", event.target.checked)}
+                                  />
+                                  <span>{ui.authEnabled}</span>
+                                </label>
+                                <button className="icon-only danger" type="button" onClick={() => removeAuthEntry(entry.id)} aria-label={ui.deleteAuth} title={ui.deleteAuth}>
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="form-grid">
+                              <Field label={ui.authName} value={entry.name} onChange={(value) => setAuthEntryValue(entry.id, "name", value)} placeholder={ui.authNamePlaceholder} />
+                              <Field label={ui.authBaseUrl} value={entry.baseUrl} onChange={(value) => setAuthEntryValue(entry.id, "baseUrl", value)} placeholder={ui.authBaseUrlPlaceholder} />
+                              <label className="field">
+                                <span>{ui.authType}</span>
+                                <select value={entry.authType} onChange={(event) => setAuthEntryValue(entry.id, "authType", event.target.value as AuthEntry["authType"])}>
+                                  <option value="bearer">{ui.authTypeBearer}</option>
+                                  <option value="basic">{ui.authTypeBasic}</option>
+                                  <option value="apiKey">{ui.authTypeApiKey}</option>
+                                </select>
+                              </label>
+                              {entry.authType === "basic" ? (
+                                <>
+                                  <Field label={ui.user} value={entry.user} onChange={(value) => setAuthEntryValue(entry.id, "user", value)} placeholder="name@example.com" />
+                                  <Field label={ui.password} value={entry.password} type="password" onChange={(value) => setAuthEntryValue(entry.id, "password", value)} savedIndicator={entry.saved?.hasPassword} />
+                                </>
+                              ) : (
+                                <Field label={entry.authType === "apiKey" ? ui.apiKey : "Token"} value={entry.token} type="password" onChange={(value) => setAuthEntryValue(entry.id, "token", value)} savedIndicator={entry.saved?.hasToken} />
+                              )}
+                            </div>
+                            <Field label={ui.authNotes} value={entry.notes} onChange={(value) => setAuthEntryValue(entry.id, "notes", value)} placeholder={ui.authNotesPlaceholder} textarea rows={3} />
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mini-note">{ui.noCustomAuth}</div>
+                    )}
+                  </div>
                 </div>
-                <div className="button-row">
+                <div className="button-row auth-save-row">
                   <IconButton
-                    icon={settingsBusy === "credentials" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
-                    onClick={() => saveUserSettings("credentials")}
-                    disabled={Boolean(settingsBusy)}
+                    icon={settingsBusy === "auth" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+                    onClick={() => saveUserSettings("auth")}
+                    disabled={Boolean(settingsBusy) || !settingsDirty.auth}
                     variant="primary"
                   >
                     {ui.save}
                   </IconButton>
                 </div>
-                {secretStatus.jira.hasPassword || secretStatus.jira.hasToken ? (
-                  <div className="mini-note">{ui.jiraSecretNote}</div>
+                {secretStatus.confluence.hasPassword || secretStatus.confluence.hasToken ? (
+                  <div className="mini-note">{ui.confluenceSecretNote}</div>
                 ) : null}
-                {settingsStatus.credentials ? <div className="mini-note">{settingsStatus.credentials}</div> : null}
+                {settingsStatus.auth ? <div className="mini-note">{settingsStatus.auth}</div> : null}
                 {defaults ? (
                   <div className="status-stack">
                     <StatusBadge ok={defaults.wrappers.jiraExists} text="Jira wrapper" />
@@ -3091,44 +3739,27 @@ function App() {
               </section>
               ) : null}
 
-              {activeSettingsSection === "confluence" ? (
-              <section className="panel settings-panel">
-                <div className="panel-title">
-                  <FileText size={18} />
-                  <h2>{ui.confluenceAuth}</h2>
-                </div>
-                <div className="form-grid">
-                  <Field label={ui.user} value={confluenceCredentials.user} onChange={(value) => setConfluenceCredentialValue("user", value)} placeholder="name@example.com" required={Boolean(confluenceLinks.trim())} error={validationErrors["confluence.user"]} />
-                  <Field label={ui.password} value={confluenceCredentials.password} type="password" onChange={(value) => setConfluenceCredentialValue("password", value)} required={Boolean(confluenceLinks.trim())} savedIndicator={secretStatus.confluence.hasPassword} error={validationErrors["confluence.password"]} />
-                  <Field label="Token" value={confluenceCredentials.token} type="password" onChange={(value) => setConfluenceCredentialValue("token", value)} required={Boolean(confluenceLinks.trim())} savedIndicator={secretStatus.confluence.hasToken} error={validationErrors["confluence.token"]} />
-                </div>
-                <div className="button-row">
-                  <IconButton
-                    icon={settingsBusy === "confluence" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
-                    onClick={() => saveUserSettings("confluence")}
-                    disabled={Boolean(settingsBusy)}
-                    variant="primary"
-                  >
-                    {ui.save}
-                  </IconButton>
-                </div>
-                {secretStatus.confluence.hasPassword || secretStatus.confluence.hasToken ? (
-                  <div className="mini-note">{ui.confluenceSecretNote}</div>
-                ) : null}
-                {settingsStatus.confluence ? <div className="mini-note">{settingsStatus.confluence}</div> : null}
-                <div className="mini-note">{ui.confluenceAuthNote}</div>
-              </section>
-              ) : null}
-
               {activeSettingsSection === "ai" ? (
               <section className="panel settings-panel">
                 <div className="panel-title">
                   <Wand2 size={18} />
                   <h2>{ui.aiSettings}</h2>
+                  {aiSettingsImprovePending ? (
+                    <span className="field-ai-badge panel-badge">
+                      <Wand2 size={12} />
+                      {ui.aiImprovedBadge}
+                    </span>
+                  ) : null}
                 </div>
                 <p className="panel-help">
                   {ui.aiPanelHelp}
                 </p>
+                {aiSettingsImprovePending ? (
+                  <div className="notice ok ai-pending-note">
+                    <Wand2 size={16} />
+                    <span>{ui.aiSettingsPendingImprove} {ui.aiSettingsUnsavedGuard}</span>
+                  </div>
+                ) : null}
                 <label className="checkbox-field">
                   <input
                     type="checkbox"
@@ -3193,6 +3824,14 @@ function App() {
                     textarea
                     rows={4}
                     placeholder={ui.improveSkillPlaceholder}
+                    badge={
+                      aiSettingsImprovedField === "improvementNotes" ? (
+                        <>
+                          <Wand2 size={11} />
+                          {ui.aiImprovedBadge}
+                        </>
+                      ) : null
+                    }
                   />
                   <Field
                     label={ui.testCaseGuidelines}
@@ -3218,7 +3857,7 @@ function App() {
                   <IconButton
                     icon={settingsBusy === "ai" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
                     onClick={() => saveUserSettings("ai")}
-                    disabled={Boolean(settingsBusy)}
+                    disabled={Boolean(settingsBusy) || !settingsDirty.ai}
                     variant="primary"
                   >
                     {ui.save}
@@ -3227,6 +3866,45 @@ function App() {
                 {settingsStatus.ai ? <div className="mini-note">{settingsStatus.ai}</div> : null}
                 <div className="mini-note">
                   {ui.aiFootnote}
+                </div>
+                <div className="settings-history">
+                  <div className="subhead">
+                    <span>{ui.aiSettingsHistory}</span>
+                  </div>
+                  {aiSettingsHistory.length ? (
+                    <div className="history-list">
+                      {aiSettingsHistory.slice(0, 12).map((entry) => (
+                        <details className="history-card" key={entry.id}>
+                          <summary>
+                            <span>
+                              <strong>{entry.summary || aiHistorySourceLabel(entry.source, ui)}</strong>
+                              <small>{formatHistoryDate(entry.createdAt, languageMode)} · {entry.section === "knowledgeAi" ? ui.knowledgeAiSettings : ui.aiSettings}</small>
+                            </span>
+                            <em>{aiHistorySourceLabel(entry.source, ui)}</em>
+                          </summary>
+                          <div className="history-change-list">
+                            {entry.changes.map((change) => (
+                              <div className="history-change" key={`${entry.id}-${change.field}`}>
+                                <strong>{change.label}</strong>
+                                <div className="history-diff-grid">
+                                  <div>
+                                    <span>{ui.historyBefore}</span>
+                                    <pre>{change.before || "(empty)"}</pre>
+                                  </div>
+                                  <div>
+                                    <span>{ui.historyAfter}</span>
+                                    <pre>{change.after || "(empty)"}</pre>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mini-note">{ui.noAiSettingsHistory}</div>
+                  )}
                 </div>
               </section>
               ) : null}
@@ -3308,7 +3986,7 @@ function App() {
                   <IconButton
                     icon={settingsBusy === "knowledgeAi" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
                     onClick={() => saveUserSettings("knowledgeAi")}
-                    disabled={Boolean(settingsBusy)}
+                    disabled={Boolean(settingsBusy) || !settingsDirty.knowledgeAi}
                     variant="primary"
                   >
                     {ui.save}
@@ -3479,6 +4157,52 @@ function App() {
             </div>
           </div>
         </section>
+
+        {testCases.length ? (
+          <section className="panel improve-panel">
+            <div className="section-heading">
+              <div>
+                <h2>{ui.improveDraftTitle}</h2>
+                <p>{ui.improveDraftHelp}</p>
+              </div>
+              <IconButton
+                icon={busy === "improve" ? <Loader2 className="spin" size={16} /> : <Wand2 size={16} />}
+                onClick={improveDraft}
+                disabled={isWorking || !savedAiSettings.enabled}
+                variant="primary"
+              >
+                {ui.improveDraftButton}
+              </IconButton>
+            </div>
+            <Field
+              label={ui.improveDraftInput}
+              value={improveInstruction}
+              onChange={(value) => {
+                setImproveInstruction(value);
+                if (improveStatus) setImproveStatus("");
+                if (promptImproveStatus) setPromptImproveStatus("");
+              }}
+              textarea
+              rows={3}
+              placeholder={ui.improveDraftPlaceholder}
+            />
+            <div className="button-row improve-actions">
+              <IconButton
+                icon={busy === "promptImprove" ? <Loader2 className="spin" size={16} /> : <Wand2 size={16} />}
+                onClick={improvePromptWithAi}
+                disabled={isWorking || !savedAiSettings.enabled}
+                variant="success"
+              >
+                {ui.improvePromptButton}
+              </IconButton>
+            </div>
+            {improveStatus ? <div className={improveStatus.startsWith(ui.improveDonePrefix) ? "notice ok improve-status" : "notice improve-status"}>{improveStatus}</div> : null}
+            {promptImproveStatus ? (
+              <div className={promptImproveStatus.startsWith(ui.improvePromptDonePrefix) ? "notice ok improve-status" : "notice improve-status"}>{promptImproveStatus}</div>
+            ) : null}
+            {!savedAiSettings.enabled ? <div className="mini-note">{ui.improveRequiresAi}</div> : null}
+          </section>
+        ) : null}
 
         <nav className="tabs">
           <button className={activeTab === "cases" ? "active" : ""} onClick={() => setActiveTab("cases")} type="button">

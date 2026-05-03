@@ -426,7 +426,9 @@ async function initializeDatabase() {
       project_config JSONB NOT NULL DEFAULT '{}'::jsonb,
       credentials_encrypted TEXT NOT NULL DEFAULT '',
       confluence_credentials_encrypted TEXT NOT NULL DEFAULT '',
+      auth_entries_encrypted TEXT NOT NULL DEFAULT '',
       ai_settings_encrypted TEXT NOT NULL DEFAULT '',
+      ai_settings_history JSONB NOT NULL DEFAULT '[]'::jsonb,
       repo_context_encrypted TEXT NOT NULL DEFAULT '',
       knowledge_articles JSONB NOT NULL DEFAULT '[]'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -434,7 +436,9 @@ async function initializeDatabase() {
     )
   `);
   await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS confluence_credentials_encrypted TEXT NOT NULL DEFAULT ''");
+  await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS auth_entries_encrypted TEXT NOT NULL DEFAULT ''");
   await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_settings_encrypted TEXT NOT NULL DEFAULT ''");
+  await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_settings_history JSONB NOT NULL DEFAULT '[]'::jsonb");
   await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS repo_context_encrypted TEXT NOT NULL DEFAULT ''");
   await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS knowledge_articles JSONB NOT NULL DEFAULT '[]'::jsonb");
 
@@ -789,6 +793,7 @@ function secretValuesFromAuth(...items) {
 function publicCredentials(credentials = {}) {
   const normalized = normalizeCredentials(credentials);
   return {
+    enabled: normalized.enabled,
     user: normalized.user,
     password: "",
     token: "",
@@ -802,6 +807,7 @@ function publicCredentials(credentials = {}) {
 function publicConfluenceCredentials(credentials = {}) {
   const normalized = normalizeConfluenceCredentials(credentials);
   return {
+    enabled: normalized.enabled,
     baseUrl: "",
     user: normalized.user,
     password: "",
@@ -811,6 +817,18 @@ function publicConfluenceCredentials(credentials = {}) {
       hasToken: Boolean(normalized.token),
     },
   };
+}
+
+function publicAuthEntries(entries = []) {
+  return normalizeAuthEntries(entries).map((entry) => ({
+    ...entry,
+    password: "",
+    token: "",
+    saved: {
+      hasPassword: Boolean(entry.password),
+      hasToken: Boolean(entry.token),
+    },
+  }));
 }
 
 function publicAiSettings(settings = {}) {
@@ -832,12 +850,126 @@ function publicAiSettings(settings = {}) {
   };
 }
 
+function normalizeAiSettingsHistory(raw = []) {
+  const items = Array.isArray(raw) ? raw : [];
+  return items
+    .map((item) => ({
+      id: asText(item.id) || crypto.randomUUID(),
+      createdAt: asText(item.createdAt || item.created_at) || new Date().toISOString(),
+      section: asText(item.section) === "knowledgeAi" ? "knowledgeAi" : "ai",
+      source: asText(item.source) || "manual_save",
+      summary: asText(item.summary),
+      changes: Array.isArray(item.changes)
+        ? item.changes
+            .map((change) => ({
+              field: asText(change.field),
+              label: asText(change.label || change.field),
+              before: asText(change.before),
+              after: asText(change.after),
+              secret: Boolean(change.secret),
+            }))
+            .filter((change) => change.field)
+            .slice(0, 40)
+        : [],
+    }))
+    .filter((item) => item.changes.length || item.summary)
+    .slice(0, 100);
+}
+
+function aiHistoryValue(value, secret = false) {
+  if (secret) {
+    return value ? "[secret updated]" : "[empty]";
+  }
+  const text = asText(value);
+  if (!text) return "";
+  return text.length > 1200 ? `${text.slice(0, 1200).trim()}\n...[truncated ${text.length - 1200} chars]` : text;
+}
+
+function aiSettingsRevisionChanges(previousSettings = {}, nextSettings = {}, section = "ai") {
+  const previous = normalizeAiSettings(previousSettings);
+  const next = normalizeAiSettings(nextSettings);
+  const fields =
+    section === "knowledgeAi"
+      ? [
+          ["knowledge.enabled", "Knowledge AI enabled", false],
+          ["knowledge.provider", "Knowledge provider", false],
+          ["knowledge.baseUrl", "Knowledge Base URL", false],
+          ["knowledge.model", "Knowledge model", false],
+          ["knowledge.apiKey", "Knowledge API key", true],
+          ["knowledge.writingStyle", "Knowledge writing style", false],
+          ["knowledge.articleGuidelines", "Knowledge article guidelines", false],
+        ]
+      : [
+          ["enabled", "AI enabled", false],
+          ["provider", "Provider", false],
+          ["baseUrl", "Base URL", false],
+          ["model", "Model", false],
+          ["apiKey", "API key", true],
+          ["writingStyle", "Writing style", false],
+          ["testCaseGuidelines", "Test case guidelines", false],
+          ["testDesignGuidelines", "Test design guidelines", false],
+          ["improvementNotes", "Ghi nhớ cải tiến", false],
+        ];
+  const getValue = (settings, field) =>
+    field.split(".").reduce((value, key) => (value && typeof value === "object" ? value[key] : undefined), settings);
+  return fields
+    .map(([field, label, secret]) => {
+      const beforeRaw = getValue(previous, field);
+      const afterRaw = getValue(next, field);
+      if (secret) {
+        const beforeSecret = asText(beforeRaw);
+        const afterSecret = asText(afterRaw);
+        if (beforeSecret === afterSecret) return null;
+        return {
+          field,
+          label,
+          before: beforeSecret ? "[saved secret]" : "[empty]",
+          after: afterSecret ? "[secret updated]" : "[empty]",
+          secret: true,
+        };
+      }
+      const beforeValue = aiHistoryValue(beforeRaw, Boolean(secret));
+      const afterValue = aiHistoryValue(afterRaw, Boolean(secret));
+      if (beforeValue === afterValue) return null;
+      return {
+        field,
+        label,
+        before: beforeValue,
+        after: afterValue,
+        secret: Boolean(secret),
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildAiSettingsHistoryEntry(previousSettings = {}, nextSettings = {}, meta = {}) {
+  const section = meta.section === "knowledgeAi" ? "knowledgeAi" : "ai";
+  const changes = aiSettingsRevisionChanges(previousSettings, nextSettings, section);
+  if (!changes.length) return null;
+  const source = asText(meta.source) || "manual_save";
+  const defaultSummary = source === "ai_prompt_improve"
+    ? "AI improved reusable prompt guidance"
+    : section === "knowledgeAi"
+      ? "Saved Knowledge AI Settings"
+      : "Saved AI Settings";
+  return {
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+    section,
+    source,
+    summary: asText(meta.summary) || defaultSummary,
+    changes,
+  };
+}
+
 function publicUserSettings(settings = {}) {
   return {
     project: settings.project || null,
     credentials: settings.credentials ? publicCredentials(settings.credentials) : null,
     confluenceCredentials: settings.confluenceCredentials ? publicConfluenceCredentials(settings.confluenceCredentials) : null,
+    authEntries: publicAuthEntries(settings.authEntries),
     aiSettings: settings.aiSettings ? publicAiSettings(settings.aiSettings) : null,
+    aiSettingsHistory: normalizeAiSettingsHistory(settings.aiSettingsHistory),
     repoContext: settings.repoContext || null,
     knowledgeArticles: normalizeKnowledgeArticles(settings.knowledgeArticles),
   };
@@ -845,11 +977,11 @@ function publicUserSettings(settings = {}) {
 
 async function readUserSettings(email) {
   if (!db || !email) {
-    return { project: null, credentials: {}, confluenceCredentials: {}, aiSettings: {}, repoContext: null, knowledgeArticles: [] };
+    return { project: null, credentials: {}, confluenceCredentials: {}, authEntries: [], aiSettings: {}, aiSettingsHistory: [], repoContext: null, knowledgeArticles: [] };
   }
   const result = await db.query(
     `
-      SELECT project_config, credentials_encrypted, confluence_credentials_encrypted, ai_settings_encrypted, repo_context_encrypted, knowledge_articles
+      SELECT project_config, credentials_encrypted, confluence_credentials_encrypted, auth_entries_encrypted, ai_settings_encrypted, ai_settings_history, repo_context_encrypted, knowledge_articles
       FROM user_settings
       WHERE user_email = $1
     `,
@@ -860,7 +992,9 @@ async function readUserSettings(email) {
     project: row?.project_config || null,
     credentials: decryptSettingsJson(row?.credentials_encrypted),
     confluenceCredentials: decryptSettingsJson(row?.confluence_credentials_encrypted),
+    authEntries: normalizeAuthEntries(decryptSettingsJson(row?.auth_entries_encrypted)),
     aiSettings: decryptSettingsJson(row?.ai_settings_encrypted),
+    aiSettingsHistory: normalizeAiSettingsHistory(row?.ai_settings_history),
     repoContext: decryptSettingsJson(row?.repo_context_encrypted),
     knowledgeArticles: normalizeKnowledgeArticles(row?.knowledge_articles),
   };
@@ -874,6 +1008,7 @@ function mergeCredentialsWithStored(incoming = {}, stored = {}) {
   const current = normalizeCredentials(incoming);
   const saved = normalizeCredentials(stored);
   return {
+    enabled: current.enabled,
     user: current.user || saved.user,
     password: current.password || saved.password,
     token: current.token || saved.token,
@@ -884,11 +1019,24 @@ function mergeConfluenceCredentialsWithStored(incoming = {}, stored = {}) {
   const current = normalizeConfluenceCredentials(incoming);
   const saved = normalizeConfluenceCredentials(stored);
   return {
+    enabled: current.enabled,
     baseUrl: current.baseUrl || saved.baseUrl,
     user: current.user || saved.user,
     password: current.password || saved.password,
     token: current.token || saved.token,
   };
+}
+
+function mergeAuthEntriesWithStored(incoming = [], stored = []) {
+  const savedById = new Map(normalizeAuthEntries(stored).map((entry) => [entry.id, entry]));
+  return normalizeAuthEntries(incoming).map((entry) => {
+    const saved = savedById.get(entry.id) || {};
+    return {
+      ...entry,
+      password: entry.password || saved.password || "",
+      token: entry.token || saved.token || "",
+    };
+  });
 }
 
 function mergeAiSettingsWithStored(incoming = {}, stored = {}) {
@@ -1035,7 +1183,7 @@ app.get("/api/download-file", async (req, res) => {
 app.get("/api/user-settings", async (req, res) => {
   try {
     if (!db) {
-      res.json({ project: null, credentials: null, confluenceCredentials: null, aiSettings: null, repoContext: null });
+      res.json({ project: null, credentials: null, confluenceCredentials: null, authEntries: [], aiSettings: null, aiSettingsHistory: [], repoContext: null });
       return;
     }
     res.json(publicUserSettings(await requestUserSettings(req)));
@@ -1055,6 +1203,7 @@ app.post("/api/user-settings", async (req, res) => {
     const hasProject = Object.prototype.hasOwnProperty.call(body, "project");
     const hasCredentials = Object.prototype.hasOwnProperty.call(body, "credentials");
     const hasConfluenceCredentials = Object.prototype.hasOwnProperty.call(body, "confluenceCredentials");
+    const hasAuthEntries = Object.prototype.hasOwnProperty.call(body, "authEntries");
     const hasAiSettings = Object.prototype.hasOwnProperty.call(body, "aiSettings");
     const hasRepoContext = Object.prototype.hasOwnProperty.call(body, "repoContext");
     const stored = await readUserSettings(email);
@@ -1065,20 +1214,37 @@ app.post("/api/user-settings", async (req, res) => {
     const confluenceCredentials = hasConfluenceCredentials
       ? mergeConfluenceCredentialsWithStored(body.confluenceCredentials, stored.confluenceCredentials)
       : normalizeConfluenceCredentials(stored.confluenceCredentials);
+    const authEntries = hasAuthEntries
+      ? mergeAuthEntriesWithStored(body.authEntries, stored.authEntries)
+      : normalizeAuthEntries(stored.authEntries);
     const aiSettings = hasAiSettings
       ? mergeAiSettingsWithStored(body.aiSettings, stored.aiSettings)
       : normalizeAiSettings(stored.aiSettings);
     const repoContext = hasRepoContext ? normalizeRepoContext(body.repoContext) : stored.repoContext || {};
+    const previousAiSettings = normalizeAiSettings(stored.aiSettings);
+    const historyMeta = body.historyMeta || {};
+    const historyEntry = hasAiSettings
+      ? buildAiSettingsHistoryEntry(previousAiSettings, aiSettings, {
+          section: body.settingsSection,
+          source: historyMeta.source,
+          summary: historyMeta.summary,
+        })
+      : null;
+    const aiSettingsHistory = historyEntry
+      ? normalizeAiSettingsHistory([historyEntry, ...(stored.aiSettingsHistory || [])])
+      : normalizeAiSettingsHistory(stored.aiSettingsHistory);
     await db.query(
       `
-        INSERT INTO user_settings (user_email, project_config, credentials_encrypted, confluence_credentials_encrypted, ai_settings_encrypted, repo_context_encrypted)
-        VALUES ($1, $2::jsonb, $3, $4, $5, $6)
+        INSERT INTO user_settings (user_email, project_config, credentials_encrypted, confluence_credentials_encrypted, auth_entries_encrypted, ai_settings_encrypted, ai_settings_history, repo_context_encrypted)
+        VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7::jsonb, $8)
         ON CONFLICT (user_email)
         DO UPDATE SET
           project_config = EXCLUDED.project_config,
           credentials_encrypted = EXCLUDED.credentials_encrypted,
           confluence_credentials_encrypted = EXCLUDED.confluence_credentials_encrypted,
+          auth_entries_encrypted = EXCLUDED.auth_entries_encrypted,
           ai_settings_encrypted = EXCLUDED.ai_settings_encrypted,
+          ai_settings_history = EXCLUDED.ai_settings_history,
           repo_context_encrypted = EXCLUDED.repo_context_encrypted,
           updated_at = NOW()
       `,
@@ -1087,11 +1253,13 @@ app.post("/api/user-settings", async (req, res) => {
         JSON.stringify(project),
         encryptSettingsJson(credentials),
         encryptSettingsJson(confluenceCredentials),
+        encryptSettingsJson(authEntries),
         encryptSettingsJson(aiSettings),
+        JSON.stringify(aiSettingsHistory),
         encryptSettingsJson(repoContext),
       ],
     );
-    res.json({ saved: true, ...publicUserSettings({ project, credentials, confluenceCredentials, aiSettings, repoContext }) });
+    res.json({ saved: true, ...publicUserSettings({ project, credentials, confluenceCredentials, authEntries, aiSettings, aiSettingsHistory, repoContext }) });
   } catch (error) {
     sendError(res, error);
   }
@@ -2638,6 +2806,9 @@ const HTML_ENTITIES = {
 
 function confluenceAuthHeaders(credentials = {}) {
   const headers = { Accept: "application/json, text/html;q=0.8" };
+  if (credentials.enabled === false || asText(credentials.enabled).toLowerCase() === "false") {
+    return headers;
+  }
   const user = asText(credentials.user);
   const password = asText(credentials.password);
   const token = asText(credentials.token);
@@ -2867,6 +3038,10 @@ function normalizeIssue(raw = {}, jiraUrl = "") {
 function credentialEnv(project, credentials = {}) {
   const env = {};
   const baseUrl = asText(project.jiraBaseUrl);
+  if (credentials.enabled === false || asText(credentials.enabled).toLowerCase() === "false") {
+    if (baseUrl) env.JIRA_BASE_URL = baseUrl;
+    return env;
+  }
   const user = asText(credentials.user || credentials.jiraUser);
   const password = asText(credentials.password || credentials.jiraPassword);
   const token = asText(credentials.token || credentials.jiraToken);
@@ -2879,6 +3054,9 @@ function credentialEnv(project, credentials = {}) {
 
 function jiraAuthHeaders(credentials = {}) {
   const headers = { Accept: "application/json" };
+  if (credentials.enabled === false || asText(credentials.enabled).toLowerCase() === "false") {
+    return headers;
+  }
   const user = asText(credentials.user || credentials.jiraUser);
   const password = asText(credentials.password || credentials.jiraPassword);
   const token = asText(credentials.token || credentials.jiraToken);
@@ -2958,6 +3136,7 @@ async function fetchJiraDocumentLinks(project, credentials, issueKey) {
 
 function normalizeCredentials(raw = {}) {
   return {
+    enabled: raw.enabled === false || asText(raw.enabled).toLowerCase() === "false" ? false : true,
     user: asText(raw.user || raw.jiraUser),
     password: asText(raw.password || raw.jiraPassword),
     token: asText(raw.token || raw.jiraToken),
@@ -2966,11 +3145,36 @@ function normalizeCredentials(raw = {}) {
 
 function normalizeConfluenceCredentials(raw = {}) {
   return {
+    enabled: raw.enabled === false || asText(raw.enabled).toLowerCase() === "false" ? false : true,
     baseUrl: asText(raw.baseUrl || raw.confluenceBaseUrl),
     user: asText(raw.user || raw.confluenceUser),
     password: asText(raw.password || raw.confluencePassword),
     token: asText(raw.token || raw.confluenceToken),
   };
+}
+
+function normalizeAuthEntry(raw = {}) {
+  const authType = asText(raw.authType || raw.type).toLowerCase();
+  const normalizedType = authType === "basic" || authType === "apikey" || authType === "api_key" ? authType : "bearer";
+  return {
+    id: asText(raw.id) || crypto.randomUUID(),
+    name: asText(raw.name || raw.label),
+    baseUrl: asText(raw.baseUrl || raw.url || raw.host),
+    authType: normalizedType === "apikey" || normalizedType === "api_key" ? "apiKey" : normalizedType,
+    user: asText(raw.user || raw.username || raw.keyName),
+    password: asText(raw.password),
+    token: asText(raw.token || raw.apiKey),
+    enabled: raw.enabled === true || asText(raw.enabled).toLowerCase() === "true",
+    notes: asText(raw.notes || raw.description),
+  };
+}
+
+function normalizeAuthEntries(raw = []) {
+  const items = Array.isArray(raw) ? raw : [];
+  return items
+    .map(normalizeAuthEntry)
+    .filter((entry) => entry.name || entry.baseUrl)
+    .slice(0, 20);
 }
 
 function normalizeKnowledgeAiSettings(raw = {}) {
@@ -4867,7 +5071,7 @@ function completeAiCasesWithFallback(testCases = [], fallbackCases = [], qaPlan 
   return selected;
 }
 
-function normalizeAiDraft(payload, issue, archetypeKey, fallbackCases, fallbackOutline, qaPlan = null) {
+function normalizeAiDraft(payload, issue, archetypeKey, fallbackCases, fallbackOutline, qaPlan = null, options = {}) {
   const rawCases = Array.isArray(payload?.test_cases)
     ? payload.test_cases
     : Array.isArray(payload?.testCases)
@@ -4877,7 +5081,7 @@ function normalizeAiDraft(payload, issue, archetypeKey, fallbackCases, fallbackO
     throw new Error("AI provider trả về JSON nhưng thiếu `test_cases`.");
   }
   const aiCases = rawCases.slice(0, 32).map((rawCase, index) => normalizeAiCase(rawCase, index, issue, fallbackCases[index]));
-  const testCases = completeAiCasesWithFallback(aiCases, fallbackCases, qaPlan);
+  const testCases = options.completeFallback === false ? aiCases : completeAiCasesWithFallback(aiCases, fallbackCases, qaPlan);
   const outline = normalizeAiOutline(payload.outline || payload.test_design || payload.testDesign || {}, issue, archetypeKey, fallbackOutline);
   return { testCases, outline };
 }
@@ -5093,6 +5297,283 @@ async function generateAiDraft({ issue, archetypeKey, sourceInput, aiSettings, a
   const result = await callOpenAiCompatible(aiSettings, messages);
   return {
     ...normalizeAiDraft(result.payload, issue, archetypeKey, fallbackCases, fallbackOutline, qaPlan),
+    usage: result.usage,
+  };
+}
+
+function buildAiImproveDraftMessages({
+  issue,
+  archetypeKey,
+  archetype,
+  sourceInput,
+  aiCustomization,
+  currentCases,
+  currentOutline,
+  improveInstruction,
+  sourceRoot,
+  qaPlan,
+}) {
+  const system = [
+    "You are EasyForQC, a senior QC/QA test design assistant.",
+    "Improve an existing draft of Jira Zephyr test cases and an XMind test-design outline.",
+    "The user's improve instruction is task-local feedback. Apply it carefully without losing useful risk coverage.",
+    "Return a full revised draft as strict JSON only. Do not return patches, markdown, or prose outside JSON.",
+  ].join("\n");
+
+  const user = [
+    "## Source priority",
+    "1. Jira summary/description and acceptance criteria remain the primary source of truth.",
+    "2. User improve instruction refines the current draft. It can request additions, removals, rewrites, coverage shifts, or title/style changes.",
+    "3. Preserve strong existing cases when they are still relevant. Remove or merge cases only when the instruction clearly asks for it or they are duplicate/generic.",
+    "4. Confluence/doc context and QA notes are supporting evidence only when clearly related to this Jira task.",
+    "5. AI Settings guidance applies to style and coverage quality, but must not override explicit Jira scope.",
+    "",
+    "## Improve rules",
+    "- Output language: Vietnamese with full diacritics for all human-readable testcase/test-design content.",
+    "- Return the complete revised `test_cases` and `outline`, not a diff.",
+    "- Do not simply append generic cases. Add cases only when they cover a distinct risk, edge case, fallback, validation, regression, mapping, or state transition.",
+    "- If the user asks to rewrite titles, make titles business/risk specific and remove URLs/reference-noise.",
+    "- If the user asks for more coverage, prioritize likely bug surfaces: validation, auth, empty/partial data, duplicate/retry, fallback, wrong mapping, state carry-forward, nearby regression.",
+    "- Keep each testcase focused: one testcase = one scenario.",
+    "- `expected_result` must be multiline bullet points beginning with `- `.",
+    "- `steps` must be an array of clear tester actions.",
+    "- Keep exactly one `Out of scope` branch in the outline.",
+    "",
+    "## Required JSON schema",
+    JSON.stringify(
+      {
+        test_cases: [
+          {
+            title: "Scenario-specific title without TC prefix",
+            precondition: "Precondition text",
+            objective: "Objective text",
+            priority: "High | Normal | Low",
+            technique: "Decision table",
+            risk: "Risk covered by this case",
+            requirement_ref: issue.key || "Jira issue / doc source",
+            coverage_tags: ["short-tag"],
+            scenario_type: "happy_path | negative | regression | boundary | fallback | mapping | state_transition",
+            steps: ["One clear tester action", "Another concrete verification action"],
+            test_data: "Dữ liệu kiểm tra:\\n1. \"...\"",
+            expected_result: "- Expected 1\\n- Expected 2",
+          },
+        ],
+        outline: {
+          issue_key: issue.key,
+          title: `[${issue.key}] ${issue.summary}`,
+          sheet_title: "Brace Map",
+          template: archetypeKey,
+          source_context: {},
+          design_rationale: {
+            archetype: archetype.label,
+            primary_techniques: archetype.primary,
+            supporting_techniques: archetype.supporting,
+            assumptions: [],
+            open_questions: [],
+          },
+          branches: [{ title: "Branch title", items: ["Concrete bullet"] }],
+        },
+      },
+      null,
+      2,
+    ),
+    "",
+    "## User improve instruction",
+    truncateForPrompt(improveInstruction, 8000),
+    "",
+    "## Jira issue",
+    jsonForPrompt(issue, 16000),
+    "",
+    "## Selected archetype",
+    jsonForPrompt({ key: archetypeKey, ...archetype }, 4000),
+    "",
+    "## Adaptive QA plan",
+    jsonForPrompt(qaPlan || {}, 14000),
+    "",
+    "## Current draft test cases to improve",
+    jsonForPrompt(currentCases, 22000),
+    "",
+    "## Current test-design outline to improve",
+    jsonForPrompt(currentOutline, 12000),
+    "",
+    "## QA notes",
+    truncateForPrompt(sourceInput.qaNotes || "", 4000),
+    "",
+    "## Confluence/doc context for this task only",
+    truncateForPrompt(sourceInput.docContext || "", AI_DOC_CONTEXT_PROMPT_LIMIT),
+    "",
+    "## OmniAgent skill references",
+    truncateForPrompt(omniSkillReference(sourceRoot), 12000),
+    "",
+    "## User AI Settings guidance",
+    truncateForPrompt(aiGuidanceText(aiCustomization), 6000),
+  ].join("\n");
+
+  return [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ];
+}
+
+function buildAiImprovePromptMessages({
+  instruction,
+  issue,
+  currentCases,
+  currentOutline,
+  currentImprovementNotes,
+  aiCustomization,
+  language,
+}) {
+  const outputLanguage = language === "en" ? "English" : "Vietnamese with full diacritics";
+  const system = [
+    "You are EasyForQC's senior QA prompt engineer.",
+    "Convert task-local user feedback into reusable AI Settings guidance for future Jira test-case and test-design generation.",
+    "The output will be saved into the `improvementNotes` field, so it must be generally useful, precise, and safe to reuse.",
+    "Return only one valid JSON object.",
+  ].join("\n");
+
+  const user = [
+    `Output language: ${outputLanguage}`,
+    "",
+    "## Goal",
+    "Rewrite the user's refine request into reusable guidance that can improve future EasyForQC generations across different tasks.",
+    "",
+    "## Rules",
+    "- Generalize task-specific wording into testing rules, risk lenses, title rules, coverage expectations, or formatting guidance.",
+    "- Do not include Jira keys, URLs, credentials, tokens, personal data, company-internal secrets, or one-off task facts unless they are necessary as a reusable pattern.",
+    "- Keep the guidance short but actionable: 2 to 5 bullets, each bullet beginning with `- `.",
+    "- Preserve the user's real intent. Do not invent unrelated QA rules.",
+    "- If the request asks for more coverage, name concrete bug surfaces such as validation, auth, empty/partial data, duplicate/retry, fallback, wrong mapping, state carry-forward, or nearby regression.",
+    "- If the request asks for title/style changes, phrase it as a reusable naming or writing rule.",
+    "- Make it compatible with existing AI Settings guidance; do not erase or contradict existing rules.",
+    "",
+    "## Required JSON schema",
+    JSON.stringify(
+      {
+        improved_prompt: "- Reusable prompt bullet 1\n- Reusable prompt bullet 2",
+        target_field: "improvementNotes",
+        summary: "Short note describing what was improved",
+      },
+      null,
+      2,
+    ),
+    "",
+    "## User refine request to generalize",
+    truncateForPrompt(instruction, 5000),
+    "",
+    "## Current AI Settings guidance",
+    truncateForPrompt(aiGuidanceText(aiCustomization), 6000),
+    "",
+    "## Existing improvementNotes",
+    truncateForPrompt(currentImprovementNotes, 6000),
+    "",
+    "## Current Jira context for de-specificating only",
+    jsonForPrompt(
+      {
+        key: issue?.key,
+        summary: issue?.summary,
+        issue_type: issue?.issue_type,
+        status: issue?.status,
+      },
+      5000,
+    ),
+    "",
+    "## Current draft examples for de-specificating only",
+    jsonForPrompt(
+      {
+        test_case_titles: Array.isArray(currentCases) ? currentCases.slice(0, 12).map((item) => stripTestCasePrefix(item?.title)) : [],
+        outline_branches: Array.isArray(currentOutline?.branches) ? currentOutline.branches.slice(0, 8).map((branch) => branch?.title) : [],
+      },
+      6000,
+    ),
+  ].join("\n");
+
+  return [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ];
+}
+
+function normalizeImprovedPromptPayload(payload = {}) {
+  const improvedPrompt = asText(
+    payload.improved_prompt ||
+      payload.improvedPrompt ||
+      payload.prompt ||
+      payload.guidance ||
+      payload.content,
+  );
+  if (!improvedPrompt.trim()) {
+    throw Object.assign(new Error("AI provider trả về JSON nhưng thiếu `improved_prompt`."), { status: 502 });
+  }
+  const normalizedLines = improvedPrompt
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^[-•]\s*/, "").trim())
+    .filter(Boolean)
+    .slice(0, 8)
+    .map((line) => `- ${line}`);
+  return {
+    improvedPrompt: normalizedLines.length ? normalizedLines.join("\n") : `- ${improvedPrompt.trim()}`,
+    targetField: asText(payload.target_field || payload.targetField) || "improvementNotes",
+    summary: asText(payload.summary),
+  };
+}
+
+async function generateAiImprovedDraft({
+  issue,
+  archetypeKey,
+  sourceInput,
+  aiSettings,
+  aiCustomization,
+  currentCases,
+  currentOutline,
+  improveInstruction,
+  project,
+  qaPlan,
+}) {
+  const archetype = ARCHETYPES[archetypeKey] || ARCHETYPES.general;
+  const messages = buildAiImproveDraftMessages({
+    issue,
+    archetypeKey,
+    archetype,
+    sourceInput,
+    aiCustomization,
+    currentCases,
+    currentOutline,
+    improveInstruction,
+    sourceRoot: project.sourceRoot,
+    qaPlan,
+  });
+  const result = await callOpenAiCompatible(aiSettings, messages);
+  return {
+    ...normalizeAiDraft(result.payload, issue, archetypeKey, currentCases, currentOutline, qaPlan, { completeFallback: false }),
+    usage: result.usage,
+  };
+}
+
+async function generateAiImprovedPrompt({
+  instruction,
+  issue,
+  aiSettings,
+  aiCustomization,
+  currentCases,
+  currentOutline,
+  currentImprovementNotes,
+  language,
+}) {
+  const messages = buildAiImprovePromptMessages({
+    instruction,
+    issue,
+    currentCases,
+    currentOutline,
+    currentImprovementNotes,
+    aiCustomization,
+    language,
+  });
+  const result = await callOpenAiCompatible(aiSettings, messages);
+  return {
+    ...normalizeImprovedPromptPayload(result.payload),
     usage: result.usage,
   };
 }
@@ -5386,6 +5867,137 @@ app.post("/api/draft", async (req, res) => {
       referenceDocsFetched: referenceDocs,
       testCases,
       outline,
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post("/api/improve-draft", async (req, res) => {
+  try {
+    const parsed = parseIssueReference(req.body?.jiraUrl || "");
+    const project = normalizeProject(req.body?.project, { jiraBaseUrl: parsed.baseUrl });
+    const issue = normalizeIssue(req.body?.issue, req.body?.jiraUrl);
+    if (!issue.key) issue.key = parsed.issueKey;
+    if (!issue.summary && !issue.description) {
+      throw Object.assign(new Error("Cần summary hoặc description của Jira task để refine draft."), { status: 400 });
+    }
+    const improveInstruction = asText(req.body?.improveInstruction || req.body?.instruction || req.body?.feedback);
+    if (!improveInstruction.trim()) {
+      throw Object.assign(new Error("Cần nhập nội dung muốn AI tinh chỉnh cho draft."), { status: 400 });
+    }
+    const currentCases = normalizeCasesForFile(req.body?.testCases);
+    const currentOutline = req.body?.outline;
+    if (!currentOutline || !Array.isArray(currentOutline.branches)) {
+      throw Object.assign(new Error("Cần test design outline hiện tại để refine draft."), { status: 400 });
+    }
+    const archetypeKey = chooseArchetype(issue, req.body?.archetype || currentOutline.template);
+    const sourceContext = {
+      qaNotes: asText(req.body?.notes),
+      docContext: asText(req.body?.docContext),
+      repoContext: normalizeRepoContext(req.body?.repoContext),
+    };
+    const stored = await requestUserSettings(req);
+    const aiSettings = mergeAiSettingsWithStored(req.body?.aiSettings, stored.aiSettings);
+    if (!aiSettings.enabled) {
+      throw Object.assign(new Error("Tinh chỉnh draft cần bật AI Settings. Hãy bật AI Settings và lưu API key/model trước khi chạy Improve draft."), {
+        status: 400,
+      });
+    }
+    if (!aiProviderReady(aiSettings)) {
+      throw Object.assign(new Error("AI Settings đang bật nhưng thiếu API key hoặc model. Hãy nhập đủ API key/model trước khi Improve draft."), {
+        status: 400,
+      });
+    }
+    const aiCustomization = aiCustomizationFromSettings(aiSettings);
+    const qaPlan =
+      req.body?.qaPlan && typeof req.body.qaPlan === "object"
+        ? req.body.qaPlan
+        : await buildQaPlan({
+            issue,
+            archetypeKey,
+            sourceInput: sourceContext,
+            aiCustomization,
+            project,
+          });
+    const aiDraft = await generateAiImprovedDraft({
+      issue,
+      archetypeKey,
+      sourceInput: sourceContext,
+      aiSettings,
+      aiCustomization,
+      currentCases,
+      currentOutline,
+      improveInstruction,
+      project,
+      qaPlan,
+    }).catch((error) => {
+      throw Object.assign(
+        new Error(aiProviderDraftErrorMessage(error)),
+        {
+          status: error.status || 502,
+          details: error.details || null,
+        },
+      );
+    });
+    const testCases = polishDraftCases(aiDraft.testCases, issue, qaPlan, project);
+    const outline = attachQaPlanToOutline(aiDraft.outline, qaPlan);
+    res.json({
+      archetypeKey,
+      archetype: ARCHETYPES[archetypeKey],
+      aiCustomizationApplied: Boolean(aiCustomization),
+      aiGenerationUsed: true,
+      aiGenerationError: "",
+      aiUsage: aiDraft.usage,
+      aiProvider: aiProviderResponseMeta(aiSettings, true, "", aiDraft.usage),
+      qaPlan,
+      qaQuality: draftQualityReport(testCases, outline, qaPlan),
+      sourceContext: outline.source_context,
+      improveInstruction,
+      testCases,
+      outline,
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post("/api/improve-prompt", async (req, res) => {
+  try {
+    const instruction = asText(req.body?.instruction || req.body?.improveInstruction || req.body?.feedback);
+    if (!instruction.trim()) {
+      throw Object.assign(new Error("Cần nhập yêu cầu tinh chỉnh để AI cải thiện thành prompt dùng lại."), { status: 400 });
+    }
+    const stored = await requestUserSettings(req);
+    const aiSettings = mergeAiSettingsWithStored(req.body?.aiSettings, stored.aiSettings);
+    if (!aiSettings.enabled) {
+      throw Object.assign(new Error("Improve prompt bằng AI cần bật AI Settings trước."), { status: 400 });
+    }
+    if (!aiProviderReady(aiSettings)) {
+      throw Object.assign(new Error("AI Settings đang thiếu API key hoặc model nên chưa thể Improve prompt."), { status: 400 });
+    }
+    const issue = normalizeIssue(req.body?.issue, req.body?.jiraUrl);
+    const aiCustomization = aiCustomizationFromSettings(aiSettings);
+    const improved = await generateAiImprovedPrompt({
+      instruction,
+      issue,
+      aiSettings,
+      aiCustomization,
+      currentCases: Array.isArray(req.body?.testCases) ? req.body.testCases : [],
+      currentOutline: req.body?.outline && typeof req.body.outline === "object" ? req.body.outline : null,
+      currentImprovementNotes: asText(req.body?.currentImprovementNotes || aiSettings.improvementNotes),
+      language: req.body?.language === "en" ? "en" : "vi",
+    }).catch((error) => {
+      throw Object.assign(new Error(aiProviderDraftErrorMessage(error)), {
+        status: error.status || 502,
+        details: error.details || null,
+      });
+    });
+    res.json({
+      improvedPrompt: improved.improvedPrompt,
+      targetField: improved.targetField,
+      summary: improved.summary,
+      aiProvider: aiProviderResponseMeta(aiSettings, true, "", improved.usage),
     });
   } catch (error) {
     sendError(res, error);
