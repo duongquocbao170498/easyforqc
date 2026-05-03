@@ -682,33 +682,40 @@ button:disabled {
   overflow: hidden;
 }
 
-.history-card summary {
+.history-card-summary {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: start;
   padding: 10px 12px;
-  cursor: pointer;
 }
 
-.history-card summary span {
+.history-card-summary > span {
   display: grid;
   gap: 3px;
   min-width: 0;
 }
 
-.history-card summary strong {
+.history-card-summary strong {
   color: var(--ink);
   font-size: 13px;
   line-height: 1.35;
 }
 
-.history-card summary small {
+.history-card-summary small {
   color: var(--text-muted);
   font-size: 11px;
 }
 
-.history-card summary em {
+.history-card-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.history-card-actions em {
   border: 1px solid rgba(249, 115, 22, 0.35);
   border-radius: 999px;
   background: rgba(249, 115, 22, 0.12);
@@ -1915,7 +1922,7 @@ pre {
   background: #ffffff;
 }
 
-:root[data-theme="light"] .history-card summary em {
+:root[data-theme="light"] .history-card-actions em {
   border-color: #fdba74;
   background: #fff7ed;
   color: #c2410c;

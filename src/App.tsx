@@ -97,9 +97,15 @@ type DraftResponse = {
 };
 type PromptImproveResponse = {
   improvedPrompt: string;
-  targetField?: string;
+  targetField?: AiImproveField;
+  updates?: PromptImproveUpdate[];
   summary?: string;
   aiProvider?: AiProviderInfo;
+};
+type AiImproveField = "writingStyle" | "testCaseGuidelines" | "testDesignGuidelines" | "improvementNotes";
+type PromptImproveUpdate = {
+  targetField: AiImproveField;
+  improvedPrompt: string;
 };
 type ConfluenceDocument = { title: string; url: string; text: string; error?: string };
 type DownloadFileMeta = { file: string; path: string; url: string };
@@ -399,11 +405,12 @@ const UI_TEXT = {
     improvePromptButton: "Improve prompt bằng AI",
     improvePromptRequiresInput: "Cần nhập Yêu cầu tinh chỉnh trước khi Improve prompt.",
     improvePromptDonePrefix: "Đã cải thiện prompt từ yêu cầu tinh chỉnh",
-    improvePromptSavedToAiSettings: "Đã thêm vào Ghi nhớ cải tiến. Vào Cài đặt AI để review và bấm Lưu trước khi dùng cho lần sau.",
+    improvePromptSavedToAiSettings: "Đã cập nhật vào Cài đặt AI. Review các mục được đánh dấu rồi bấm Lưu trước khi dùng cho lần sau.",
+    improvePromptUpdatedFields: "Đã cập nhật",
     improveRequiresDraft: "Cần tạo draft trước khi tinh chỉnh bằng AI.",
     improveRequiresAi: "Cần bật AI Settings và có API key/model để dùng Improve draft.",
     improveDonePrefix: "Đã chỉnh sửa theo yêu cầu tinh chỉnh",
-    aiSettingsPendingImprove: "AI vừa cập nhật Ghi nhớ cải tiến. Review nội dung rồi bấm Lưu để áp dụng cho các task sau.",
+    aiSettingsPendingImprove: "AI vừa cập nhật một số mục trong Cài đặt AI. Review nội dung rồi bấm Lưu để áp dụng cho các task sau.",
     aiImprovedBadge: "AI cải thiện",
     aiSettingsUnsavedGuard: "Prompt mới chỉ áp dụng sau khi bấm Lưu trong Cài đặt AI.",
     aiSettingsHistory: "Lịch sử chỉnh sửa",
@@ -412,6 +419,7 @@ const UI_TEXT = {
     historyAfter: "Sau",
     historyManualSave: "Lưu thủ công",
     historyAiPromptImprove: "AI improve prompt",
+    historyChangedItems: "mục thay đổi",
     taskContext: "Ngữ cảnh task",
     issueKey: "Issue key",
     status: "Trạng thái",
@@ -636,11 +644,12 @@ const UI_TEXT = {
     improvePromptButton: "Improve prompt with AI",
     improvePromptRequiresInput: "Enter an improve request before improving the prompt.",
     improvePromptDonePrefix: "Improved prompt from refine request",
-    improvePromptSavedToAiSettings: "Added to Improve skill notes. Open AI Settings to review and Save before using it next time.",
+    improvePromptSavedToAiSettings: "Updated AI Settings. Review the marked fields and Save before using them next time.",
+    improvePromptUpdatedFields: "Updated",
     improveRequiresDraft: "Generate a draft before improving it with AI.",
     improveRequiresAi: "Enable AI Settings with API key/model before using Improve draft.",
     improveDonePrefix: "Improved draft using request",
-    aiSettingsPendingImprove: "AI updated Improve skill notes. Review the content and Save to apply it to future tasks.",
+    aiSettingsPendingImprove: "AI updated some AI Settings fields. Review the content and Save to apply it to future tasks.",
     aiImprovedBadge: "AI improved",
     aiSettingsUnsavedGuard: "The new prompt applies only after saving AI Settings.",
     aiSettingsHistory: "Revision history",
@@ -649,6 +658,7 @@ const UI_TEXT = {
     historyAfter: "After",
     historyManualSave: "Manual save",
     historyAiPromptImprove: "AI prompt improve",
+    historyChangedItems: "changed fields",
     taskContext: "Task context",
     issueKey: "Issue key",
     status: "Status",
@@ -741,6 +751,44 @@ function formatHistoryDate(value: string, language: LanguageMode) {
 
 function aiHistorySourceLabel(source: string, ui: UiText) {
   return source === "ai_prompt_improve" ? ui.historyAiPromptImprove : ui.historyManualSave;
+}
+
+function aiImproveFieldLabel(field: AiImproveField, ui: UiText) {
+  const labels: Record<AiImproveField, string> = {
+    writingStyle: ui.writingStyle,
+    testCaseGuidelines: ui.testCaseGuidelines,
+    testDesignGuidelines: ui.testDesignGuidelines,
+    improvementNotes: ui.improveSkillNotes,
+  };
+  return labels[field];
+}
+
+const AI_IMPROVE_FIELD_SET = new Set<AiImproveField>(["writingStyle", "testCaseGuidelines", "testDesignGuidelines", "improvementNotes"]);
+
+function normalizeAiImproveField(value: unknown): AiImproveField {
+  const raw = typeof value === "string" ? value : "";
+  return AI_IMPROVE_FIELD_SET.has(raw as AiImproveField) ? (raw as AiImproveField) : "improvementNotes";
+}
+
+function normalizePromptImproveUpdates(payload: PromptImproveResponse): PromptImproveUpdate[] {
+  const fromUpdates = Array.isArray(payload.updates)
+    ? payload.updates
+        .map((update) => ({
+          targetField: normalizeAiImproveField(update?.targetField),
+          improvedPrompt: typeof update?.improvedPrompt === "string" ? update.improvedPrompt.trim() : "",
+        }))
+        .filter((update) => Boolean(update.improvedPrompt))
+    : [];
+  if (fromUpdates.length) return fromUpdates;
+  const improvedPrompt = typeof payload.improvedPrompt === "string" ? payload.improvedPrompt.trim() : "";
+  return improvedPrompt
+    ? [
+        {
+          targetField: normalizeAiImproveField(payload.targetField),
+          improvedPrompt,
+        },
+      ]
+    : [];
 }
 
 type KnowledgeCard = {
@@ -1914,8 +1962,9 @@ function App() {
   const [improveStatus, setImproveStatus] = useState("");
   const [promptImproveStatus, setPromptImproveStatus] = useState("");
   const [aiSettingsImprovePending, setAiSettingsImprovePending] = useState(false);
-  const [aiSettingsImprovedField, setAiSettingsImprovedField] = useState<"" | "improvementNotes">("");
+  const [aiSettingsImprovedFields, setAiSettingsImprovedFields] = useState<AiImproveField[]>([]);
   const [pendingAiImproveHistory, setPendingAiImproveHistory] = useState<{ source: string; summary: string } | null>(null);
+  const [expandedHistoryIds, setExpandedHistoryIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<TabKey>("cases");
   const [busy, setBusy] = useState<BusyKey>("");
   const [message, setMessage] = useState("");
@@ -2034,7 +2083,7 @@ function App() {
     setSecretStatus(nextSecretStatus);
     setSavedSettingsSnapshot(settingsSnapshots(nextProject, nextCredentials, nextConfluenceCredentials, nextAuthEntries, nextAiSettings));
     setAiSettingsImprovePending(false);
-    setAiSettingsImprovedField("");
+    setAiSettingsImprovedFields([]);
     setPendingAiImproveHistory(null);
     setSavedKnowledgeDraftSnapshot("");
   }
@@ -2599,7 +2648,7 @@ function App() {
           ai: aiCoreSettingsSnapshot(nextFormAiSettings),
         }));
         setAiSettingsImprovePending(false);
-        setAiSettingsImprovedField("");
+        setAiSettingsImprovedFields([]);
         setPendingAiImproveHistory(null);
       }
       if (section === "knowledgeAi") {
@@ -2925,7 +2974,6 @@ function App() {
         jiraUrl,
         issue,
         aiSettings: activeAiSettings,
-        currentImprovementNotes: activeAiSettings.improvementNotes,
         testCases,
         outline,
         language: languageMode,
@@ -2934,22 +2982,27 @@ function App() {
         setPromptImproveStatus(errorMessage);
         throw error;
       });
-      const improvedPrompt = payload.improvedPrompt.trim();
-      if (!improvedPrompt) {
+      const updates = normalizePromptImproveUpdates(payload);
+      if (!updates.length) {
         throw new Error("AI chưa trả về prompt cải thiện hợp lệ.");
       }
-      setAiSettings((current) => ({
-        ...current,
-        improvementNotes: appendImproveNote(current.improvementNotes, improvedPrompt),
-      }));
+      const changedFields = Array.from(new Set(updates.map((update) => update.targetField)));
+      setAiSettings((current) => {
+        const next = { ...current };
+        for (const update of updates) {
+          next[update.targetField] = appendImproveNote(next[update.targetField], update.improvedPrompt);
+        }
+        return next;
+      });
       setAiSettingsImprovePending(true);
-      setAiSettingsImprovedField("improvementNotes");
+      setAiSettingsImprovedFields(changedFields);
+      const changedLabels = changedFields.map((field) => aiImproveFieldLabel(field, ui)).join(", ");
       setPendingAiImproveHistory({
         source: "ai_prompt_improve",
-        summary: `AI improve prompt từ yêu cầu: ${trimmedInstruction.slice(0, 140)}`,
+        summary: `AI improve prompt từ yêu cầu: ${trimmedInstruction.slice(0, 120)}${changedLabels ? ` | Cập nhật: ${changedLabels}` : ""}`,
       });
       setSettingsStatus((current) => ({ ...current, ai: "" }));
-      const successText = `${ui.improvePromptDonePrefix}: "${trimmedInstruction}". ${ui.improvePromptSavedToAiSettings} ${ui.aiSettingsUnsavedGuard}`;
+      const successText = `${ui.improvePromptDonePrefix}: "${trimmedInstruction}". ${changedLabels ? `${ui.improvePromptUpdatedFields}: ${changedLabels}. ` : ""}${ui.improvePromptSavedToAiSettings} ${ui.aiSettingsUnsavedGuard}`;
       setPromptImproveStatus(successText);
       setMessage(successText);
     });
@@ -3816,6 +3869,14 @@ function App() {
                     textarea
                     rows={4}
                     placeholder={ui.writingStylePlaceholder}
+                    badge={
+                      aiSettingsImprovedFields.includes("writingStyle") ? (
+                        <>
+                          <Wand2 size={11} />
+                          {ui.aiImprovedBadge}
+                        </>
+                      ) : null
+                    }
                   />
                   <Field
                     label={ui.improveSkillNotes}
@@ -3825,7 +3886,7 @@ function App() {
                     rows={4}
                     placeholder={ui.improveSkillPlaceholder}
                     badge={
-                      aiSettingsImprovedField === "improvementNotes" ? (
+                      aiSettingsImprovedFields.includes("improvementNotes") ? (
                         <>
                           <Wand2 size={11} />
                           {ui.aiImprovedBadge}
@@ -3840,6 +3901,14 @@ function App() {
                     textarea
                     rows={5}
                     placeholder={ui.testCaseGuidelinesPlaceholder}
+                    badge={
+                      aiSettingsImprovedFields.includes("testCaseGuidelines") ? (
+                        <>
+                          <Wand2 size={11} />
+                          {ui.aiImprovedBadge}
+                        </>
+                      ) : null
+                    }
                   />
                   <Field
                     label={ui.testDesignGuidelines}
@@ -3848,6 +3917,14 @@ function App() {
                     textarea
                     rows={5}
                     placeholder={ui.testDesignGuidelinesPlaceholder}
+                    badge={
+                      aiSettingsImprovedFields.includes("testDesignGuidelines") ? (
+                        <>
+                          <Wand2 size={11} />
+                          {ui.aiImprovedBadge}
+                        </>
+                      ) : null
+                    }
                   />
                 </div>
                 {secretStatus.ai.hasApiKey ? (
@@ -3873,34 +3950,57 @@ function App() {
                   </div>
                   {aiSettingsHistory.length ? (
                     <div className="history-list">
-                      {aiSettingsHistory.slice(0, 12).map((entry) => (
-                        <details className="history-card" key={entry.id}>
-                          <summary>
-                            <span>
-                              <strong>{entry.summary || aiHistorySourceLabel(entry.source, ui)}</strong>
-                              <small>{formatHistoryDate(entry.createdAt, languageMode)} · {entry.section === "knowledgeAi" ? ui.knowledgeAiSettings : ui.aiSettings}</small>
-                            </span>
-                            <em>{aiHistorySourceLabel(entry.source, ui)}</em>
-                          </summary>
-                          <div className="history-change-list">
-                            {entry.changes.map((change) => (
-                              <div className="history-change" key={`${entry.id}-${change.field}`}>
-                                <strong>{change.label}</strong>
-                                <div className="history-diff-grid">
-                                  <div>
-                                    <span>{ui.historyBefore}</span>
-                                    <pre>{change.before || "(empty)"}</pre>
-                                  </div>
-                                  <div>
-                                    <span>{ui.historyAfter}</span>
-                                    <pre>{change.after || "(empty)"}</pre>
-                                  </div>
-                                </div>
+                      {aiSettingsHistory.slice(0, 12).map((entry) => {
+                        const isExpanded = expandedHistoryIds.includes(entry.id);
+                        return (
+                          <article className={`history-card ${isExpanded ? "expanded" : ""}`} key={entry.id}>
+                            <div className="history-card-summary">
+                              <span>
+                                <strong>{entry.summary || aiHistorySourceLabel(entry.source, ui)}</strong>
+                                <small>
+                                  {formatHistoryDate(entry.createdAt, languageMode)} · {entry.section === "knowledgeAi" ? ui.knowledgeAiSettings : ui.aiSettings} · {entry.changes.length} {ui.historyChangedItems}
+                                </small>
+                              </span>
+                              <div className="history-card-actions">
+                                <em>{aiHistorySourceLabel(entry.source, ui)}</em>
+                                <button
+                                  className="tiny"
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedHistoryIds((current) =>
+                                      current.includes(entry.id) ? current.filter((item) => item !== entry.id) : [...current, entry.id],
+                                    )
+                                  }
+                                  aria-expanded={isExpanded}
+                                  title={isExpanded ? ui.caseCollapse : ui.caseDetails}
+                                >
+                                  {isExpanded ? <ChevronDown size={14} /> : <FileText size={14} />}
+                                  {isExpanded ? ui.caseCollapse : ui.caseDetails}
+                                </button>
                               </div>
-                            ))}
-                          </div>
-                        </details>
-                      ))}
+                            </div>
+                            {isExpanded ? (
+                              <div className="history-change-list">
+                                {entry.changes.map((change) => (
+                                  <div className="history-change" key={`${entry.id}-${change.field}`}>
+                                    <strong>{change.label}</strong>
+                                    <div className="history-diff-grid">
+                                      <div>
+                                        <span>{ui.historyBefore}</span>
+                                        <pre>{change.before || "(empty)"}</pre>
+                                      </div>
+                                      <div>
+                                        <span>{ui.historyAfter}</span>
+                                        <pre>{change.after || "(empty)"}</pre>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </article>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="mini-note">{ui.noAiSettingsHistory}</div>

@@ -891,23 +891,23 @@ function aiSettingsRevisionChanges(previousSettings = {}, nextSettings = {}, sec
   const fields =
     section === "knowledgeAi"
       ? [
-          ["knowledge.enabled", "Knowledge AI enabled", false],
+          ["knowledge.enabled", "Bật Knowledge AI", false],
           ["knowledge.provider", "Knowledge provider", false],
           ["knowledge.baseUrl", "Knowledge Base URL", false],
           ["knowledge.model", "Knowledge model", false],
           ["knowledge.apiKey", "Knowledge API key", true],
-          ["knowledge.writingStyle", "Knowledge writing style", false],
-          ["knowledge.articleGuidelines", "Knowledge article guidelines", false],
+          ["knowledge.writingStyle", "Phong cách viết Knowledge", false],
+          ["knowledge.articleGuidelines", "Quy tắc viết bài Knowledge", false],
         ]
       : [
-          ["enabled", "AI enabled", false],
+          ["enabled", "Bật AI", false],
           ["provider", "Provider", false],
           ["baseUrl", "Base URL", false],
           ["model", "Model", false],
           ["apiKey", "API key", true],
-          ["writingStyle", "Writing style", false],
-          ["testCaseGuidelines", "Test case guidelines", false],
-          ["testDesignGuidelines", "Test design guidelines", false],
+          ["writingStyle", "Phong cách viết", false],
+          ["testCaseGuidelines", "Quy tắc test case", false],
+          ["testDesignGuidelines", "Quy tắc test design", false],
           ["improvementNotes", "Ghi nhớ cải tiến", false],
         ];
   const getValue = (settings, field) =>
@@ -5420,7 +5420,6 @@ function buildAiImprovePromptMessages({
   issue,
   currentCases,
   currentOutline,
-  currentImprovementNotes,
   aiCustomization,
   language,
 }) {
@@ -5428,7 +5427,7 @@ function buildAiImprovePromptMessages({
   const system = [
     "You are EasyForQC's senior QA prompt engineer.",
     "Convert task-local user feedback into reusable AI Settings guidance for future Jira test-case and test-design generation.",
-    "The output will be saved into the `improvementNotes` field, so it must be generally useful, precise, and safe to reuse.",
+    "Classify each reusable guidance item into the most relevant AI Settings field.",
     "Return only one valid JSON object.",
   ].join("\n");
 
@@ -5441,18 +5440,36 @@ function buildAiImprovePromptMessages({
     "## Rules",
     "- Generalize task-specific wording into testing rules, risk lenses, title rules, coverage expectations, or formatting guidance.",
     "- Do not include Jira keys, URLs, credentials, tokens, personal data, company-internal secrets, or one-off task facts unless they are necessary as a reusable pattern.",
-    "- Keep the guidance short but actionable: 2 to 5 bullets, each bullet beginning with `- `.",
+    "- Keep each field update short but actionable: 1 to 4 bullets, each bullet beginning with `- `.",
     "- Preserve the user's real intent. Do not invent unrelated QA rules.",
     "- If the request asks for more coverage, name concrete bug surfaces such as validation, auth, empty/partial data, duplicate/retry, fallback, wrong mapping, state carry-forward, or nearby regression.",
-    "- If the request asks for title/style changes, phrase it as a reusable naming or writing rule.",
+    "- If the request asks for title, precondition, steps, expected result, priority, data, or Zephyr fields, use `testCaseGuidelines`.",
+    "- If the request asks for branches, mindmap, XMind, PNG, design coverage, out of scope, or test-design structure, use `testDesignGuidelines`.",
+    "- If the request asks for tone, language, sentence style, concise/full wording, terminology, or Vietnamese/English consistency, use `writingStyle`.",
+    "- If the request is a general cross-cutting habit that affects both test case and test design, use `improvementNotes`.",
+    "- You may return multiple updates when the user's request affects multiple fields.",
     "- Make it compatible with existing AI Settings guidance; do not erase or contradict existing rules.",
+    "",
+    "## Allowed target fields",
+    "- `writingStyle`: writing tone, language, terminology, sentence style.",
+    "- `testCaseGuidelines`: test case content, title, steps, expected result, priority, validation, negative/edge/regression coverage.",
+    "- `testDesignGuidelines`: test design branch structure, XMind/mindmap coverage, out-of-scope branch, design rationale.",
+    "- `improvementNotes`: reusable cross-cutting generation habits not specific to one field above.",
     "",
     "## Required JSON schema",
     JSON.stringify(
       {
-        improved_prompt: "- Reusable prompt bullet 1\n- Reusable prompt bullet 2",
-        target_field: "improvementNotes",
-        summary: "Short note describing what was improved",
+        updates: [
+          {
+            target_field: "testCaseGuidelines",
+            improved_prompt: "- Reusable prompt bullet for this field",
+          },
+          {
+            target_field: "testDesignGuidelines",
+            improved_prompt: "- Reusable prompt bullet for this field",
+          },
+        ],
+        summary: "Short note describing which AI Settings fields were improved",
       },
       null,
       2,
@@ -5463,9 +5480,6 @@ function buildAiImprovePromptMessages({
     "",
     "## Current AI Settings guidance",
     truncateForPrompt(aiGuidanceText(aiCustomization), 6000),
-    "",
-    "## Existing improvementNotes",
-    truncateForPrompt(currentImprovementNotes, 6000),
     "",
     "## Current Jira context for de-specificating only",
     jsonForPrompt(
@@ -5494,17 +5508,36 @@ function buildAiImprovePromptMessages({
   ];
 }
 
-function normalizeImprovedPromptPayload(payload = {}) {
-  const improvedPrompt = asText(
-    payload.improved_prompt ||
-      payload.improvedPrompt ||
-      payload.prompt ||
-      payload.guidance ||
-      payload.content,
-  );
-  if (!improvedPrompt.trim()) {
-    throw Object.assign(new Error("AI provider trả về JSON nhưng thiếu `improved_prompt`."), { status: 502 });
-  }
+const AI_PROMPT_IMPROVE_FIELDS = new Set(["writingStyle", "testCaseGuidelines", "testDesignGuidelines", "improvementNotes"]);
+
+function normalizePromptImproveTargetField(value) {
+  const raw = asText(value).trim();
+  const compact = raw.replace(/[\s_-]+/g, "").toLowerCase();
+  const aliases = {
+    writingstyle: "writingStyle",
+    style: "writingStyle",
+    tone: "writingStyle",
+    language: "writingStyle",
+    testcaseguidelines: "testCaseGuidelines",
+    testcase: "testCaseGuidelines",
+    testcases: "testCaseGuidelines",
+    caseguidelines: "testCaseGuidelines",
+    testdesignguidelines: "testDesignGuidelines",
+    testdesign: "testDesignGuidelines",
+    xmind: "testDesignGuidelines",
+    mindmap: "testDesignGuidelines",
+    improvementnotes: "improvementNotes",
+    improvements: "improvementNotes",
+    memory: "improvementNotes",
+    notes: "improvementNotes",
+  };
+  const normalized = aliases[compact] || raw;
+  return AI_PROMPT_IMPROVE_FIELDS.has(normalized) ? normalized : "improvementNotes";
+}
+
+function normalizePromptImproveText(value) {
+  const improvedPrompt = asText(value);
+  if (!improvedPrompt.trim()) return "";
   const normalizedLines = improvedPrompt
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -5513,9 +5546,48 @@ function normalizeImprovedPromptPayload(payload = {}) {
     .filter(Boolean)
     .slice(0, 8)
     .map((line) => `- ${line}`);
+  return normalizedLines.length ? normalizedLines.join("\n") : `- ${improvedPrompt.trim()}`;
+}
+
+function normalizeImprovedPromptPayload(payload = {}) {
+  const rawUpdates = Array.isArray(payload.updates)
+    ? payload.updates
+    : Array.isArray(payload.prompt_updates)
+      ? payload.prompt_updates
+      : Array.isArray(payload.field_updates)
+        ? payload.field_updates
+        : [];
+  const legacyPrompt = asText(
+    payload.improved_prompt ||
+      payload.improvedPrompt ||
+      payload.prompt ||
+      payload.guidance ||
+      payload.content,
+  );
+  const updateItems = rawUpdates.length
+    ? rawUpdates
+    : legacyPrompt.trim()
+      ? [{ target_field: payload.target_field || payload.targetField || "improvementNotes", improved_prompt: legacyPrompt }]
+      : [];
+  const byField = new Map();
+  for (const item of updateItems) {
+    const targetField = normalizePromptImproveTargetField(item?.target_field || item?.targetField || item?.field);
+    const text = normalizePromptImproveText(item?.improved_prompt || item?.improvedPrompt || item?.prompt || item?.guidance || item?.content || item?.text);
+    if (!text) continue;
+    const existing = byField.get(targetField);
+    byField.set(targetField, existing ? `${existing}\n${text}` : text);
+  }
+  const updates = Array.from(byField.entries()).map(([targetField, improvedPrompt]) => ({
+    targetField,
+    improvedPrompt,
+  }));
+  if (!updates.length) {
+    throw Object.assign(new Error("AI provider trả về JSON nhưng thiếu `updates[].improved_prompt`."), { status: 502 });
+  }
   return {
-    improvedPrompt: normalizedLines.length ? normalizedLines.join("\n") : `- ${improvedPrompt.trim()}`,
-    targetField: asText(payload.target_field || payload.targetField) || "improvementNotes",
+    improvedPrompt: updates[0].improvedPrompt,
+    targetField: updates[0].targetField,
+    updates,
     summary: asText(payload.summary),
   };
 }
@@ -5559,7 +5631,6 @@ async function generateAiImprovedPrompt({
   aiCustomization,
   currentCases,
   currentOutline,
-  currentImprovementNotes,
   language,
 }) {
   const messages = buildAiImprovePromptMessages({
@@ -5567,7 +5638,6 @@ async function generateAiImprovedPrompt({
     issue,
     currentCases,
     currentOutline,
-    currentImprovementNotes,
     aiCustomization,
     language,
   });
@@ -5985,7 +6055,6 @@ app.post("/api/improve-prompt", async (req, res) => {
       aiCustomization,
       currentCases: Array.isArray(req.body?.testCases) ? req.body.testCases : [],
       currentOutline: req.body?.outline && typeof req.body.outline === "object" ? req.body.outline : null,
-      currentImprovementNotes: asText(req.body?.currentImprovementNotes || aiSettings.improvementNotes),
       language: req.body?.language === "en" ? "en" : "vi",
     }).catch((error) => {
       throw Object.assign(new Error(aiProviderDraftErrorMessage(error)), {
@@ -5996,6 +6065,7 @@ app.post("/api/improve-prompt", async (req, res) => {
     res.json({
       improvedPrompt: improved.improvedPrompt,
       targetField: improved.targetField,
+      updates: improved.updates,
       summary: improved.summary,
       aiProvider: aiProviderResponseMeta(aiSettings, true, "", improved.usage),
     });
