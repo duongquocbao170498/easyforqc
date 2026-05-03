@@ -739,9 +739,41 @@ button:disabled {
   gap: 7px;
 }
 
-.history-change > strong {
+.history-change-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+
+.history-change-title strong {
   color: var(--ink);
   font-size: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.history-change-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: rgba(47, 48, 53, 0.92);
+  color: #e4e4e7;
+  padding: 0;
+}
+
+.history-change-expand:hover {
+  border-color: rgba(249, 115, 22, 0.72);
+  background: var(--blue-soft);
+  color: var(--blue);
+  filter: none;
 }
 
 .history-diff-grid {
@@ -1826,6 +1858,13 @@ pre {
   overflow-wrap: anywhere;
 }
 
+.field-expand-header small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .field-expand-close {
   display: inline-flex;
   align-items: center;
@@ -1864,6 +1903,47 @@ pre {
 .field-expand-editor:focus {
   border-color: transparent;
   box-shadow: inset 0 0 0 2px rgba(249, 115, 22, 0.72);
+}
+
+.history-compare-panel {
+  width: min(1320px, calc(100vw - 48px));
+  max-height: calc(100dvh - 48px);
+}
+
+.history-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px;
+  min-height: min(620px, calc(100dvh - 148px));
+}
+
+.history-compare-column {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 7px;
+  min-width: 0;
+}
+
+.history-compare-column span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.history-compare-editor {
+  width: 100%;
+  height: 100%;
+  min-height: min(560px, calc(100dvh - 190px));
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: #151518;
+  color: var(--ink);
+  padding: 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  resize: none;
 }
 
 :root[data-theme="light"] .app-shell {
@@ -1933,6 +2013,11 @@ pre {
   color: #111827;
 }
 
+:root[data-theme="light"] .history-compare-editor {
+  background: #ffffff;
+  color: #111827;
+}
+
 :root[data-theme="light"] .sidebar-user {
   border-top-color: #e5e7eb;
 }
@@ -1979,7 +2064,8 @@ pre {
   color: #111113;
 }
 
-:root[data-theme="light"] .field-expand-button {
+:root[data-theme="light"] .field-expand-button,
+:root[data-theme="light"] .history-change-expand {
   background: rgba(255, 255, 255, 0.94);
   color: #374151;
 }
@@ -2183,6 +2269,7 @@ pre {
   .form-grid,
   .form-grid.two,
   .history-diff-grid,
+  .history-compare-grid,
   .step-row {
     grid-template-columns: 1fr;
   }
