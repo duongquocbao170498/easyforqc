@@ -1882,7 +1882,17 @@ pre {
     align-items: stretch;
   }
 
+  .topbar {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .topbar > :first-child {
+    flex: 0 1 auto;
+  }
+
   .top-actions {
+    flex: 0 1 auto;
     min-width: 0;
     width: 100%;
   }
