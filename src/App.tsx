@@ -55,7 +55,7 @@ import type {
 } from "./types";
 
 type TabKey = "cases" | "design" | "run";
-type BusyKey = "issue" | "docs" | "draft" | "improve" | "promptImprove" | "save" | "xmind" | "attach" | "suite" | "cycle" | "";
+type BusyKey = "issue" | "docs" | "draft" | "promptImprove" | "save" | "xmind" | "attach" | "suite" | "cycle" | "";
 type SettingsSection = "project" | "auth" | "ai" | "knowledgeAi";
 type KnowledgeSection = "principles" | "process" | "techniques" | "levels" | "reviews" | "defects" | "aiWriter";
 type StaticKnowledgeSection = Exclude<KnowledgeSection, "aiWriter">;
@@ -398,19 +398,18 @@ const UI_TEXT = {
     runTitleEmpty: "Nhập Jira task để bắt đầu",
     autoArchetype: "Tự chọn archetype",
     generateDraft: "Tạo draft",
-    improveDraftTitle: "Tinh chỉnh draft bằng AI",
-    improveDraftHelp: "Nhập feedback cho draft hiện tại. AI sẽ viết lại hoặc bổ sung test case/test design dựa trên Jira/doc/context đang có.",
+    improveDraftTitle: "Improve prompt và tạo lại draft bằng AI",
+    improveDraftHelp: "Nhập yêu cầu tinh chỉnh. AI sẽ cập nhật prompt trong Cài đặt AI, lưu lịch sử Trước/Sau, rồi tự tạo lại bộ test case/test design mới.",
     improveDraftInput: "Yêu cầu tinh chỉnh",
     improveDraftPlaceholder: "Ví dụ: Bổ sung negative case cho thiếu auth Confluence, title viết rõ risk hơn, bỏ case trùng...",
-    improveDraftButton: "Tinh chỉnh draft",
     improvePromptButton: "Improve prompt bằng AI",
     improvePromptRequiresInput: "Cần nhập Yêu cầu tinh chỉnh trước khi Improve prompt.",
     improvePromptDonePrefix: "Đã cải thiện prompt từ yêu cầu tinh chỉnh",
     improvePromptSavedToAiSettings: "Đã tự lưu vào Cài đặt AI và tạo lịch sử chỉnh sửa.",
     improvePromptUpdatedFields: "Đã cập nhật",
     improveRequiresDraft: "Cần tạo draft trước khi tinh chỉnh bằng AI.",
-    improveRequiresAi: "Cần bật AI Settings và có API key/model để dùng Improve draft.",
-    improveDonePrefix: "Đã chỉnh sửa theo yêu cầu tinh chỉnh",
+    improveRequiresAi: "Cần bật AI Settings và có API key/model để dùng Improve prompt.",
+    improvePromptRegeneratedDraft: "Đã tạo lại draft mới bằng prompt vừa cải thiện.",
     aiSettingsPendingImprove: "AI vừa cập nhật và tự lưu một số mục trong Cài đặt AI. Mở Lịch sử chỉnh sửa để xem Trước/Sau.",
     aiImprovedBadge: "AI cải thiện",
     aiSettingsUnsavedGuard: "Có thể mở Lịch sử chỉnh sửa để xem lại nội dung Trước/Sau.",
@@ -639,19 +638,18 @@ const UI_TEXT = {
     runTitleEmpty: "Enter a Jira task to start",
     autoArchetype: "Auto archetype",
     generateDraft: "Generate draft",
-    improveDraftTitle: "Improve draft with AI",
-    improveDraftHelp: "Enter feedback for the current draft. AI rewrites or adds test cases/test design from the current Jira/docs/context.",
+    improveDraftTitle: "Improve prompt and regenerate draft with AI",
+    improveDraftHelp: "Enter a refine request. AI updates AI Settings prompts, saves Before/After history, then regenerates the test case/test design draft.",
     improveDraftInput: "Improve request",
     improveDraftPlaceholder: "Example: Add negative cases for missing Confluence auth, make titles risk-specific, remove duplicates...",
-    improveDraftButton: "Improve draft",
     improvePromptButton: "Improve prompt with AI",
     improvePromptRequiresInput: "Enter an improve request before improving the prompt.",
     improvePromptDonePrefix: "Improved prompt from refine request",
     improvePromptSavedToAiSettings: "Auto-saved to AI Settings and created a revision history entry.",
     improvePromptUpdatedFields: "Updated",
     improveRequiresDraft: "Generate a draft before improving it with AI.",
-    improveRequiresAi: "Enable AI Settings with API key/model before using Improve draft.",
-    improveDonePrefix: "Improved draft using request",
+    improveRequiresAi: "Enable AI Settings with API key/model before using Improve prompt.",
+    improvePromptRegeneratedDraft: "Regenerated a new draft using the improved prompt.",
     aiSettingsPendingImprove: "AI updated and auto-saved some AI Settings fields. Open Revision history to review Before/After.",
     aiImprovedBadge: "AI improved",
     aiSettingsUnsavedGuard: "Open Revision history to review the Before/After content.",
@@ -1964,7 +1962,6 @@ function App() {
   const [outline, setOutline] = useState<TestDesignOutline>(emptyOutline(emptyIssue));
   const [improveInstruction, setImproveInstruction] = useState("");
   const [lastImproveInstruction, setLastImproveInstruction] = useState("");
-  const [improveStatus, setImproveStatus] = useState("");
   const [promptImproveStatus, setPromptImproveStatus] = useState("");
   const [aiSettingsImprovePending, setAiSettingsImprovePending] = useState(false);
   const [aiSettingsImprovedFields, setAiSettingsImprovedFields] = useState<AiImproveField[]>([]);
@@ -2428,7 +2425,6 @@ function App() {
     setQaPlan(null);
     setImproveInstruction("");
     setLastImproveInstruction("");
-    setImproveStatus("");
     setPromptImproveStatus("");
     setGenerationStatus(idleGenerationStatus);
     setActiveTab("cases");
@@ -2843,7 +2839,6 @@ function App() {
       setQaPlan(null);
       setImproveInstruction("");
       setLastImproveInstruction("");
-      setImproveStatus("");
       setPromptImproveStatus("");
       const generationAiSettings = savedAiSettings;
       setGenerationStatus({
@@ -2897,70 +2892,6 @@ function App() {
     });
   }
 
-  function improveDraft() {
-    const trimmedInstruction = improveInstruction.trim();
-    const activeAiSettings = savedAiSettings;
-    if (!testCases.length || !outline.branches.length) {
-      setMessage(ui.improveRequiresDraft);
-      setImproveStatus(ui.improveRequiresDraft);
-      return;
-    }
-    if (!activeAiSettings.enabled || (!activeAiSettings.apiKey.trim() && !secretStatus.ai.hasApiKey) || !activeAiSettings.model.trim()) {
-      setMessage(ui.improveRequiresAi);
-      setImproveStatus(ui.improveRequiresAi);
-      return;
-    }
-    if (!trimmedInstruction) {
-      setMessage(ui.improveDraftPlaceholder);
-      setImproveStatus(ui.improveDraftPlaceholder);
-      return;
-    }
-    setBusyRun("improve", async () => {
-      setImproveStatus("");
-      setGenerationStatus({
-        state: "running",
-        title: ui.improveDraftTitle,
-        detail: trimmedInstruction,
-        provider: activeAiSettings.provider,
-        model: activeAiSettings.model,
-        endpoint: activeAiSettings.baseUrl,
-      });
-      const effectiveIssueKey = issueKeyFromText(jiraUrl) || issue.key;
-      const effectiveIssue = { ...issue, key: effectiveIssueKey };
-      const shouldUseConfluenceDocs = Boolean(docContext.trim() && (!docIssueKey || docIssueKey === effectiveIssueKey));
-      const payload = await apiPost<DraftResponse & { improveInstruction?: string }>("/api/improve-draft", {
-        ...requestBody,
-        issue: effectiveIssue,
-        archetype: archetypeKey,
-        qaPlan,
-        testCases,
-        outline,
-        improveInstruction: trimmedInstruction,
-        confluenceLinks: shouldUseConfluenceDocs ? confluenceLinks : "",
-        docContext: shouldUseConfluenceDocs ? docContext : "",
-      }).catch((error) => {
-        const errorMessage = error instanceof Error ? error.message : "Không tinh chỉnh được draft.";
-        setImproveStatus(errorMessage);
-        throw error;
-      });
-      setArchetypeKey(payload.archetypeKey);
-      setQaPlan(payload.qaPlan || qaPlan);
-      setTestCases(payload.testCases);
-      setDetailCaseIndex(null);
-      setOutline(payload.outline);
-      setActiveTab("cases");
-      setSavedFiles(null);
-      setBuiltDesignFiles(null);
-      setOutput(JSON.stringify(payload, null, 2));
-      setGenerationStatus(generationStatusFromPayload({ ...payload, aiGenerationUsed: true }));
-      setImproveInstruction("");
-      setLastImproveInstruction(trimmedInstruction);
-      const successText = `${ui.improveDonePrefix}: "${trimmedInstruction}".`;
-      setImproveStatus(successText);
-      setMessage(successText);
-    });
-  }
-
   function improvePromptWithAi() {
     const trimmedInstruction = improveInstruction.trim() || lastImproveInstruction.trim();
     const activeAiSettings = savedAiSettings;
@@ -2972,6 +2903,16 @@ function App() {
     if (!activeAiSettings.enabled || (!activeAiSettings.apiKey.trim() && !secretStatus.ai.hasApiKey) || !activeAiSettings.model.trim()) {
       setMessage(ui.improveRequiresAi);
       setPromptImproveStatus(ui.improveRequiresAi);
+      return;
+    }
+    if (!testCases.length || !outline.branches.length) {
+      setMessage(ui.improveRequiresDraft);
+      setPromptImproveStatus(ui.improveRequiresDraft);
+      return;
+    }
+    const draftErrors = validateGenerateDraft();
+    if (Object.keys(draftErrors).length) {
+      setValidationFailure(draftErrors, "Vui lòng bổ sung các field bắt buộc đang được highlight trước khi Improve prompt.");
       return;
     }
     setBusyRun("promptImprove", async () => {
@@ -3046,7 +2987,60 @@ function App() {
       setAiSettingsImprovedFields(changedFields);
       setSettingsStatus((current) => ({ ...current, ai: "" }));
       setSettingsBusy("");
-      const successText = `${ui.improvePromptDonePrefix}: "${trimmedInstruction}". ${changedLabels ? `${ui.improvePromptUpdatedFields}: ${changedLabels}. ` : ""}${ui.improvePromptSavedToAiSettings} ${ui.aiSettingsUnsavedGuard}`;
+      const effectiveIssueKey = issueKeyFromText(jiraUrl) || issue.key;
+      const effectiveIssue = { ...issue, key: effectiveIssueKey };
+      const shouldUseConfluenceDocs = Boolean(docContext.trim() && (!docIssueKey || docIssueKey === effectiveIssueKey));
+      setTestCases([]);
+      setDetailCaseIndex(null);
+      setOutline(emptyOutline(effectiveIssue));
+      setCaseKeys("");
+      setSavedFiles(null);
+      setBuiltDesignFiles(null);
+      setOutput("");
+      setQaPlan(null);
+      setActiveTab("cases");
+      setGenerationStatus({
+        state: "running",
+        title: ui.improveDraftTitle,
+        detail: changedLabels ? `${ui.improvePromptUpdatedFields}: ${changedLabels}` : trimmedInstruction,
+        provider: nextSavedAiSettings.provider,
+        model: nextSavedAiSettings.model,
+        endpoint: nextSavedAiSettings.baseUrl,
+      });
+      let draftPayload: DraftResponse;
+      try {
+        draftPayload = await apiPost<DraftResponse>("/api/draft", {
+          ...requestBody,
+          issue: effectiveIssue,
+          aiSettings: nextSavedAiSettings,
+          confluenceLinks: shouldUseConfluenceDocs ? confluenceLinks : "",
+          docContext: shouldUseConfluenceDocs ? docContext : "",
+        });
+      } catch (error) {
+        const text = error instanceof Error ? error.message : "Generate draft lỗi.";
+        const errorText = `Đã tự lưu prompt mới, nhưng tạo lại draft lỗi: ${text}`;
+        setGenerationStatus({
+          state: "error",
+          title: "Tạo lại draft lỗi",
+          detail: text.split("\n")[0],
+          provider: nextSavedAiSettings.provider,
+          model: nextSavedAiSettings.model,
+          endpoint: nextSavedAiSettings.baseUrl,
+        });
+        setPromptImproveStatus(errorText);
+        throw error;
+      }
+      setArchetypeKey(draftPayload.archetypeKey);
+      setQaPlan(draftPayload.qaPlan || null);
+      setTestCases(draftPayload.testCases);
+      setDetailCaseIndex(null);
+      setOutline(draftPayload.outline);
+      setActiveTab("cases");
+      setOutput(JSON.stringify(draftPayload, null, 2));
+      setGenerationStatus(generationStatusFromPayload(draftPayload));
+      setImproveInstruction("");
+      setLastImproveInstruction(trimmedInstruction);
+      const successText = `${ui.improvePromptDonePrefix}: "${trimmedInstruction}". ${changedLabels ? `${ui.improvePromptUpdatedFields}: ${changedLabels}. ` : ""}${ui.improvePromptSavedToAiSettings} ${ui.improvePromptRegeneratedDraft} ${ui.aiSettingsUnsavedGuard}`;
       setPromptImproveStatus(successText);
       setMessage(successText);
     });
@@ -4320,21 +4314,12 @@ function App() {
                 <h2>{ui.improveDraftTitle}</h2>
                 <p>{ui.improveDraftHelp}</p>
               </div>
-              <IconButton
-                icon={busy === "improve" ? <Loader2 className="spin" size={16} /> : <Wand2 size={16} />}
-                onClick={improveDraft}
-                disabled={isWorking || !savedAiSettings.enabled}
-                variant="primary"
-              >
-                {ui.improveDraftButton}
-              </IconButton>
             </div>
             <Field
               label={ui.improveDraftInput}
               value={improveInstruction}
               onChange={(value) => {
                 setImproveInstruction(value);
-                if (improveStatus) setImproveStatus("");
                 if (promptImproveStatus) setPromptImproveStatus("");
               }}
               textarea
@@ -4351,7 +4336,6 @@ function App() {
                 {ui.improvePromptButton}
               </IconButton>
             </div>
-            {improveStatus ? <div className={improveStatus.startsWith(ui.improveDonePrefix) ? "notice ok improve-status" : "notice improve-status"}>{improveStatus}</div> : null}
             {promptImproveStatus ? (
               <div className={promptImproveStatus.startsWith(ui.improvePromptDonePrefix) ? "notice ok improve-status" : "notice improve-status"}>{promptImproveStatus}</div>
             ) : null}
