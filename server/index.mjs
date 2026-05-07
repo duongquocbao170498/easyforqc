@@ -882,7 +882,7 @@ function aiHistoryValue(value, secret = false) {
   }
   const text = asText(value);
   if (!text) return "";
-  return text.length > 1200 ? `${text.slice(0, 1200).trim()}\n...[truncated ${text.length - 1200} chars]` : text;
+  return text;
 }
 
 function aiSettingsRevisionChanges(previousSettings = {}, nextSettings = {}, section = "ai") {
@@ -905,6 +905,7 @@ function aiSettingsRevisionChanges(previousSettings = {}, nextSettings = {}, sec
           ["baseUrl", "Base URL", false],
           ["model", "Model", false],
           ["apiKey", "API key", true],
+          ["promptGuidelines", "Prompt tạo test case/test design", false],
           ["writingStyle", "Phong cách viết", false],
           ["testCaseGuidelines", "Quy tắc test case", false],
           ["testDesignGuidelines", "Quy tắc test design", false],
@@ -3190,6 +3191,18 @@ function normalizeKnowledgeAiSettings(raw = {}) {
   };
 }
 
+function consolidatedAiPromptGuidelines(raw = {}) {
+  const direct = asText(raw.promptGuidelines || raw.prompt_guidelines || raw.guidelines);
+  if (direct.trim()) return direct;
+  const sections = [
+    asText(raw.writingStyle).trim() ? `Phong cách viết:\n${asText(raw.writingStyle).trim()}` : "",
+    asText(raw.testCaseGuidelines).trim() ? `Cách viết test case:\n${asText(raw.testCaseGuidelines).trim()}` : "",
+    asText(raw.testDesignGuidelines).trim() ? `Cách làm test design:\n${asText(raw.testDesignGuidelines).trim()}` : "",
+    asText(raw.improvementNotes).trim() ? `Ghi nhớ cải tiến:\n${asText(raw.improvementNotes).trim()}` : "",
+  ].filter(Boolean);
+  return sections.join("\n\n");
+}
+
 function normalizeAiSettings(raw = {}) {
   const baseUrl = asText(raw.baseUrl || raw.apiBaseUrl);
   return {
@@ -3198,6 +3211,7 @@ function normalizeAiSettings(raw = {}) {
     baseUrl: baseUrl || "https://api.openai.com/v1",
     model: asText(raw.model),
     apiKey: asText(raw.apiKey || raw.token),
+    promptGuidelines: consolidatedAiPromptGuidelines(raw),
     writingStyle: asText(raw.writingStyle),
     testCaseGuidelines: asText(raw.testCaseGuidelines),
     testDesignGuidelines: asText(raw.testDesignGuidelines),
@@ -3254,6 +3268,7 @@ function aiCustomizationFromSettings(raw = {}) {
     provider: settings.provider,
     baseUrl: settings.baseUrl,
     model: settings.model,
+    promptGuidelines: settings.promptGuidelines,
     writingStyle: settings.writingStyle,
     testCaseGuidelines: settings.testCaseGuidelines,
     testDesignGuidelines: settings.testDesignGuidelines,
@@ -3265,6 +3280,9 @@ function aiCustomizationFromSettings(raw = {}) {
 function aiGuidanceText(aiCustomization) {
   if (!aiCustomization) {
     return "";
+  }
+  if (aiCustomization.promptGuidelines) {
+    return `Prompt tạo test case/test design:\n${aiCustomization.promptGuidelines}`;
   }
   return [
     aiCustomization.writingStyle ? `Phong cách viết: ${aiCustomization.writingStyle}` : "",
@@ -5424,10 +5442,11 @@ function buildAiImprovePromptMessages({
   language,
 }) {
   const outputLanguage = language === "en" ? "English" : "Vietnamese with full diacritics";
+  const currentPromptGuidance = aiCustomization?.promptGuidelines || aiGuidanceText(aiCustomization);
   const system = [
     "You are EasyForQC's senior QA prompt engineer.",
     "Convert task-local user feedback into reusable AI Settings guidance for future Jira test-case and test-design generation.",
-    "Classify each reusable guidance item into the most relevant AI Settings field.",
+    "Return a full revised version of the consolidated AI Settings prompt, not a patch and not only the user's new text.",
     "Return only one valid JSON object.",
   ].join("\n");
 
@@ -5435,41 +5454,42 @@ function buildAiImprovePromptMessages({
     `Output language: ${outputLanguage}`,
     "",
     "## Goal",
-    "Rewrite the user's refine request into reusable guidance that can improve future EasyForQC generations across different tasks.",
+    "Revise the current consolidated prompt so it remains clean, deduplicated, and reusable across different Jira tasks.",
     "",
     "## Rules",
+    "- Treat the current AI Settings guidance as the source document to edit, not as loose inspiration.",
+    "- Preserve the existing prompt's important intent, writing style rules, title-quality rules, test-case structure, test-design rules, coverage rules, and open-question/assumption rules.",
+    "- Make the smallest useful edit. If one existing sentence can be improved, edit that sentence and leave the rest unchanged.",
+    "- Keep unrelated sections, bullets, examples, and formatting from the current prompt. Only remove text when it is truly duplicate, contradictory, obsolete, or directly replaced by better wording.",
+    "- Preserve the current prompt's language, numbering style, and section order unless the user's request clearly requires a cleaner structure.",
+    "- Never replace the whole prompt with only the user's request or only a short summary.",
+    "- Read the current prompt first, then decide whether the user's request is already covered, partially covered, contradictory, or new.",
+    "- If the request is already covered, refine the existing wording only when it makes the rule clearer; do not duplicate it.",
+    "- If the request partially overlaps an existing rule, edit that existing rule in place instead of appending a near-duplicate rule.",
+    "- If the request conflicts with an existing rule, keep the higher-quality/general rule and revise the prompt so there is no contradiction.",
+    "- If the request adds a genuinely new reusable rule, insert it in the most relevant position and keep numbering/formatting tidy.",
     "- Generalize task-specific wording into testing rules, risk lenses, title rules, coverage expectations, or formatting guidance.",
     "- Do not include Jira keys, URLs, credentials, tokens, personal data, company-internal secrets, or one-off task facts unless they are necessary as a reusable pattern.",
-    "- Keep each field update short but actionable: 1 to 4 bullets, each bullet beginning with `- `.",
     "- Preserve the user's real intent. Do not invent unrelated QA rules.",
     "- If the request asks for more coverage, name concrete bug surfaces such as validation, auth, empty/partial data, duplicate/retry, fallback, wrong mapping, state carry-forward, or nearby regression.",
-    "- If the request asks for title, precondition, steps, expected result, priority, data, or Zephyr fields, use `testCaseGuidelines`.",
-    "- If the request asks for branches, mindmap, XMind, PNG, design coverage, out of scope, or test-design structure, use `testDesignGuidelines`.",
-    "- If the request asks for tone, language, sentence style, concise/full wording, terminology, or Vietnamese/English consistency, use `writingStyle`.",
-    "- If the request is a general cross-cutting habit that affects both test case and test design, use `improvementNotes`.",
-    "- You may return multiple updates when the user's request affects multiple fields.",
-    "- Make it compatible with existing AI Settings guidance; do not erase or contradict existing rules.",
+    "- Keep the final prompt concise but complete. It may rewrite, merge, remove, or renumber existing content.",
+    "- Always target `promptGuidelines`; do not split the result into multiple fields.",
+    "- `improved_prompt` must contain the full final consolidated prompt after all edits, including unchanged rules that should remain. Do not include the label `Prompt tạo test case/test design:` unless it already belongs inside the prompt.",
+    "- Never return only the new bullet, only a diff, or only a summary.",
     "",
-    "## Allowed target fields",
-    "- `writingStyle`: writing tone, language, terminology, sentence style.",
-    "- `testCaseGuidelines`: test case content, title, steps, expected result, priority, validation, negative/edge/regression coverage.",
-    "- `testDesignGuidelines`: test design branch structure, XMind/mindmap coverage, out-of-scope branch, design rationale.",
-    "- `improvementNotes`: reusable cross-cutting generation habits not specific to one field above.",
+    "## Allowed target field",
+    "- `promptGuidelines`: consolidated prompt for writing style, test-case rules, test-design rules, risk coverage, and reusable improvement habits.",
     "",
     "## Required JSON schema",
     JSON.stringify(
       {
         updates: [
           {
-            target_field: "testCaseGuidelines",
-            improved_prompt: "- Reusable prompt bullet for this field",
-          },
-          {
-            target_field: "testDesignGuidelines",
-            improved_prompt: "- Reusable prompt bullet for this field",
+            target_field: "promptGuidelines",
+            improved_prompt: "Full revised consolidated prompt after merging, editing, deduplicating, and preserving useful existing rules.",
           },
         ],
-        summary: "Short note describing which AI Settings fields were improved",
+        summary: "Short note describing how the consolidated AI Settings prompt was improved",
       },
       null,
       2,
@@ -5479,7 +5499,7 @@ function buildAiImprovePromptMessages({
     truncateForPrompt(instruction, 5000),
     "",
     "## Current AI Settings guidance",
-    truncateForPrompt(aiGuidanceText(aiCustomization), 6000),
+    truncateForPrompt(currentPromptGuidance, 20000),
     "",
     "## Current Jira context for de-specificating only",
     jsonForPrompt(
@@ -5508,45 +5528,38 @@ function buildAiImprovePromptMessages({
   ];
 }
 
-const AI_PROMPT_IMPROVE_FIELDS = new Set(["writingStyle", "testCaseGuidelines", "testDesignGuidelines", "improvementNotes"]);
+const AI_PROMPT_IMPROVE_FIELDS = new Set(["promptGuidelines"]);
 
 function normalizePromptImproveTargetField(value) {
   const raw = asText(value).trim();
   const compact = raw.replace(/[\s_-]+/g, "").toLowerCase();
   const aliases = {
-    writingstyle: "writingStyle",
-    style: "writingStyle",
-    tone: "writingStyle",
-    language: "writingStyle",
-    testcaseguidelines: "testCaseGuidelines",
-    testcase: "testCaseGuidelines",
-    testcases: "testCaseGuidelines",
-    caseguidelines: "testCaseGuidelines",
-    testdesignguidelines: "testDesignGuidelines",
-    testdesign: "testDesignGuidelines",
-    xmind: "testDesignGuidelines",
-    mindmap: "testDesignGuidelines",
-    improvementnotes: "improvementNotes",
-    improvements: "improvementNotes",
-    memory: "improvementNotes",
-    notes: "improvementNotes",
+    promptguidelines: "promptGuidelines",
+    guidelines: "promptGuidelines",
+    prompt: "promptGuidelines",
+    writingstyle: "promptGuidelines",
+    style: "promptGuidelines",
+    tone: "promptGuidelines",
+    language: "promptGuidelines",
+    testcaseguidelines: "promptGuidelines",
+    testcase: "promptGuidelines",
+    testcases: "promptGuidelines",
+    caseguidelines: "promptGuidelines",
+    testdesignguidelines: "promptGuidelines",
+    testdesign: "promptGuidelines",
+    xmind: "promptGuidelines",
+    mindmap: "promptGuidelines",
+    improvementnotes: "promptGuidelines",
+    improvements: "promptGuidelines",
+    memory: "promptGuidelines",
+    notes: "promptGuidelines",
   };
   const normalized = aliases[compact] || raw;
-  return AI_PROMPT_IMPROVE_FIELDS.has(normalized) ? normalized : "improvementNotes";
+  return AI_PROMPT_IMPROVE_FIELDS.has(normalized) ? normalized : "promptGuidelines";
 }
 
 function normalizePromptImproveText(value) {
-  const improvedPrompt = asText(value);
-  if (!improvedPrompt.trim()) return "";
-  const normalizedLines = improvedPrompt
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => line.replace(/^[-•]\s*/, "").trim())
-    .filter(Boolean)
-    .slice(0, 8)
-    .map((line) => `- ${line}`);
-  return normalizedLines.length ? normalizedLines.join("\n") : `- ${improvedPrompt.trim()}`;
+  return asText(value).trim();
 }
 
 function normalizeImprovedPromptPayload(payload = {}) {
@@ -5567,7 +5580,7 @@ function normalizeImprovedPromptPayload(payload = {}) {
   const updateItems = rawUpdates.length
     ? rawUpdates
     : legacyPrompt.trim()
-      ? [{ target_field: payload.target_field || payload.targetField || "improvementNotes", improved_prompt: legacyPrompt }]
+      ? [{ target_field: payload.target_field || payload.targetField || "promptGuidelines", improved_prompt: legacyPrompt }]
       : [];
   const byField = new Map();
   for (const item of updateItems) {
@@ -5590,6 +5603,80 @@ function normalizeImprovedPromptPayload(payload = {}) {
     updates,
     summary: asText(payload.summary),
   };
+}
+
+function promptTokenSet(value = "") {
+  const words = asText(value)
+    .toLowerCase()
+    .normalize("NFC")
+    .replace(/[^\p{L}\p{N}_]+/gu, " ")
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter((word) => word.length >= 4 && !/^\d+$/.test(word));
+  return new Set(words);
+}
+
+function promptTokenOverlapRatio(previousPrompt = "", nextPrompt = "") {
+  const previousTokens = promptTokenSet(previousPrompt);
+  if (!previousTokens.size) return 1;
+  const nextTokens = promptTokenSet(nextPrompt);
+  let matched = 0;
+  for (const token of previousTokens) {
+    if (nextTokens.has(token)) matched += 1;
+  }
+  return matched / previousTokens.size;
+}
+
+function promptConceptFlags(value = "") {
+  const text = asText(value).toLowerCase();
+  return {
+    scope: /scope|jira|task|phạm vi|đối tượng|feature|flow|mục tiêu|acceptance|business rule/.test(text),
+    writingStyle: /phong cách|tiếng việt|ngắn gọn|business rule|expected result|cụ thể/.test(text),
+    titleQuality: /title|tiêu đề|tên test|scenario|đọc vào|mục đích/.test(text),
+    testCaseStructure:
+      /test\s*case|testcase|precondition|objective|priority|step|steps|test data|expected result|zephyr|tiền điều kiện|các bước|dữ liệu|kết quả mong đợi|ưu tiên/.test(text),
+    coverage:
+      /happy|negative|edge|regression|fallback|validation|duplicate|retry|boundary|empty|null|missing|partial|wrong|mapping|auth|permission|state|context|rủi ro|bao phủ|lỗi|biên|trùng|thiếu|sai|xác thực|phân quyền/.test(text),
+    testDesign: /test\s*design|xmind|mindmap|branch|out of scope|nhánh|sơ đồ|góc nhìn/.test(text),
+    uncertainty: /open question|assumption|scope chưa rõ|không đoán|tự đoán|thiếu scope|giả định|câu hỏi mở|thiếu thông tin|không đoán ngầm/.test(text),
+  };
+}
+
+function missingPreservedPromptConcepts(previousPrompt = "", nextPrompt = "") {
+  const before = promptConceptFlags(previousPrompt);
+  const after = promptConceptFlags(nextPrompt);
+  return Object.entries(before)
+    .filter(([, existed]) => existed)
+    .filter(([concept]) => !after[concept])
+    .map(([concept]) => concept);
+}
+
+function validateImprovedPromptPreservesContext(previousPrompt = "", updates = []) {
+  const currentPrompt = asText(previousPrompt).trim();
+  if (currentPrompt.length < 500) return;
+  for (const update of updates) {
+    if (update.targetField !== "promptGuidelines") continue;
+    const improvedPrompt = asText(update.improvedPrompt).trim();
+    const lengthRatio = improvedPrompt.length / currentPrompt.length;
+    const overlapRatio = promptTokenOverlapRatio(currentPrompt, improvedPrompt);
+    const missingConcepts = missingPreservedPromptConcepts(currentPrompt, improvedPrompt);
+    if (lengthRatio < 0.68 || overlapRatio < 0.52 || missingConcepts.length) {
+      throw Object.assign(
+        new Error(
+          "AI trả về prompt mới thiếu quá nhiều nội dung cũ nên EasyForQC chưa lưu đè. Hãy thử Improve lại với yêu cầu cụ thể hơn, hoặc chỉnh prompt thủ công rồi nhấn Lưu.",
+        ),
+        {
+          status: 502,
+          details: {
+            reason: "prompt_preservation_guard",
+            length_ratio: Number(lengthRatio.toFixed(3)),
+            token_overlap_ratio: Number(overlapRatio.toFixed(3)),
+            missing_concepts: missingConcepts,
+          },
+        },
+      );
+    }
+  }
 }
 
 async function generateAiImprovedDraft({
@@ -5633,19 +5720,45 @@ async function generateAiImprovedPrompt({
   currentOutline,
   language,
 }) {
-  const messages = buildAiImprovePromptMessages({
-    instruction,
-    issue,
-    currentCases,
-    currentOutline,
-    aiCustomization,
-    language,
-  });
-  const result = await callOpenAiCompatible(aiSettings, messages);
-  return {
-    ...normalizeImprovedPromptPayload(result.payload),
-    usage: result.usage,
-  };
+  async function runPromptImprove(promptInstruction) {
+    const messages = buildAiImprovePromptMessages({
+      instruction: promptInstruction,
+      issue,
+      currentCases,
+      currentOutline,
+      aiCustomization,
+      language,
+    });
+    const result = await callOpenAiCompatible(aiSettings, messages);
+    const improved = normalizeImprovedPromptPayload(result.payload);
+    validateImprovedPromptPreservesContext(aiCustomization?.promptGuidelines || "", improved.updates);
+    return {
+      ...improved,
+      usage: result.usage,
+    };
+  }
+
+  try {
+    return await runPromptImprove(instruction);
+  } catch (error) {
+    if (error?.details?.reason !== "prompt_preservation_guard") {
+      throw error;
+    }
+    const retryInstruction = [
+      instruction,
+      "",
+      "PRESERVATION RETRY:",
+      "The previous improved prompt was rejected because it removed too much useful existing guidance.",
+      `Length ratio: ${error.details.length_ratio}; token overlap ratio: ${error.details.token_overlap_ratio}.`,
+      Array.isArray(error.details.missing_concepts) && error.details.missing_concepts.length
+        ? `Missing concept groups that must be preserved: ${error.details.missing_concepts.join(", ")}.`
+        : "",
+      "Return a full revised prompt that keeps all unrelated existing rules, edits overlapping rules in place, and adds only genuinely reusable new guidance.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    return runPromptImprove(retryInstruction);
+  }
 }
 
 function aiProviderResponseMeta(settings = {}, used = false, error = "", usage = null) {
@@ -6069,6 +6182,84 @@ app.post("/api/improve-prompt", async (req, res) => {
       summary: improved.summary,
       aiProvider: aiProviderResponseMeta(aiSettings, true, "", improved.usage),
     });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post("/api/test-connection", async (req, res) => {
+  try {
+    const target = asText(req.body?.target || req.body?.type).trim();
+    const stored = await requestUserSettings(req);
+    if (target === "jira") {
+      const parsed = parseIssueReference(req.body?.jiraUrl || "");
+      const project = normalizeProject(req.body?.project, { jiraBaseUrl: parsed.baseUrl });
+      const credentials = mergeCredentialsWithStored(req.body?.credentials, stored.credentials);
+      const payload = await jiraJson(project, credentials, "/rest/api/2/myself");
+      res.json({
+        ok: true,
+        message: `Jira OK: ${asText(payload.displayName || payload.name || payload.emailAddress || credentials.user || project.jiraBaseUrl)}`,
+      });
+      return;
+    }
+    if (target === "confluence") {
+      const confluenceCredentials = mergeConfluenceCredentialsWithStored(
+        req.body?.confluenceCredentials,
+        stored.confluenceCredentials,
+      );
+      const rawBaseUrl = asText(confluenceCredentials.baseUrl || req.body?.baseUrl);
+      if (!rawBaseUrl) {
+        throw Object.assign(new Error("Thiếu Confluence Base URL để test connection."), { status: 400 });
+      }
+      let parsedBaseUrl;
+      try {
+        parsedBaseUrl = new URL(rawBaseUrl);
+      } catch {
+        throw Object.assign(new Error("Confluence Base URL không hợp lệ."), { status: 400 });
+      }
+      const baseUrl = confluenceBaseUrlFrom(parsedBaseUrl, confluenceCredentials);
+      if (!/^https?:\/\//i.test(baseUrl)) {
+        throw Object.assign(new Error("Thiếu Confluence Base URL để test connection."), { status: 400 });
+      }
+      const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/rest/api/space?limit=1`, {
+        headers: confluenceAuthHeaders(confluenceCredentials),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw Object.assign(new Error(payload.message || payload.errorMessage || `Confluence HTTP ${response.status}`), { status: response.status });
+      }
+      res.json({ ok: true, message: `Confluence OK: ${baseUrl}` });
+      return;
+    }
+    if (target === "ai" || target === "knowledgeAi") {
+      const normalizedSettings = target === "knowledgeAi"
+        ? (() => {
+            const storedKnowledge = normalizeAiSettings(stored.aiSettings).knowledge;
+            const incomingKnowledge = normalizeKnowledgeAiSettings(req.body?.aiSettings || req.body?.knowledgeAiSettings);
+            return {
+              ...incomingKnowledge,
+              apiKey: incomingKnowledge.apiKey || storedKnowledge.apiKey,
+            };
+          })()
+        : mergeAiSettingsWithStored(req.body?.aiSettings, stored.aiSettings);
+      if (!normalizedSettings.enabled) {
+        throw Object.assign(new Error("AI Settings đang tắt."), { status: 400 });
+      }
+      if (!aiProviderReady(normalizedSettings)) {
+        throw Object.assign(new Error("AI Settings đang thiếu API key hoặc model."), { status: 400 });
+      }
+      const result = await callOpenAiCompatible(normalizedSettings, [
+        { role: "system", content: "Return only valid JSON." },
+        { role: "user", content: JSON.stringify({ ok: true, task: "connection_test" }) },
+      ]);
+      res.json({
+        ok: true,
+        message: `AI OK: ${normalizedSettings.model}`,
+        aiProvider: aiProviderResponseMeta(normalizedSettings, true, "", result.usage),
+      });
+      return;
+    }
+    throw Object.assign(new Error("Target test connection không hợp lệ."), { status: 400 });
   } catch (error) {
     sendError(res, error);
   }

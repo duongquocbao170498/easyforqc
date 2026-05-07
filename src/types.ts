@@ -59,6 +59,7 @@ export type AiSettings = {
   baseUrl: string;
   model: string;
   apiKey: string;
+  promptGuidelines: string;
   writingStyle: string;
   testCaseGuidelines: string;
   testDesignGuidelines: string;

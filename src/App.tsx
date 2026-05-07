@@ -103,10 +103,26 @@ type PromptImproveResponse = {
   summary?: string;
   aiProvider?: AiProviderInfo;
 };
-type AiImproveField = "writingStyle" | "testCaseGuidelines" | "testDesignGuidelines" | "improvementNotes";
+type AiImproveField = "promptGuidelines";
 type PromptImproveUpdate = {
   targetField: AiImproveField;
   improvedPrompt: string;
+};
+type PromptImproveProposal = {
+  source: "settings" | "draft";
+  instruction: string;
+  beforePrompt: string;
+  updates: PromptImproveUpdate[];
+  nextAiSettings: AiSettings;
+  changedFields: AiImproveField[];
+  changedLabels: string;
+  summary?: string;
+};
+type PromptCompareDialog = {
+  label: string;
+  summary: string;
+  before: string;
+  after: string;
 };
 type ConfluenceDocument = { title: string; url: string; text: string; error?: string };
 type DownloadFileMeta = { file: string; path: string; url: string };
@@ -117,6 +133,42 @@ type SavedDraftFiles = {
 type BuiltDesignFiles = {
   xmind?: DownloadFileMeta | null;
   png?: DownloadFileMeta | null;
+};
+type CaseFilter = "all" | "happy" | "negative" | "edge" | "regression" | "auth" | "validation" | "doc";
+type QualityItem = {
+  id: string;
+  label: string;
+  detail: string;
+  ok: boolean;
+  severity: "good" | "warn" | "bad";
+};
+type CoverageRow = {
+  id: string;
+  title: string;
+  source: string;
+  matchedIndexes: number[];
+};
+type ReadinessItem = {
+  id: string;
+  label: string;
+  detail: string;
+  ok: boolean;
+};
+type PipelineItem = {
+  id: string;
+  label: string;
+  detail: string;
+  done: boolean;
+};
+type ConnectionTarget = "jira" | "confluence" | "ai" | "knowledgeAi";
+type DraftHistoryEntry = {
+  id: string;
+  createdAt: string;
+  issueKey: string;
+  source: string;
+  testCases: TestCase[];
+  outline: TestDesignOutline;
+  qaPlan?: QaPlan | null;
 };
 type KnowledgeArticle = {
   id: string;
@@ -175,6 +227,30 @@ const emptyConfluenceCredentials: ConfluenceCredentials = {
   token: "",
 };
 
+const DEFAULT_AI_PROMPT_GUIDELINES = `1. Bám sát scope Jira/task trước tiên. Chỉ test đúng đối tượng, feature, kênh, flow hoặc rule mà task yêu cầu. Không mở rộng sang module/kênh/feature khác nếu user không yêu cầu rõ.
+
+2. Phân loại task trước khi viết:
+   - UI/report: decision table, empty/null, refresh, pagination, data binding.
+   - Workflow/routing/assignment: state transition, branching, misrouting, retry.
+   - Chatbot/tool flow: user journey, context carry-forward, tool choice, fallback, handoff.
+   - API/tool/callback: field mapping, required/missing data, duplicate event, idempotency.
+   - Bug fix: reproduce bug, verify fix, nearby regression.
+
+3. Mỗi suite phải cover tối thiểu:
+   - Happy path chính.
+   - Negative/fail-safe path.
+   - Edge case hoặc platform limitation.
+   - State/context carry-forward nếu có nhiều bước.
+   - Regression gần nhất có khả năng bị ảnh hưởng.
+
+4. Nếu task nói "hoạt động như / ổn định như / parity với X", thì chỉ test đối tượng chính của task. X chỉ là baseline trong expected result, không tạo case riêng cho X trừ khi user yêu cầu regression X rõ ràng.
+
+5. Test data phải là dữ liệu/chính câu user thật sẽ dùng để chạy test. Expected result phải cụ thể, quan sát được, và không mâu thuẫn với limitation đã nêu trong task.
+
+6. Test design nên có 4-5 nhánh ngắn, task-specific, luôn có \`Out of scope\`. Không dùng nhánh chung chung nếu có thể đặt tên theo rủi ro/flow thật của task.
+
+7. Nếu scope chưa rõ, ghi \`Open question\` thay vì tự đoán. Nếu đã tạo sai scope, xoá artifact sai trước khi tạo lại để không có hai bộ test cạnh tranh.`;
+
 function createEmptyAuthEntry(): AuthEntry {
   return {
     id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `auth-${Date.now()}`,
@@ -210,6 +286,7 @@ const emptyAiSettings: AiSettings = {
   baseUrl: "https://api.openai.com/v1",
   model: "",
   apiKey: "",
+  promptGuidelines: DEFAULT_AI_PROMPT_GUIDELINES,
   writingStyle: "",
   testCaseGuidelines: "",
   testDesignGuidelines: "",
@@ -384,6 +461,8 @@ const UI_TEXT = {
     modelPlaceholder: "Nhập model mà user muốn dùng",
     apiKey: "API key",
     apiKeyPlaceholder: "Key riêng của từng user",
+    aiPromptGuidelines: "Prompt tạo test case/test design",
+    aiPromptGuidelinesPlaceholder: DEFAULT_AI_PROMPT_GUIDELINES,
     writingStyle: "Phong cách viết",
     writingStylePlaceholder: "Ví dụ: viết ngắn gọn, rõ precondition, expected result dạng bullet...",
     improveSkillNotes: "Ghi nhớ cải tiến",
@@ -399,18 +478,29 @@ const UI_TEXT = {
     autoArchetype: "Tự chọn archetype",
     generateDraft: "Tạo draft",
     improveDraftTitle: "Improve prompt và tạo lại draft bằng AI",
-    improveDraftHelp: "Nhập yêu cầu tinh chỉnh. AI sẽ cập nhật prompt trong Cài đặt AI, lưu lịch sử Trước/Sau, rồi tự tạo lại bộ test case/test design mới.",
+    improveDraftHelp: "Nhập yêu cầu tinh chỉnh. AI sẽ tạo đề xuất prompt mới để bạn xem Trước/Sau; khi áp dụng, app lưu lịch sử rồi tạo lại bộ test case/test design.",
     improveDraftInput: "Yêu cầu tinh chỉnh",
     improveDraftPlaceholder: "Ví dụ: Bổ sung negative case cho thiếu auth Confluence, title viết rõ risk hơn, bỏ case trùng...",
+    aiSettingsImproveTitle: "Improve prompt AI",
+    aiSettingsImproveHelp: "Dùng khi muốn cải thiện riêng prompt trong Cài đặt AI. AI tạo đề xuất Trước/Sau; chỉ khi bạn áp dụng thì app mới lưu prompt mới.",
+    aiSettingsImproveInput: "Yêu cầu improve prompt",
+    aiSettingsImprovePlaceholder: "Ví dụ: Test case title cần nêu rõ risk hơn, expected result phải kiểm được, test design cần thêm branch regression...",
     improvePromptButton: "Improve prompt bằng AI",
     improvePromptRequiresInput: "Cần nhập Yêu cầu tinh chỉnh trước khi Improve prompt.",
     improvePromptDonePrefix: "Đã cải thiện prompt từ yêu cầu tinh chỉnh",
-    improvePromptSavedToAiSettings: "Đã tự lưu vào Cài đặt AI và tạo lịch sử chỉnh sửa.",
+    improvePromptSavedToAiSettings: "Đã lưu vào Cài đặt AI và tạo lịch sử chỉnh sửa.",
     improvePromptUpdatedFields: "Đã cập nhật",
+    promptImprovePreviewTitle: "Đề xuất cải thiện prompt",
+    promptImprovePreviewHelp: "Kiểm tra nội dung Trước/Sau. Prompt mới chỉ được lưu khi bạn bấm áp dụng.",
+    promptImprovePreviewReady: "AI đã tạo đề xuất cải thiện prompt. Hãy kiểm tra Trước/Sau trước khi áp dụng.",
+    applyPromptImprove: "Áp dụng & lưu",
+    applyPromptImproveAndRegenerate: "Áp dụng và tạo lại draft",
+    discardPromptImprove: "Bỏ đề xuất",
+    promptImproveApplied: "Đã áp dụng prompt mới và lưu lịch sử chỉnh sửa.",
     improveRequiresDraft: "Cần tạo draft trước khi tinh chỉnh bằng AI.",
     improveRequiresAi: "Cần bật AI Settings và có API key/model để dùng Improve prompt.",
     improvePromptRegeneratedDraft: "Đã tạo lại draft mới bằng prompt vừa cải thiện.",
-    aiSettingsPendingImprove: "AI vừa cập nhật và tự lưu một số mục trong Cài đặt AI. Mở Lịch sử chỉnh sửa để xem Trước/Sau.",
+    aiSettingsPendingImprove: "AI vừa cập nhật prompt trong Cài đặt AI. Mở Lịch sử chỉnh sửa để xem Trước/Sau.",
     aiImprovedBadge: "AI cải thiện",
     aiSettingsUnsavedGuard: "Có thể mở Lịch sử chỉnh sửa để xem lại nội dung Trước/Sau.",
     aiSettingsHistory: "Lịch sử chỉnh sửa",
@@ -422,6 +512,32 @@ const UI_TEXT = {
     historyChangedItems: "mục thay đổi",
     historyExpandChange: "Mở rộng so sánh",
     historyCompareTitle: "So sánh thay đổi",
+    restorePrevious: "Khôi phục bản trước",
+    restorePreviousTitle: "Đưa nội dung Trước vào form, chưa lưu ngay",
+    readinessTitle: "Sẵn sàng tạo draft",
+    qualityTitle: "Kiểm tra chất lượng draft",
+    qualityGood: "Bộ test đang đạt các checkpoint chính.",
+    coverageTitle: "Ma trận coverage",
+    caseFilterLabel: "Lọc theo risk",
+    allCases: "Tất cả",
+    happyPath: "Happy path",
+    negativePath: "Negative",
+    edgeCase: "Edge",
+    regression: "Regression",
+    authRisk: "Auth",
+    validationRisk: "Validation",
+    docCoverage: "Doc coverage",
+    pipelineTitle: "Pipeline chạy QA",
+    designPreview: "Preview PNG test design",
+    projectAdvanced: "Cấu hình nâng cao",
+    knowledgeSearch: "Tìm kiến thức",
+    knowledgeSearchPlaceholder: "Tìm theo nguyên lý, kỹ thuật, risk, ví dụ...",
+    bookmark: "Bookmark",
+    bookmarked: "Đã lưu",
+    applyToAiPrompt: "Dùng làm prompt rule",
+    appliedKnowledgePrompt: "Đã đưa kiến thức này vào Yêu cầu improve prompt trong Cài đặt AI.",
+    testConnection: "Test connection",
+    connectionOk: "Kết nối thành công",
     taskContext: "Ngữ cảnh task",
     issueKey: "Issue key",
     status: "Trạng thái",
@@ -624,6 +740,8 @@ const UI_TEXT = {
     modelPlaceholder: "Enter the model this user wants to use",
     apiKey: "API key",
     apiKeyPlaceholder: "User-specific key",
+    aiPromptGuidelines: "Test case/test design prompt",
+    aiPromptGuidelinesPlaceholder: DEFAULT_AI_PROMPT_GUIDELINES,
     writingStyle: "Writing style",
     writingStylePlaceholder: "Example: concise writing, clear preconditions, bullet expected results...",
     improveSkillNotes: "Improve skill notes",
@@ -639,18 +757,29 @@ const UI_TEXT = {
     autoArchetype: "Auto archetype",
     generateDraft: "Generate draft",
     improveDraftTitle: "Improve prompt and regenerate draft with AI",
-    improveDraftHelp: "Enter a refine request. AI updates AI Settings prompts, saves Before/After history, then regenerates the test case/test design draft.",
+    improveDraftHelp: "Enter a refine request. AI creates a prompt proposal for Before/After review; when applied, the app saves history and regenerates the test case/test design draft.",
     improveDraftInput: "Improve request",
     improveDraftPlaceholder: "Example: Add negative cases for missing Confluence auth, make titles risk-specific, remove duplicates...",
+    aiSettingsImproveTitle: "Improve AI prompt",
+    aiSettingsImproveHelp: "Use this to improve AI Settings prompts independently. AI creates a Before/After proposal; the app saves the new prompt only after you apply it.",
+    aiSettingsImproveInput: "Prompt improve request",
+    aiSettingsImprovePlaceholder: "Example: Make test case titles risk-specific, make expected results verifiable, add regression branches to test design...",
     improvePromptButton: "Improve prompt with AI",
     improvePromptRequiresInput: "Enter an improve request before improving the prompt.",
     improvePromptDonePrefix: "Improved prompt from refine request",
-    improvePromptSavedToAiSettings: "Auto-saved to AI Settings and created a revision history entry.",
+    improvePromptSavedToAiSettings: "Saved to AI Settings and created a revision history entry.",
     improvePromptUpdatedFields: "Updated",
+    promptImprovePreviewTitle: "Prompt improvement proposal",
+    promptImprovePreviewHelp: "Review the Before/After diff. The new prompt is saved only after you apply it.",
+    promptImprovePreviewReady: "AI created a prompt improvement proposal. Review Before/After before applying it.",
+    applyPromptImprove: "Apply & save",
+    applyPromptImproveAndRegenerate: "Apply and regenerate draft",
+    discardPromptImprove: "Discard proposal",
+    promptImproveApplied: "Applied the new prompt and saved revision history.",
     improveRequiresDraft: "Generate a draft before improving it with AI.",
     improveRequiresAi: "Enable AI Settings with API key/model before using Improve prompt.",
     improvePromptRegeneratedDraft: "Regenerated a new draft using the improved prompt.",
-    aiSettingsPendingImprove: "AI updated and auto-saved some AI Settings fields. Open Revision history to review Before/After.",
+    aiSettingsPendingImprove: "AI updated the AI Settings prompt. Open Revision history to review Before/After.",
     aiImprovedBadge: "AI improved",
     aiSettingsUnsavedGuard: "Open Revision history to review the Before/After content.",
     aiSettingsHistory: "Revision history",
@@ -662,6 +791,32 @@ const UI_TEXT = {
     historyChangedItems: "changed fields",
     historyExpandChange: "Open comparison",
     historyCompareTitle: "Change comparison",
+    restorePrevious: "Restore before",
+    restorePreviousTitle: "Put the Before content back into the form without saving yet",
+    readinessTitle: "Ready to generate",
+    qualityTitle: "Draft quality check",
+    qualityGood: "The suite passes the main quality checkpoints.",
+    coverageTitle: "Coverage matrix",
+    caseFilterLabel: "Filter by risk",
+    allCases: "All",
+    happyPath: "Happy path",
+    negativePath: "Negative",
+    edgeCase: "Edge",
+    regression: "Regression",
+    authRisk: "Auth",
+    validationRisk: "Validation",
+    docCoverage: "Doc coverage",
+    pipelineTitle: "QA run pipeline",
+    designPreview: "Test design PNG preview",
+    projectAdvanced: "Advanced settings",
+    knowledgeSearch: "Search knowledge",
+    knowledgeSearchPlaceholder: "Search by principle, technique, risk, example...",
+    bookmark: "Bookmark",
+    bookmarked: "Saved",
+    applyToAiPrompt: "Use as prompt rule",
+    appliedKnowledgePrompt: "Added this knowledge to the AI Settings prompt improve request.",
+    testConnection: "Test connection",
+    connectionOk: "Connection successful",
     taskContext: "Task context",
     issueKey: "Issue key",
     status: "Status",
@@ -758,19 +913,24 @@ function aiHistorySourceLabel(source: string, ui: UiText) {
 
 function aiImproveFieldLabel(field: AiImproveField, ui: UiText) {
   const labels: Record<AiImproveField, string> = {
-    writingStyle: ui.writingStyle,
-    testCaseGuidelines: ui.testCaseGuidelines,
-    testDesignGuidelines: ui.testDesignGuidelines,
-    improvementNotes: ui.improveSkillNotes,
+    promptGuidelines: ui.aiPromptGuidelines,
   };
   return labels[field];
 }
 
-const AI_IMPROVE_FIELD_SET = new Set<AiImproveField>(["writingStyle", "testCaseGuidelines", "testDesignGuidelines", "improvementNotes"]);
+function promptImproveNoticeClass(status: string, ui: UiText) {
+  const isOk =
+    status.startsWith(ui.improvePromptDonePrefix) ||
+    status.startsWith(ui.promptImprovePreviewReady) ||
+    status.startsWith(ui.promptImproveApplied);
+  return isOk ? "notice ok improve-status" : "notice improve-status";
+}
+
+const AI_IMPROVE_FIELD_SET = new Set<AiImproveField>(["promptGuidelines"]);
 
 function normalizeAiImproveField(value: unknown): AiImproveField {
   const raw = typeof value === "string" ? value : "";
-  return AI_IMPROVE_FIELD_SET.has(raw as AiImproveField) ? (raw as AiImproveField) : "improvementNotes";
+  return AI_IMPROVE_FIELD_SET.has(raw as AiImproveField) ? (raw as AiImproveField) : "promptGuidelines";
 }
 
 function normalizePromptImproveUpdates(payload: PromptImproveResponse): PromptImproveUpdate[] {
@@ -792,6 +952,128 @@ function normalizePromptImproveUpdates(payload: PromptImproveResponse): PromptIm
         },
       ]
     : [];
+}
+
+type DiffSegment = {
+  kind: "equal" | "delete" | "insert";
+  text: string;
+};
+
+function tokenizeDiffText(value: string) {
+  return value.split(/(\s+)/).filter(Boolean);
+}
+
+function appendDiffSegment(segments: DiffSegment[], kind: DiffSegment["kind"], text: string) {
+  if (!text) return;
+  const previous = segments[segments.length - 1];
+  if (previous?.kind === kind) {
+    previous.text += text;
+    return;
+  }
+  segments.push({ kind, text });
+}
+
+function diffTextSegments(beforeValue: string, afterValue: string): DiffSegment[] {
+  const before = tokenizeDiffText(beforeValue);
+  const after = tokenizeDiffText(afterValue);
+  if (!before.length && !after.length) return [];
+  const dp = Array.from({ length: before.length + 1 }, () => new Uint16Array(after.length + 1));
+  for (let i = before.length - 1; i >= 0; i -= 1) {
+    for (let j = after.length - 1; j >= 0; j -= 1) {
+      dp[i][j] = before[i] === after[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const segments: DiffSegment[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < before.length && j < after.length) {
+    if (before[i] === after[j]) {
+      appendDiffSegment(segments, "equal", after[j]);
+      i += 1;
+      j += 1;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      appendDiffSegment(segments, "delete", before[i]);
+      i += 1;
+    } else {
+      appendDiffSegment(segments, "insert", after[j]);
+      j += 1;
+    }
+  }
+  while (i < before.length) {
+    appendDiffSegment(segments, "delete", before[i]);
+    i += 1;
+  }
+  while (j < after.length) {
+    appendDiffSegment(segments, "insert", after[j]);
+    j += 1;
+  }
+  return segments;
+}
+
+function DiffText(props: { before: string; after: string; className?: string }) {
+  const before = props.before || "";
+  const after = props.after || "";
+  const segments = diffTextSegments(before, after);
+  return (
+    <pre className={`history-diff-render ${props.className || ""}`}>
+      {segments.length
+        ? segments.map((segment, index) => (
+            <span className={`diff-${segment.kind}`} key={`${segment.kind}-${index}`}>
+              {segment.text}
+            </span>
+          ))
+        : "(empty)"}
+    </pre>
+  );
+}
+
+function PromptImprovePreview(props: {
+  ui: UiText;
+  proposal: PromptImproveProposal;
+  applyLabel: string;
+  busy: boolean;
+  onCompare: () => void;
+  onApply: () => void;
+  onDiscard: () => void;
+}) {
+  return (
+    <div className="prompt-improve-preview">
+      <div className="section-heading compact-heading prompt-improve-preview-heading">
+        <div>
+          <h3>{props.ui.promptImprovePreviewTitle}</h3>
+          <p>{props.ui.promptImprovePreviewHelp}</p>
+        </div>
+        <button
+          className="tiny prompt-compare-button"
+          type="button"
+          onClick={props.onCompare}
+          title={props.ui.historyExpandChange}
+          aria-label={props.ui.historyExpandChange}
+        >
+          <Maximize2 size={14} />
+          {props.ui.historyExpandChange}
+        </button>
+      </div>
+      <div className="history-diff-grid prompt-improve-diff">
+        <div>
+          <span>{props.ui.historyBefore}</span>
+          <pre>{props.proposal.beforePrompt || "(empty)"}</pre>
+        </div>
+        <div>
+          <span>{props.ui.historyAfter}</span>
+          <DiffText before={props.proposal.beforePrompt} after={props.proposal.nextAiSettings.promptGuidelines} />
+        </div>
+      </div>
+      <div className="button-row prompt-improve-preview-actions">
+        <IconButton icon={props.busy ? <Loader2 className="spin" size={16} /> : <Save size={16} />} onClick={props.onApply} disabled={props.busy} variant="primary">
+          {props.applyLabel}
+        </IconButton>
+        <IconButton icon={<X size={16} />} onClick={props.onDiscard} disabled={props.busy}>
+          {props.ui.discardPromptImprove}
+        </IconButton>
+      </div>
+    </div>
+  );
 }
 
 type KnowledgeCard = {
@@ -1371,11 +1653,23 @@ function aiCoreSettingsSnapshot(aiSettings: AiSettings) {
     baseUrl: aiSettings.baseUrl,
     model: aiSettings.model,
     apiKey: aiSettings.apiKey,
+    promptGuidelines: aiSettings.promptGuidelines,
     writingStyle: aiSettings.writingStyle,
     testCaseGuidelines: aiSettings.testCaseGuidelines,
     testDesignGuidelines: aiSettings.testDesignGuidelines,
     improvementNotes: aiSettings.improvementNotes,
   });
+}
+
+function aiPromptGuidelinesFromSettings(aiSettings: Partial<AiSettings>) {
+  if (aiSettings.promptGuidelines?.trim()) return aiSettings.promptGuidelines;
+  const legacySections = [
+    aiSettings.writingStyle?.trim() ? `Phong cách viết:\n${aiSettings.writingStyle.trim()}` : "",
+    aiSettings.testCaseGuidelines?.trim() ? `Cách viết test case:\n${aiSettings.testCaseGuidelines.trim()}` : "",
+    aiSettings.testDesignGuidelines?.trim() ? `Cách làm test design:\n${aiSettings.testDesignGuidelines.trim()}` : "",
+    aiSettings.improvementNotes?.trim() ? `Ghi nhớ cải tiến:\n${aiSettings.improvementNotes.trim()}` : "",
+  ].filter(Boolean);
+  return legacySections.length ? legacySections.join("\n\n") : DEFAULT_AI_PROMPT_GUIDELINES;
 }
 
 function knowledgeAiSettingsSnapshot(aiSettings: AiSettings) {
@@ -1510,6 +1804,164 @@ const makeEmptyCase = (index: number, issueKey: string, numberTemplate: string):
     },
   ],
 });
+
+function normalizeComparableText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}_]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function stripCaseNumberPrefix(value: string) {
+  return value.replace(/^\s*\[[^\]]+\]\s*/, "").trim();
+}
+
+function testCaseSearchText(testCase: TestCase) {
+  return normalizeComparableText(
+    [
+      testCase.title,
+      testCase.objective,
+      testCase.priority,
+      testCase.technique,
+      testCase.risk,
+      testCase.requirement_ref,
+      testCase.coverage_tags.join(" "),
+      testCase.scenario_type,
+      testCase.precondition,
+      testCase.test_data,
+      testCase.expected_result,
+      ...(testCase.structured_steps || []).flatMap((step) => [step.description, step.test_data, step.expected_result]),
+    ].join(" "),
+  );
+}
+
+function caseMatchesFilter(testCase: TestCase, filter: CaseFilter) {
+  if (filter === "all") return true;
+  const text = testCaseSearchText(testCase);
+  const patterns: Record<Exclude<CaseFilter, "all">, RegExp> = {
+    happy: /\b(happy|success|positive|main|primary|chinh|thanh cong|hop le)\b/,
+    negative: /\b(negative|fail|invalid|missing|wrong|empty|null|deny|error|loi|thieu|sai|khong)\b/,
+    edge: /\b(edge|boundary|limit|partial|timeout|large|small|max|min|bien|gioi han)\b/,
+    regression: /\b(regression|nearby|existing|legacy|old flow|hoi quy|luong cu)\b/,
+    auth: /\b(auth|token|permission|role|login|credential|xac thuc|phan quyen)\b/,
+    validation: /\b(validation|required|format|mapping|field|payload|schema|validate|bat buoc)\b/,
+    doc: /\b(doc|document|confluence|article|reference|chunk|source|knowledge|tai lieu)\b/,
+  };
+  return patterns[filter].test(text);
+}
+
+function buildQualityItems(testCases: TestCase[], outline: TestDesignOutline, docContext: string, issueKey: string, ui: UiText): QualityItem[] {
+  if (!testCases.length) return [];
+  const allText = testCases.map(testCaseSearchText).join(" ");
+  const genericTitles = testCases.filter((testCase) => {
+    const title = normalizeComparableText(stripCaseNumberPrefix(testCase.title));
+    return title.length < 18 || /^(test|kiem thu|scenario|case)\b/.test(title) || !/[a-z0-9]{4,}/i.test(title);
+  });
+  const missingSteps = testCases.filter((testCase) => !(testCase.structured_steps || []).length);
+  const weakExpected = testCases.filter((testCase) => normalizeComparableText(testCase.expected_result).length < 28);
+  const missingRequirement = issueKey ? testCases.filter((testCase) => normalizeComparableText(testCase.requirement_ref) !== normalizeComparableText(issueKey)) : [];
+  const missingTags = testCases.filter((testCase) => !testCase.coverage_tags?.length);
+  const hasNegative = /\b(negative|fail|invalid|missing|wrong|empty|null|error|loi|thieu|sai|khong)\b/.test(allText);
+  const hasRegression = /\b(regression|nearby|existing|legacy|old flow|hoi quy|luong cu)\b/.test(allText);
+  const hasEdge = /\b(edge|boundary|limit|partial|timeout|max|min|bien|gioi han)\b/.test(allText);
+  const hasOutOfScope = outline.branches.some((branch) => /out\s*of\s*scope|ngoai pham vi|khong kiem thu/i.test(normalizeComparableText(branch.title)));
+  const hasDocCoverage = !docContext.trim() || /\b(doc|document|confluence|article|reference|chunk|source|knowledge|tai lieu)\b/.test(allText);
+  return [
+    {
+      id: "title",
+      label: ui.title,
+      detail: genericTitles.length ? `${genericTitles.length} title còn ngắn hoặc chung chung.` : "Title đã đủ rõ để scan nhanh.",
+      ok: genericTitles.length === 0,
+      severity: genericTitles.length ? "warn" : "good",
+    },
+    {
+      id: "steps",
+      label: ui.steps,
+      detail: missingSteps.length ? `${missingSteps.length} case thiếu structured_steps.` : "Mỗi case có step kiểm thử có thể thao tác.",
+      ok: missingSteps.length === 0,
+      severity: missingSteps.length ? "bad" : "good",
+    },
+    {
+      id: "expected",
+      label: ui.expectedResult,
+      detail: weakExpected.length ? `${weakExpected.length} expected result còn quá ngắn, khó kiểm chứng.` : "Expected result đủ cụ thể để review.",
+      ok: weakExpected.length === 0,
+      severity: weakExpected.length ? "warn" : "good",
+    },
+    {
+      id: "risk",
+      label: ui.caseFilterLabel,
+      detail: hasNegative && hasEdge && hasRegression ? "Đã có negative, edge và regression lens." : "Nên có đủ negative, edge và regression để bắt bug tốt hơn.",
+      ok: hasNegative && hasEdge && hasRegression,
+      severity: hasNegative && hasEdge && hasRegression ? "good" : "warn",
+    },
+    {
+      id: "design",
+      label: ui.testDesignTab,
+      detail: hasOutOfScope ? "Test design có nhánh Out of scope." : "Test design nên có đúng 1 nhánh Out of scope.",
+      ok: hasOutOfScope,
+      severity: hasOutOfScope ? "good" : "warn",
+    },
+    {
+      id: "refs",
+      label: ui.requirementRef,
+      detail: missingRequirement.length ? `${missingRequirement.length} case chưa map về ${issueKey}.` : "Requirement ref đang map đúng issue.",
+      ok: missingRequirement.length === 0,
+      severity: missingRequirement.length ? "warn" : "good",
+    },
+    {
+      id: "tags",
+      label: ui.coverageTags,
+      detail: missingTags.length ? `${missingTags.length} case thiếu coverage tag.` : "Coverage tag đã có ở các case.",
+      ok: missingTags.length === 0,
+      severity: missingTags.length ? "warn" : "good",
+    },
+    {
+      id: "doc",
+      label: ui.docCoverage,
+      detail: hasDocCoverage ? "Doc context đã có dấu hiệu được dùng trong coverage." : "Có doc context nhưng case chưa thể hiện rõ doc/reference coverage.",
+      ok: hasDocCoverage,
+      severity: hasDocCoverage ? "good" : "warn",
+    },
+  ];
+}
+
+function keywordsFromCoverageText(value: string) {
+  const stopWords = new Set(["test", "case", "task", "jira", "scope", "kiem", "thu", "luong", "risk", "rule", "happy", "path"]);
+  return normalizeComparableText(value)
+    .split(" ")
+    .filter((word) => word.length >= 4 && !stopWords.has(word))
+    .slice(0, 8);
+}
+
+function buildCoverageRows(issue: IssueSummary, qaPlan: QaPlan | null, testCases: TestCase[]): CoverageRow[] {
+  const sourceRows = qaPlan?.coverage_axes?.length
+    ? qaPlan.coverage_axes.slice(0, 8).map((axis) => ({
+        id: axis.id,
+        title: axis.title,
+        source: [axis.technique, axis.risk].filter(Boolean).join(" · "),
+      }))
+    : [
+        ...issue.description
+          .split(/\r?\n/)
+          .map((line) => line.replace(/^[\s*#>-]+/, "").trim())
+          .filter((line) => line.length >= 18)
+          .slice(0, 6)
+          .map((line, index) => ({ id: `desc-${index}`, title: line, source: "Jira description/AC" })),
+        issue.summary ? { id: "summary", title: issue.summary, source: "Jira summary" } : null,
+      ].filter(Boolean) as Array<{ id: string; title: string; source: string }>;
+  return sourceRows.slice(0, 8).map((row) => {
+    const keywords = keywordsFromCoverageText(`${row.title} ${row.source}`);
+    const matchedIndexes = testCases
+      .map((testCase, index) => ({ index, text: testCaseSearchText(testCase) }))
+      .filter(({ text }) => keywords.some((keyword) => text.includes(keyword)))
+      .map(({ index }) => index);
+    return { ...row, matchedIndexes };
+  });
+}
 
 function inferConfluenceBaseUrl(value: string) {
   const firstLink = value
@@ -1917,6 +2369,9 @@ function App() {
   const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSection>("project");
   const [activeKnowledgeSection, setActiveKnowledgeSection] = useState<KnowledgeSection>("principles");
   const [expandedKnowledgeCards, setExpandedKnowledgeCards] = useState<string[]>([]);
+  const [knowledgeSearch, setKnowledgeSearch] = useState("");
+  const [bookmarkedKnowledgeCards, setBookmarkedKnowledgeCards] = useState<string[]>([]);
+  const [projectAdvancedOpen, setProjectAdvancedOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(initialThemeMode);
   const [languageMode, setLanguageMode] = useState<LanguageMode>(initialLanguageMode);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -1936,6 +2391,8 @@ function App() {
     ai: "",
     knowledgeAi: "",
   });
+  const [connectionBusy, setConnectionBusy] = useState<ConnectionTarget | "">("");
+  const [connectionStatus, setConnectionStatus] = useState<Partial<Record<ConnectionTarget, string>>>({});
   const [savedSettingsSnapshot, setSavedSettingsSnapshot] = useState<Record<SettingsSection, string>>(initialSavedSettingsSnapshot);
   const [defaults, setDefaults] = useState<DefaultsResponse | null>(null);
   const [project, setProject] = useState<ProjectConfig>(emptyProject);
@@ -1958,15 +2415,24 @@ function App() {
   const [archetypeKey, setArchetypeKey] = useState("auto");
   const [qaPlan, setQaPlan] = useState<QaPlan | null>(null);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
+  const [draftHistory, setDraftHistory] = useState<DraftHistoryEntry[]>([]);
   const [detailCaseIndex, setDetailCaseIndex] = useState<number | null>(null);
+  const [caseFilter, setCaseFilter] = useState<CaseFilter>("all");
   const [outline, setOutline] = useState<TestDesignOutline>(emptyOutline(emptyIssue));
   const [improveInstruction, setImproveInstruction] = useState("");
   const [lastImproveInstruction, setLastImproveInstruction] = useState("");
+  const [settingsImproveInstruction, setSettingsImproveInstruction] = useState("");
+  const [settingsPromptImproveStatus, setSettingsPromptImproveStatus] = useState("");
+  const [settingsPromptImproveBusy, setSettingsPromptImproveBusy] = useState(false);
+  const [settingsPromptApplyBusy, setSettingsPromptApplyBusy] = useState(false);
+  const [settingsPromptProposal, setSettingsPromptProposal] = useState<PromptImproveProposal | null>(null);
+  const [draftPromptProposal, setDraftPromptProposal] = useState<PromptImproveProposal | null>(null);
   const [promptImproveStatus, setPromptImproveStatus] = useState("");
   const [aiSettingsImprovePending, setAiSettingsImprovePending] = useState(false);
   const [aiSettingsImprovedFields, setAiSettingsImprovedFields] = useState<AiImproveField[]>([]);
   const [expandedHistoryIds, setExpandedHistoryIds] = useState<string[]>([]);
   const [historyCompare, setHistoryCompare] = useState<{ entry: AiSettingsHistoryEntry; change: AiSettingsHistoryChange } | null>(null);
+  const [promptCompare, setPromptCompare] = useState<PromptCompareDialog | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("cases");
   const [busy, setBusy] = useState<BusyKey>("");
   const [message, setMessage] = useState("");
@@ -2061,6 +2527,7 @@ function App() {
             apiKey: "",
           },
         };
+        nextAiSettings.promptGuidelines = aiPromptGuidelinesFromSettings(nextAiSettings);
         nextSecretStatus = {
           ...nextSecretStatus,
           ai: {
@@ -2086,6 +2553,8 @@ function App() {
     setSavedSettingsSnapshot(settingsSnapshots(nextProject, nextCredentials, nextConfluenceCredentials, nextAuthEntries, nextAiSettings));
     setAiSettingsImprovePending(false);
     setAiSettingsImprovedFields([]);
+    setSettingsPromptProposal(null);
+    setDraftPromptProposal(null);
     setSavedKnowledgeDraftSnapshot("");
   }
 
@@ -2183,6 +2652,106 @@ function App() {
     () => Boolean(knowledgeArticleDraft && knowledgeArticleSnapshot(knowledgeArticleDraft) !== savedKnowledgeDraftSnapshot),
     [knowledgeArticleDraft, savedKnowledgeDraftSnapshot],
   );
+  const readinessItems = useMemo<ReadinessItem[]>(() => {
+    const effectiveIssueKey = issueKeyFromText(jiraUrl) || issue.key;
+    const jiraAuthReady = !credentials.enabled || Boolean(credentials.user.trim() && (credentials.password.trim() || credentials.token.trim() || secretStatus.jira.hasPassword || secretStatus.jira.hasToken));
+    const hasDocInput = Boolean(confluenceLinks.trim() || looksLikeConfluencePageUrl(confluenceBaseUrl));
+    const confluenceAuthReady =
+      !hasDocInput ||
+      !confluenceCredentials.enabled ||
+      Boolean(confluenceCredentials.user.trim() && (confluenceCredentials.password.trim() || confluenceCredentials.token.trim() || secretStatus.confluence.hasPassword || secretStatus.confluence.hasToken));
+    const aiReady = !savedAiSettings.enabled || Boolean(savedAiSettings.model.trim() && (savedAiSettings.apiKey.trim() || secretStatus.ai.hasApiKey));
+    return [
+      {
+        id: "jira-input",
+        label: ui.jiraTask,
+        detail: effectiveIssueKey ? `${effectiveIssueKey} đã sẵn sàng.` : "Cần nhập Jira URL hoặc issue key.",
+        ok: Boolean(effectiveIssueKey),
+      },
+      {
+        id: "jira-auth",
+        label: ui.jiraAuth,
+        detail: jiraAuthReady ? "Có đủ auth để đọc Jira khi cần." : "Thiếu user + token/password Jira.",
+        ok: jiraAuthReady,
+      },
+      {
+        id: "task-context",
+        label: ui.taskContext,
+        detail: issue.summary || issue.description ? "Đã có summary/description để generate." : "Nên Đọc Jira hoặc nhập context thủ công.",
+        ok: Boolean(issue.summary || issue.description),
+      },
+      {
+        id: "docs",
+        label: ui.confluenceDocLinks,
+        detail: hasDocInput
+          ? docContext.trim()
+            ? `${docContext.length.toLocaleString()} ký tự doc sẽ được dùng.`
+            : confluenceAuthReady
+              ? "Có link/auth, nên Đọc Jira để fetch doc trước khi generate."
+              : "Có link doc nhưng thiếu Confluence auth."
+          : "Task không có doc link, có thể generate bằng Jira context.",
+        ok: !hasDocInput || Boolean(docContext.trim()),
+      },
+      {
+        id: "ai",
+        label: ui.aiSettings,
+        detail: savedAiSettings.enabled ? (aiReady ? `${savedAiSettings.model || "AI model"} đã cấu hình.` : "AI đang bật nhưng thiếu model/API key.") : "AI tắt, app sẽ dùng fallback local.",
+        ok: aiReady,
+      },
+      {
+        id: "wrappers",
+        label: ui.automationRun,
+        detail: defaults?.wrappers.xmindExists && defaults?.wrappers.jiraExists ? "Wrapper Jira/XMind có sẵn." : "Một số wrapper local chưa sẵn sàng.",
+        ok: Boolean(defaults?.wrappers.xmindExists && defaults?.wrappers.jiraExists),
+      },
+    ];
+  }, [jiraUrl, issue, credentials, confluenceCredentials, confluenceLinks, confluenceBaseUrl, docContext, savedAiSettings, secretStatus, defaults, ui]);
+  const qualityItems = useMemo(
+    () => buildQualityItems(testCases, outline, docContext, issueKeyFromText(jiraUrl) || issue.key, ui),
+    [testCases, outline, docContext, jiraUrl, issue.key, ui],
+  );
+  const coverageRows = useMemo(
+    () => buildCoverageRows(issue, qaPlan, testCases),
+    [issue, qaPlan, testCases],
+  );
+  const filteredTestCases = useMemo(
+    () => testCases.map((testCase, index) => ({ testCase, index })).filter(({ testCase }) => caseMatchesFilter(testCase, caseFilter)),
+    [testCases, caseFilter],
+  );
+  const caseFilterCounts = useMemo(() => {
+    const filters: CaseFilter[] = ["all", "happy", "negative", "edge", "regression", "auth", "validation", "doc"];
+    return Object.fromEntries(filters.map((filter) => [filter, testCases.filter((testCase) => caseMatchesFilter(testCase, filter)).length])) as Record<CaseFilter, number>;
+  }, [testCases]);
+  const runPipelineItems = useMemo<PipelineItem[]>(
+    () => [
+      {
+        id: "draft",
+        label: ui.generateDraft,
+        detail: testCases.length ? `${testCases.length} test case, ${outline.branches.length} branch.` : "Chưa có draft để chạy.",
+        done: Boolean(testCases.length && outline.branches.length),
+      },
+      {
+        id: "json",
+        label: ui.downloadJson,
+        detail: savedFiles ? savedFiles.cases.file : "Chưa lưu JSON test case/test design.",
+        done: Boolean(savedFiles),
+      },
+      {
+        id: "design",
+        label: ui.buildLocalFiles,
+        detail: builtDesignFiles?.xmind || builtDesignFiles?.png ? "Đã build file local." : "Chưa build XMind/PNG.",
+        done: Boolean(builtDesignFiles?.xmind || builtDesignFiles?.png),
+      },
+      {
+        id: "suite",
+        label: ui.createSuite,
+        detail: caseKeys ? `${caseKeys.split(",").filter(Boolean).length} key đã tạo.` : "Chưa tạo suite/test case trên Jira.",
+        done: Boolean(caseKeys),
+      },
+    ],
+    [testCases, outline.branches.length, savedFiles, builtDesignFiles, caseKeys, ui],
+  );
+  const knowledgeSearchText = normalizeComparableText(knowledgeSearch);
 
   function toggleLanguageMode() {
     const nextLanguage = languageMode === "vi" ? "en" : "vi";
@@ -2373,6 +2942,8 @@ function App() {
 
   function setAiSettingValue<K extends keyof AiSettings>(key: K, value: AiSettings[K]) {
     clearValidationErrors(key === "enabled" ? ["ai.baseUrl", "ai.model", "ai.apiKey"] : [`ai.${String(key)}`]);
+    setSettingsPromptProposal(null);
+    setDraftPromptProposal(null);
     setAiSettings((current) => ({ ...current, [key]: value }));
   }
 
@@ -2387,36 +2958,94 @@ function App() {
     }));
   }
 
-  function appendImproveNote(existing: string, instruction: string) {
-    const newItems = instruction
-      .split(/\r?\n/)
-      .map((line) => line.trim().replace(/^[-•]\s*/, "").trim())
-      .filter(Boolean);
-    if (!newItems.length) return existing;
-    const lines = existing.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    const seen = new Set(lines.map((line) => line.replace(/^[-•]\s*/, "").trim().toLowerCase()));
-    const nextLines = [...lines];
-    for (const item of newItems) {
-      const key = item.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      nextLines.push(`- ${item}`);
-    }
-    return nextLines.join("\n");
-  }
-
   function applyPromptImproveUpdates(baseSettings: AiSettings, updates: PromptImproveUpdate[]) {
     const next = { ...baseSettings };
     for (const update of updates) {
-      next[update.targetField] = appendImproveNote(next[update.targetField], update.improvedPrompt);
+      next[update.targetField] = update.improvedPrompt.trim();
     }
     return next;
+  }
+
+  function createPromptImproveProposal(
+    source: PromptImproveProposal["source"],
+    instruction: string,
+    baseSettings: AiSettings,
+    updates: PromptImproveUpdate[],
+    summary?: string,
+  ): PromptImproveProposal {
+    const changedFields = Array.from(new Set(updates.map((update) => update.targetField)));
+    const changedLabels = changedFields.map((field) => aiImproveFieldLabel(field, ui)).join(", ");
+    return {
+      source,
+      instruction,
+      beforePrompt: aiPromptGuidelinesFromSettings(baseSettings),
+      updates,
+      nextAiSettings: applyPromptImproveUpdates(baseSettings, updates),
+      changedFields,
+      changedLabels,
+      summary,
+    };
+  }
+
+  function aiSettingsSavePayloadFromForm(nextAiSettingsForm: AiSettings) {
+    return {
+      ...savedAiSettings,
+      enabled: nextAiSettingsForm.enabled,
+      provider: nextAiSettingsForm.provider,
+      baseUrl: nextAiSettingsForm.baseUrl,
+      model: nextAiSettingsForm.model,
+      apiKey: nextAiSettingsForm.apiKey,
+      promptGuidelines: nextAiSettingsForm.promptGuidelines,
+      writingStyle: nextAiSettingsForm.writingStyle,
+      testCaseGuidelines: nextAiSettingsForm.testCaseGuidelines,
+      testDesignGuidelines: nextAiSettingsForm.testDesignGuidelines,
+      improvementNotes: nextAiSettingsForm.improvementNotes,
+      knowledge: savedAiSettings.knowledge || emptyAiSettings.knowledge!,
+    };
+  }
+
+  async function persistImprovedAiSettings(proposal: PromptImproveProposal) {
+    const aiSettingsForSave = aiSettingsSavePayloadFromForm(proposal.nextAiSettings);
+    const savedPayload = await apiPost<{ aiSettingsHistory?: AiSettingsHistoryEntry[] }>("/api/user-settings", {
+      aiSettings: aiSettingsForSave,
+      settingsSection: "ai",
+      historyMeta: {
+        source: "ai_prompt_improve",
+        summary:
+          proposal.source === "settings"
+            ? `AI improve prompt từ Cài đặt AI${proposal.changedLabels ? ` | Cập nhật: ${proposal.changedLabels}` : ""}`
+            : `AI improve prompt${proposal.changedLabels ? ` | Cập nhật: ${proposal.changedLabels}` : ""}`,
+      },
+    });
+    if (Array.isArray(savedPayload.aiSettingsHistory)) {
+      setAiSettingsHistory(savedPayload.aiSettingsHistory);
+    }
+    const nextSavedAiSettings = { ...aiSettingsForSave, apiKey: "" };
+    const nextFormAiSettings = { ...proposal.nextAiSettings, apiKey: "" };
+    setSecretStatus((current) => ({
+      ...current,
+      ai: {
+        ...current.ai,
+        hasApiKey: Boolean(proposal.nextAiSettings.apiKey.trim() || current.ai.hasApiKey),
+      },
+    }));
+    setAiSettings(nextFormAiSettings);
+    setSavedAiSettings(nextSavedAiSettings);
+    setSavedSettingsSnapshot((current) => ({
+      ...current,
+      ai: aiCoreSettingsSnapshot(nextFormAiSettings),
+    }));
+    setAiSettingsImprovePending(true);
+    setAiSettingsImprovedFields(proposal.changedFields);
+    setSettingsStatus((current) => ({ ...current, ai: "" }));
+    return nextSavedAiSettings;
   }
 
   function resetGeneratedDraft(nextIssueKey: string) {
     const nextIssue = { ...emptyIssue, key: nextIssueKey };
     setTestCases([]);
     setDetailCaseIndex(null);
+    setCaseFilter("all");
     setOutline(emptyOutline(nextIssue));
     setCaseKeys("");
     setOutput("");
@@ -2426,8 +3055,33 @@ function App() {
     setImproveInstruction("");
     setLastImproveInstruction("");
     setPromptImproveStatus("");
+    setDraftPromptProposal(null);
     setGenerationStatus(idleGenerationStatus);
     setActiveTab("cases");
+  }
+
+  function recordDraftHistory(source: string, nextTestCases: TestCase[], nextOutline: TestDesignOutline, nextQaPlan?: QaPlan | null) {
+    if (!nextTestCases.length) return;
+    const entry: DraftHistoryEntry = {
+      id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `draft-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      issueKey: nextOutline.issue_key || issue.key || issueKeyFromText(jiraUrl),
+      source,
+      testCases: JSON.parse(JSON.stringify(nextTestCases)) as TestCase[],
+      outline: JSON.parse(JSON.stringify(nextOutline)) as TestDesignOutline,
+      qaPlan: nextQaPlan ? (JSON.parse(JSON.stringify(nextQaPlan)) as QaPlan) : null,
+    };
+    setDraftHistory((current) => [entry, ...current.filter((item) => item.issueKey !== entry.issueKey || item.source !== entry.source || item.createdAt !== entry.createdAt)].slice(0, 8));
+  }
+
+  function restoreDraftHistory(entry: DraftHistoryEntry) {
+    setTestCases(JSON.parse(JSON.stringify(entry.testCases)) as TestCase[]);
+    setOutline(JSON.parse(JSON.stringify(entry.outline)) as TestDesignOutline);
+    setQaPlan(entry.qaPlan ? (JSON.parse(JSON.stringify(entry.qaPlan)) as QaPlan) : null);
+    setDetailCaseIndex(null);
+    setCaseFilter("all");
+    setActiveTab("cases");
+    setMessage(`Đã khôi phục draft ${entry.issueKey} từ ${new Date(entry.createdAt).toLocaleString(languageMode === "en" ? "en-US" : "vi-VN")}.`);
   }
 
   function clearTaskSpecificContext() {
@@ -2519,6 +3173,14 @@ function App() {
     setAiSettingsHistory([]);
     setSavedSettingsSnapshot(initialSavedSettingsSnapshot);
     setAiSettingsImprovePending(false);
+    setSettingsImproveInstruction("");
+    setSettingsPromptImproveStatus("");
+    setSettingsPromptImproveBusy(false);
+    setSettingsPromptApplyBusy(false);
+    setConnectionBusy("");
+    setConnectionStatus({});
+    setSettingsPromptProposal(null);
+    setDraftPromptProposal(null);
     setOutput("");
     setMessage("");
     setSavedFiles(null);
@@ -2560,6 +3222,7 @@ function App() {
             baseUrl: aiSettings.baseUrl,
             model: aiSettings.model,
             apiKey: aiSettings.apiKey,
+            promptGuidelines: aiSettings.promptGuidelines,
             writingStyle: aiSettings.writingStyle,
             testCaseGuidelines: aiSettings.testCaseGuidelines,
             testDesignGuidelines: aiSettings.testDesignGuidelines,
@@ -2653,6 +3316,8 @@ function App() {
         }));
         setAiSettingsImprovePending(false);
         setAiSettingsImprovedFields([]);
+        setSettingsPromptProposal(null);
+        setDraftPromptProposal(null);
       }
       if (section === "knowledgeAi") {
         const nextSavedAiSettings = {
@@ -2692,6 +3357,30 @@ function App() {
       setMessage(text);
     } finally {
       setSettingsBusy("");
+    }
+  }
+
+  async function testConnection(target: ConnectionTarget) {
+    setConnectionBusy(target);
+    setConnectionStatus((current) => ({ ...current, [target]: "" }));
+    try {
+      const payload = await apiPost<{ ok: boolean; message?: string }>("/api/test-connection", {
+        target,
+        jiraUrl,
+        project,
+        credentials,
+        confluenceCredentials: { ...confluenceCredentials, baseUrl: confluenceBaseUrl || confluenceCredentials.baseUrl },
+        aiSettings: target === "knowledgeAi" ? knowledgeAiSettings : aiSettings,
+      });
+      const text = payload.message || ui.connectionOk;
+      setConnectionStatus((current) => ({ ...current, [target]: text }));
+      setMessage(text);
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "Không test được connection.";
+      setConnectionStatus((current) => ({ ...current, [target]: text }));
+      setMessage(text);
+    } finally {
+      setConnectionBusy("");
     }
   }
 
@@ -2831,6 +3520,7 @@ function App() {
       const shouldUseConfluenceDocs = Boolean(docContext.trim() && (!docIssueKey || docIssueKey === effectiveIssueKey));
       setTestCases([]);
       setDetailCaseIndex(null);
+      setCaseFilter("all");
       setOutline(emptyOutline(effectiveIssue));
       setCaseKeys("");
       setSavedFiles(null);
@@ -2840,6 +3530,7 @@ function App() {
       setImproveInstruction("");
       setLastImproveInstruction("");
       setPromptImproveStatus("");
+      setDraftPromptProposal(null);
       const generationAiSettings = savedAiSettings;
       setGenerationStatus({
         state: "running",
@@ -2883,6 +3574,7 @@ function App() {
       setActiveTab("cases");
       setOutput(JSON.stringify(payload, null, 2));
       setGenerationStatus(generationStatusFromPayload(payload));
+      recordDraftHistory(payload.aiGenerationUsed ? "AI generate" : "Fallback generate", payload.testCases, payload.outline, payload.qaPlan || null);
       const generationMode = payload.aiGenerationUsed ? "bằng AI provider" : "bằng fallback local";
       setMessage(
         payload.aiGenerationError
@@ -2934,64 +3626,31 @@ function App() {
       if (!updates.length) {
         throw new Error("AI chưa trả về prompt cải thiện hợp lệ.");
       }
-      const changedFields = Array.from(new Set(updates.map((update) => update.targetField)));
-      const changedLabels = changedFields.map((field) => aiImproveFieldLabel(field, ui)).join(", ");
-      const nextAiSettingsForm = applyPromptImproveUpdates(aiSettings, updates);
-      const aiSettingsForSave = {
-        ...savedAiSettings,
-        enabled: nextAiSettingsForm.enabled,
-        provider: nextAiSettingsForm.provider,
-        baseUrl: nextAiSettingsForm.baseUrl,
-        model: nextAiSettingsForm.model,
-        apiKey: nextAiSettingsForm.apiKey,
-        writingStyle: nextAiSettingsForm.writingStyle,
-        testCaseGuidelines: nextAiSettingsForm.testCaseGuidelines,
-        testDesignGuidelines: nextAiSettingsForm.testDesignGuidelines,
-        improvementNotes: nextAiSettingsForm.improvementNotes,
-        knowledge: savedAiSettings.knowledge || emptyAiSettings.knowledge!,
-      };
-      const historyMeta = {
-        source: "ai_prompt_improve",
-        summary: `AI improve prompt từ yêu cầu: ${trimmedInstruction.slice(0, 120)}${changedLabels ? ` | Cập nhật: ${changedLabels}` : ""}`,
-      };
-      setSettingsBusy("ai");
-      const savedPayload = await apiPost<{ aiSettingsHistory?: AiSettingsHistoryEntry[] }>("/api/user-settings", {
-        aiSettings: aiSettingsForSave,
-        settingsSection: "ai",
-        historyMeta,
-      }).catch((error) => {
-        setSettingsBusy("");
-        const errorMessage = error instanceof Error ? error.message : "Không tự lưu được Cài đặt AI sau khi improve prompt.";
-        setPromptImproveStatus(errorMessage);
-        throw error;
-      });
-      if (Array.isArray(savedPayload.aiSettingsHistory)) {
-        setAiSettingsHistory(savedPayload.aiSettingsHistory);
-      }
-      const nextSavedAiSettings = { ...aiSettingsForSave, apiKey: "" };
-      const nextFormAiSettings = { ...nextAiSettingsForm, apiKey: "" };
-      setSecretStatus((current) => ({
-        ...current,
-        ai: {
-          ...current.ai,
-          hasApiKey: Boolean(nextAiSettingsForm.apiKey.trim() || current.ai.hasApiKey),
-        },
-      }));
-      setAiSettings(nextFormAiSettings);
-      setSavedAiSettings(nextSavedAiSettings);
-      setSavedSettingsSnapshot((current) => ({
-        ...current,
-        ai: aiCoreSettingsSnapshot(nextFormAiSettings),
-      }));
-      setAiSettingsImprovePending(true);
-      setAiSettingsImprovedFields(changedFields);
-      setSettingsStatus((current) => ({ ...current, ai: "" }));
-      setSettingsBusy("");
+      const proposal = createPromptImproveProposal("draft", trimmedInstruction, activeAiSettings, updates, payload.summary);
+      setPromptCompare(null);
+      setDraftPromptProposal(proposal);
+      setPromptImproveStatus(ui.promptImprovePreviewReady);
+      setMessage(ui.promptImprovePreviewReady);
+    });
+  }
+
+  function applyDraftPromptProposal() {
+    if (!draftPromptProposal) return;
+    const draftErrors = validateGenerateDraft();
+    if (Object.keys(draftErrors).length) {
+      setValidationFailure(draftErrors, "Vui lòng bổ sung các field bắt buộc đang được highlight trước khi áp dụng prompt.");
+      return;
+    }
+    const proposal = draftPromptProposal;
+    setBusyRun("promptImprove", async () => {
+      setPromptImproveStatus("");
+      const nextSavedAiSettings = await persistImprovedAiSettings(proposal);
       const effectiveIssueKey = issueKeyFromText(jiraUrl) || issue.key;
       const effectiveIssue = { ...issue, key: effectiveIssueKey };
       const shouldUseConfluenceDocs = Boolean(docContext.trim() && (!docIssueKey || docIssueKey === effectiveIssueKey));
       setTestCases([]);
       setDetailCaseIndex(null);
+      setCaseFilter("all");
       setOutline(emptyOutline(effectiveIssue));
       setCaseKeys("");
       setSavedFiles(null);
@@ -3002,7 +3661,7 @@ function App() {
       setGenerationStatus({
         state: "running",
         title: ui.improveDraftTitle,
-        detail: changedLabels ? `${ui.improvePromptUpdatedFields}: ${changedLabels}` : trimmedInstruction,
+        detail: proposal.changedLabels ? `${ui.improvePromptUpdatedFields}: ${proposal.changedLabels}` : proposal.instruction,
         provider: nextSavedAiSettings.provider,
         model: nextSavedAiSettings.model,
         endpoint: nextSavedAiSettings.baseUrl,
@@ -3018,7 +3677,7 @@ function App() {
         });
       } catch (error) {
         const text = error instanceof Error ? error.message : "Generate draft lỗi.";
-        const errorText = `Đã tự lưu prompt mới, nhưng tạo lại draft lỗi: ${text}`;
+        const errorText = `Đã lưu prompt mới, nhưng tạo lại draft lỗi: ${text}`;
         setGenerationStatus({
           state: "error",
           title: "Tạo lại draft lỗi",
@@ -3038,12 +3697,135 @@ function App() {
       setActiveTab("cases");
       setOutput(JSON.stringify(draftPayload, null, 2));
       setGenerationStatus(generationStatusFromPayload(draftPayload));
-      setImproveInstruction("");
-      setLastImproveInstruction(trimmedInstruction);
-      const successText = `${ui.improvePromptDonePrefix}: "${trimmedInstruction}". ${changedLabels ? `${ui.improvePromptUpdatedFields}: ${changedLabels}. ` : ""}${ui.improvePromptSavedToAiSettings} ${ui.improvePromptRegeneratedDraft} ${ui.aiSettingsUnsavedGuard}`;
+      recordDraftHistory("AI improve prompt", draftPayload.testCases, draftPayload.outline, draftPayload.qaPlan || null);
+      setDraftPromptProposal(null);
+      setPromptCompare(null);
+      setLastImproveInstruction(proposal.instruction);
+      const successText = `${ui.promptImproveApplied} ${ui.improvePromptRegeneratedDraft} ${ui.aiSettingsUnsavedGuard}`;
       setPromptImproveStatus(successText);
       setMessage(successText);
     });
+  }
+
+  async function improveAiSettingsPromptOnly() {
+    const trimmedInstruction = settingsImproveInstruction.trim();
+    const activeAiSettings = {
+      ...aiSettings,
+      promptGuidelines: aiPromptGuidelinesFromSettings(aiSettings),
+    };
+    if (!trimmedInstruction) {
+      setSettingsPromptImproveStatus(ui.improvePromptRequiresInput);
+      setMessage(ui.improvePromptRequiresInput);
+      return;
+    }
+    if (!activeAiSettings.enabled || (!activeAiSettings.apiKey.trim() && !secretStatus.ai.hasApiKey) || !activeAiSettings.model.trim()) {
+      setSettingsPromptImproveStatus(ui.improveRequiresAi);
+      setMessage(ui.improveRequiresAi);
+      return;
+    }
+    setSettingsPromptImproveBusy(true);
+    setSettingsPromptImproveStatus("");
+    setSettingsStatus((current) => ({ ...current, ai: "" }));
+    try {
+      const payload = await apiPost<PromptImproveResponse>("/api/improve-prompt", {
+        instruction: trimmedInstruction,
+        jiraUrl,
+        issue,
+        aiSettings: activeAiSettings,
+        testCases,
+        outline,
+        language: languageMode,
+      });
+      const updates = normalizePromptImproveUpdates(payload);
+      if (!updates.length) {
+        throw new Error("AI chưa trả về prompt cải thiện hợp lệ.");
+      }
+      const proposal = createPromptImproveProposal("settings", trimmedInstruction, activeAiSettings, updates, payload.summary);
+      setPromptCompare(null);
+      setSettingsPromptProposal(proposal);
+      setSettingsPromptImproveStatus(ui.promptImprovePreviewReady);
+      setMessage(ui.promptImprovePreviewReady);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Không cải thiện được prompt.";
+      setSettingsPromptImproveStatus(errorMessage);
+      setMessage(errorMessage);
+    } finally {
+      setSettingsPromptImproveBusy(false);
+    }
+  }
+
+  async function applySettingsPromptProposal() {
+    if (!settingsPromptProposal) return;
+    const proposal = settingsPromptProposal;
+    setSettingsPromptApplyBusy(true);
+    setSettingsPromptImproveStatus("");
+    try {
+      await persistImprovedAiSettings(proposal);
+      setSettingsPromptProposal(null);
+      setPromptCompare(null);
+      const successText = `${ui.promptImproveApplied} ${ui.aiSettingsUnsavedGuard}`;
+      setSettingsPromptImproveStatus(successText);
+      setMessage(successText);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Không tự lưu được Cài đặt AI sau khi áp dụng prompt.";
+      setSettingsPromptImproveStatus(errorMessage);
+      setMessage(errorMessage);
+    } finally {
+      setSettingsPromptApplyBusy(false);
+    }
+  }
+
+  function restoreAiSettingsHistoryEntry(entry: AiSettingsHistoryEntry) {
+    const next: AiSettings = {
+      ...aiSettings,
+      knowledge: {
+        ...(aiSettings.knowledge || emptyAiSettings.knowledge!),
+      },
+    };
+    for (const change of entry.changes) {
+      if (change.secret) continue;
+      const before = change.before;
+      if (entry.section === "knowledgeAi" || change.field.startsWith("knowledge.")) {
+        const key = change.field.replace(/^knowledge\./, "") as keyof NonNullable<AiSettings["knowledge"]>;
+        if (key === "enabled") {
+          next.knowledge!.enabled = before === "true";
+        } else if (key in next.knowledge!) {
+          (next.knowledge as Record<string, unknown>)[key] = before;
+        }
+      } else if (change.field === "enabled") {
+        next.enabled = before === "true";
+      } else if (change.field in next) {
+        (next as unknown as Record<string, unknown>)[change.field] = before;
+      }
+    }
+    setAiSettings(next);
+    setSettingsPromptProposal(null);
+    setDraftPromptProposal(null);
+    setPromptCompare(null);
+    setSettingsStatus((current) => ({
+      ...current,
+      [entry.section]: `${ui.restorePrevious}: ${entry.summary || aiHistorySourceLabel(entry.source, ui)}. Nhấn Lưu để áp dụng chính thức.`,
+    }));
+    setMessage(`${ui.restorePrevious}: ${entry.summary || aiHistorySourceLabel(entry.source, ui)}.`);
+  }
+
+  function applyKnowledgeCardToAiPrompt(section: StaticKnowledgeSection, card: KnowledgeCard) {
+    const detailPoints = knowledgeCardDetailPoints(languageMode, section, card).slice(0, 4);
+    const nextInstruction = [
+      `Hãy bổ sung kiến thức QA "${card.title}" thành rule reusable trong prompt tạo test case/test design.`,
+      `Ý chính: ${card.description}`,
+      detailPoints.length ? `Các điểm cần áp dụng:\n${detailPoints.map((point) => `- ${point}`).join("\n")}` : "",
+      card.example ? `Ví dụ/risk lens: ${card.example}` : "",
+      "Chỉ gộp vào prompt nếu chưa có rule tương đương; nếu đã có thì refine wording để rõ hơn.",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    setSettingsImproveInstruction(nextInstruction);
+    setSettingsPromptProposal(null);
+    setSettingsPromptImproveStatus("");
+    setAppView("settings");
+    setActiveSettingsSection("ai");
+    setMessage(ui.appliedKnowledgePrompt);
   }
 
   function saveDraftFiles() {
@@ -3269,46 +4051,6 @@ function App() {
           </div>
         </div>
 
-        <section className="panel compact">
-          <div className="panel-title">
-            <Link size={18} />
-            <h2>{ui.jiraTask}</h2>
-          </div>
-          <Field
-            label={ui.jiraUrlIssueKey}
-            value={jiraUrl}
-            onChange={handleJiraUrlChange}
-            placeholder="https://jira.vexere.net/browse/AI-707"
-            required
-            error={validationErrors.jiraUrl}
-          />
-          <Field
-            label={ui.confluenceBaseUrlTask}
-            value={confluenceBaseUrl}
-            onChange={(value) => {
-              clearValidationErrors(["confluenceBaseUrl", "confluenceLinks"]);
-              setConfluenceBaseUrl(value);
-              clearFetchedDocs(
-                value.trim() && (confluenceLinks.trim() || looksLikeConfluencePageUrl(value))
-                  ? "Confluence config đã đổi. Nhấn Fetch để đọc lại Jira task và doc cho task hiện tại."
-                  : "",
-              );
-            }}
-            placeholder={ui.confluenceBaseUrlPlaceholder}
-            required={Boolean(confluenceLinks.trim() || looksLikeConfluencePageUrl(confluenceBaseUrl))}
-            error={validationErrors.confluenceBaseUrl}
-          />
-          <div className="mini-note">{ui.confluenceBaseUrlNote}</div>
-          <div className="button-row">
-            <IconButton icon={<RefreshCw size={16} />} onClick={parseJiraLink} disabled={isWorking} title={ui.parseTitle}>
-              {ui.parseButton}
-            </IconButton>
-            <IconButton icon={busy === "issue" ? <Loader2 className="spin" size={16} /> : <FileText size={16} />} onClick={fetchIssue} disabled={isWorking}>
-              {ui.fetchButton}
-            </IconButton>
-          </div>
-        </section>
-
         <nav className="side-nav" aria-label={ui.appNavigationLabel}>
           <button className={appView === "run" ? "active" : ""} type="button" onClick={() => setAppView("run")}>
             <Play size={16} />
@@ -3518,10 +4260,29 @@ function App() {
                         </div>
                       </div>
                       <p className="panel-help">{ui.knowledgeIntro}</p>
+                      <Field
+                        label={ui.knowledgeSearch}
+                        value={knowledgeSearch}
+                        onChange={setKnowledgeSearch}
+                        placeholder={ui.knowledgeSearchPlaceholder}
+                      />
                       <div className="knowledge-card-list">
-                        {activeKnowledge.cards.map((card) => {
+                        {activeKnowledge.cards
+                          .filter((card) => {
+                            if (!knowledgeSearchText) return true;
+                            return normalizeComparableText(
+                              [
+                                card.title,
+                                card.description,
+                                card.example || "",
+                                ...knowledgeCardDetailPoints(languageMode, activeKnowledgeSection as StaticKnowledgeSection, card),
+                              ].join(" "),
+                            ).includes(knowledgeSearchText);
+                          })
+                          .map((card) => {
                           const cardKey = `${activeKnowledgeSection}:${card.title}`;
                           const isExpanded = expandedKnowledgeCards.includes(cardKey);
+                          const isBookmarked = bookmarkedKnowledgeCards.includes(cardKey);
                           const detailPoints = knowledgeCardDetailPoints(languageMode, activeKnowledgeSection as StaticKnowledgeSection, card);
                           return (
                             <article className="knowledge-card knowledge-card-collapsible" key={card.title}>
@@ -3530,20 +4291,44 @@ function App() {
                                   <h3>{card.title}</h3>
                                   <p>{card.description}</p>
                                 </div>
-                                <button
-                                  className="tiny"
-                                  type="button"
-                                  onClick={() =>
-                                    setExpandedKnowledgeCards((current) =>
-                                      current.includes(cardKey) ? current.filter((item) => item !== cardKey) : [...current, cardKey],
-                                    )
-                                  }
-                                  aria-expanded={isExpanded}
-                                  title={isExpanded ? ui.caseCollapse : ui.caseDetails}
-                                >
-                                  {isExpanded ? <ChevronDown size={14} /> : <FileText size={14} />}
-                                  {isExpanded ? ui.caseCollapse : ui.caseDetails}
-                                </button>
+                                <div className="knowledge-card-actions">
+                                  <button
+                                    className={isBookmarked ? "tiny active" : "tiny"}
+                                    type="button"
+                                    onClick={() =>
+                                      setBookmarkedKnowledgeCards((current) =>
+                                        current.includes(cardKey) ? current.filter((item) => item !== cardKey) : [...current, cardKey],
+                                      )
+                                    }
+                                    title={isBookmarked ? ui.bookmarked : ui.bookmark}
+                                  >
+                                    <BookOpen size={14} />
+                                    {isBookmarked ? ui.bookmarked : ui.bookmark}
+                                  </button>
+                                  <button
+                                    className="tiny"
+                                    type="button"
+                                    onClick={() => applyKnowledgeCardToAiPrompt(activeKnowledgeSection as StaticKnowledgeSection, card)}
+                                    title={ui.applyToAiPrompt}
+                                  >
+                                    <Wand2 size={14} />
+                                    {ui.applyToAiPrompt}
+                                  </button>
+                                  <button
+                                    className="tiny"
+                                    type="button"
+                                    onClick={() =>
+                                      setExpandedKnowledgeCards((current) =>
+                                        current.includes(cardKey) ? current.filter((item) => item !== cardKey) : [...current, cardKey],
+                                      )
+                                    }
+                                    aria-expanded={isExpanded}
+                                    title={isExpanded ? ui.caseCollapse : ui.caseDetails}
+                                  >
+                                    {isExpanded ? <ChevronDown size={14} /> : <FileText size={14} />}
+                                    {isExpanded ? ui.caseCollapse : ui.caseDetails}
+                                  </button>
+                                </div>
                               </div>
                               {isExpanded ? (
                                 <div className="knowledge-card-body">
@@ -3612,6 +4397,12 @@ function App() {
                   <Field label={ui.testCaseFolderRoot} value={project.folderRoot} onChange={(value) => setProjectValue("folderRoot", value)} required error={validationErrors["project.folderRoot"]} />
                   <Field label={ui.testCycleRunRoot} value={project.runRoot} onChange={(value) => setProjectValue("runRoot", value)} required error={validationErrors["project.runRoot"]} />
                 </div>
+                <button className="settings-advanced-toggle" type="button" onClick={() => setProjectAdvancedOpen((current) => !current)} aria-expanded={projectAdvancedOpen}>
+                  {projectAdvancedOpen ? <ChevronDown size={15} /> : <FileText size={15} />}
+                  <span>{ui.projectAdvanced}</span>
+                </button>
+                {projectAdvancedOpen ? (
+                  <>
                 <div className="label-policy">
                   <div className="subhead">
                     <span>{ui.labelPolicy}</span>
@@ -3677,6 +4468,8 @@ function App() {
                     </div>
                   </div>
                 </div>
+                  </>
+                ) : null}
                 <div className="button-row">
                   <IconButton
                     icon={settingsBusy === "project" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
@@ -3723,6 +4516,12 @@ function App() {
                         <Field label={ui.password} value={credentials.password} type="password" onChange={(value) => setCredentialValue("password", value)} savedIndicator={secretStatus.jira.hasPassword} error={validationErrors["credentials.password"]} />
                         <Field label="Token" value={credentials.token} type="password" onChange={(value) => setCredentialValue("token", value)} savedIndicator={secretStatus.jira.hasToken} error={validationErrors["credentials.token"]} />
                       </div>
+                      <div className="button-row compact-actions">
+                        <IconButton icon={connectionBusy === "jira" ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />} onClick={() => testConnection("jira")} disabled={Boolean(connectionBusy)}>
+                          {ui.testConnection}
+                        </IconButton>
+                      </div>
+                      {connectionStatus.jira ? <div className={connectionStatus.jira.startsWith("Jira OK") ? "mini-note ok-text" : "mini-note"}>{connectionStatus.jira}</div> : null}
                     </article>
                     <article className="auth-config-card">
                       <div className="auth-config-head">
@@ -3744,6 +4543,12 @@ function App() {
                         <Field label={ui.password} value={confluenceCredentials.password} type="password" onChange={(value) => setConfluenceCredentialValue("password", value)} required={Boolean(confluenceLinks.trim())} savedIndicator={secretStatus.confluence.hasPassword} error={validationErrors["confluence.password"]} />
                         <Field label="Token" value={confluenceCredentials.token} type="password" onChange={(value) => setConfluenceCredentialValue("token", value)} required={Boolean(confluenceLinks.trim())} savedIndicator={secretStatus.confluence.hasToken} error={validationErrors["confluence.token"]} />
                       </div>
+                      <div className="button-row compact-actions">
+                        <IconButton icon={connectionBusy === "confluence" ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />} onClick={() => testConnection("confluence")} disabled={Boolean(connectionBusy)}>
+                          {ui.testConnection}
+                        </IconButton>
+                      </div>
+                      {connectionStatus.confluence ? <div className={connectionStatus.confluence.startsWith("Confluence OK") ? "mini-note ok-text" : "mini-note"}>{connectionStatus.confluence}</div> : null}
                     </article>
                   </div>
                   <div className="label-policy auth-block">
@@ -3899,64 +4704,22 @@ function App() {
                     error={validationErrors["ai.apiKey"]}
                   />
                 </div>
-                <div className="form-grid two">
+                <div className="button-row compact-actions">
+                  <IconButton icon={connectionBusy === "ai" ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />} onClick={() => testConnection("ai")} disabled={Boolean(connectionBusy) || !aiSettings.enabled}>
+                    {ui.testConnection}
+                  </IconButton>
+                </div>
+                {connectionStatus.ai ? <div className={connectionStatus.ai.startsWith("AI OK") ? "mini-note ok-text" : "mini-note"}>{connectionStatus.ai}</div> : null}
+                <div className="ai-guideline-editor">
                   <Field
-                    label={ui.writingStyle}
-                    value={aiSettings.writingStyle}
-                    onChange={(value) => setAiSettingValue("writingStyle", value)}
+                    label={ui.aiPromptGuidelines}
+                    value={aiSettings.promptGuidelines}
+                    onChange={(value) => setAiSettingValue("promptGuidelines", value)}
                     textarea
-                    rows={4}
-                    placeholder={ui.writingStylePlaceholder}
+                    rows={14}
+                    placeholder={ui.aiPromptGuidelinesPlaceholder}
                     badge={
-                      aiSettingsImprovedFields.includes("writingStyle") ? (
-                        <>
-                          <Wand2 size={11} />
-                          {ui.aiImprovedBadge}
-                        </>
-                      ) : null
-                    }
-                  />
-                  <Field
-                    label={ui.improveSkillNotes}
-                    value={aiSettings.improvementNotes}
-                    onChange={(value) => setAiSettingValue("improvementNotes", value)}
-                    textarea
-                    rows={4}
-                    placeholder={ui.improveSkillPlaceholder}
-                    badge={
-                      aiSettingsImprovedFields.includes("improvementNotes") ? (
-                        <>
-                          <Wand2 size={11} />
-                          {ui.aiImprovedBadge}
-                        </>
-                      ) : null
-                    }
-                  />
-                  <Field
-                    label={ui.testCaseGuidelines}
-                    value={aiSettings.testCaseGuidelines}
-                    onChange={(value) => setAiSettingValue("testCaseGuidelines", value)}
-                    textarea
-                    rows={5}
-                    placeholder={ui.testCaseGuidelinesPlaceholder}
-                    badge={
-                      aiSettingsImprovedFields.includes("testCaseGuidelines") ? (
-                        <>
-                          <Wand2 size={11} />
-                          {ui.aiImprovedBadge}
-                        </>
-                      ) : null
-                    }
-                  />
-                  <Field
-                    label={ui.testDesignGuidelines}
-                    value={aiSettings.testDesignGuidelines}
-                    onChange={(value) => setAiSettingValue("testDesignGuidelines", value)}
-                    textarea
-                    rows={5}
-                    placeholder={ui.testDesignGuidelinesPlaceholder}
-                    badge={
-                      aiSettingsImprovedFields.includes("testDesignGuidelines") ? (
+                      aiSettingsImprovedFields.includes("promptGuidelines") ? (
                         <>
                           <Wand2 size={11} />
                           {ui.aiImprovedBadge}
@@ -3965,20 +4728,76 @@ function App() {
                     }
                   />
                 </div>
-                {secretStatus.ai.hasApiKey ? (
-                  <div className="mini-note">{ui.aiSecretNote}</div>
-                ) : null}
-                <div className="button-row">
+                <div className="button-row ai-save-row">
                   <IconButton
                     icon={settingsBusy === "ai" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
                     onClick={() => saveUserSettings("ai")}
-                    disabled={Boolean(settingsBusy) || !settingsDirty.ai}
+                    disabled={Boolean(settingsBusy) || settingsPromptImproveBusy || settingsPromptApplyBusy || !settingsDirty.ai}
                     variant="primary"
                   >
                     {ui.save}
                   </IconButton>
                 </div>
                 {settingsStatus.ai ? <div className="mini-note">{settingsStatus.ai}</div> : null}
+                <div className="settings-improve-panel">
+                  <div className="section-heading">
+                    <div>
+                      <h3>{ui.aiSettingsImproveTitle}</h3>
+                      <p>{ui.aiSettingsImproveHelp}</p>
+                    </div>
+                  </div>
+                  <Field
+                    label={ui.aiSettingsImproveInput}
+                    value={settingsImproveInstruction}
+                    onChange={(value) => {
+                      setSettingsImproveInstruction(value);
+                      setSettingsPromptProposal(null);
+                      if (settingsPromptImproveStatus) setSettingsPromptImproveStatus("");
+                    }}
+                    textarea
+                    rows={3}
+                    placeholder={ui.aiSettingsImprovePlaceholder}
+                  />
+                  <div className="button-row improve-actions">
+                    <IconButton
+                      icon={settingsPromptImproveBusy ? <Loader2 className="spin" size={16} /> : <Wand2 size={16} />}
+                      onClick={improveAiSettingsPromptOnly}
+                      disabled={settingsPromptImproveBusy || settingsPromptApplyBusy || Boolean(settingsBusy) || !aiSettings.enabled}
+                      variant="success"
+                    >
+                      {ui.improvePromptButton}
+                    </IconButton>
+                  </div>
+                  {settingsPromptImproveStatus ? (
+                    <div className={promptImproveNoticeClass(settingsPromptImproveStatus, ui)}>{settingsPromptImproveStatus}</div>
+                  ) : null}
+                  {settingsPromptProposal ? (
+                    <PromptImprovePreview
+                      ui={ui}
+                      proposal={settingsPromptProposal}
+                      applyLabel={ui.applyPromptImprove}
+                      busy={settingsPromptApplyBusy}
+                      onCompare={() =>
+                        setPromptCompare({
+                          label: ui.aiPromptGuidelines,
+                          summary: settingsPromptProposal.summary || ui.promptImprovePreviewTitle,
+                          before: settingsPromptProposal.beforePrompt,
+                          after: settingsPromptProposal.nextAiSettings.promptGuidelines,
+                        })
+                      }
+                      onApply={applySettingsPromptProposal}
+                      onDiscard={() => {
+                        setSettingsPromptProposal(null);
+                        setPromptCompare(null);
+                        setSettingsPromptImproveStatus("");
+                      }}
+                    />
+                  ) : null}
+                  {!aiSettings.enabled ? <div className="mini-note">{ui.improveRequiresAi}</div> : null}
+                </div>
+                {secretStatus.ai.hasApiKey ? (
+                  <div className="mini-note">{ui.aiSecretNote}</div>
+                ) : null}
                 <div className="mini-note">
                   {ui.aiFootnote}
                 </div>
@@ -4001,6 +4820,16 @@ function App() {
                               </span>
                               <div className="history-card-actions">
                                 <em>{aiHistorySourceLabel(entry.source, ui)}</em>
+                                <button
+                                  className="tiny"
+                                  type="button"
+                                  onClick={() => restoreAiSettingsHistoryEntry(entry)}
+                                  disabled={!entry.changes.some((change) => !change.secret)}
+                                  title={ui.restorePreviousTitle}
+                                >
+                                  <RefreshCw size={14} />
+                                  {ui.restorePrevious}
+                                </button>
                                 <button
                                   className="tiny"
                                   type="button"
@@ -4040,7 +4869,7 @@ function App() {
                                       </div>
                                       <div>
                                         <span>{ui.historyAfter}</span>
-                                        <pre>{change.after || "(empty)"}</pre>
+                                        <DiffText before={change.before} after={change.after} />
                                       </div>
                                     </div>
                                   </div>
@@ -4113,6 +4942,12 @@ function App() {
                     error={validationErrors["knowledgeAi.apiKey"]}
                   />
                 </div>
+                <div className="button-row compact-actions">
+                  <IconButton icon={connectionBusy === "knowledgeAi" ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />} onClick={() => testConnection("knowledgeAi")} disabled={Boolean(connectionBusy) || !knowledgeAiSettings.enabled}>
+                    {ui.testConnection}
+                  </IconButton>
+                </div>
+                {connectionStatus.knowledgeAi ? <div className={connectionStatus.knowledgeAi.startsWith("AI OK") ? "mini-note ok-text" : "mini-note"}>{connectionStatus.knowledgeAi}</div> : null}
                 <div className="form-grid two">
                   <Field
                     label={ui.writingStyle}
@@ -4154,84 +4989,201 @@ function App() {
             <p className="eyebrow">{ui.runEyebrow}</p>
             <h2>{issue.key || ui.runTitleEmpty}</h2>
           </div>
-          <div className="top-actions">
-            <select value={archetypeKey} onChange={(event) => setArchetypeKey(event.target.value)}>
-              <option value="auto">{ui.autoArchetype}</option>
-              {defaults
-                ? Object.entries(defaults.archetypes).map(([key, archetype]) => (
-                    <option value={key} key={key}>
-                      {archetype.label}
-                    </option>
-                  ))
-                : null}
-            </select>
-            <IconButton icon={busy === "draft" ? <Loader2 className="spin" size={16} /> : <Wand2 size={16} />} onClick={generateDraft} disabled={isWorking} variant="success">
-              {ui.generateDraft}
-            </IconButton>
-          </div>
         </header>
 
         <GenerationBanner status={generationStatus} />
 
+        {draftHistory.length ? (
+          <section className="draft-history-strip">
+            <span>Draft history</span>
+            <div>
+              {draftHistory
+                .filter((entry) => !issue.key || entry.issueKey === issue.key)
+                .slice(0, 4)
+                .map((entry) => (
+                  <button type="button" onClick={() => restoreDraftHistory(entry)} key={entry.id} title={entry.source}>
+                    <RefreshCw size={13} />
+                    {entry.source} · {new Date(entry.createdAt).toLocaleTimeString(languageMode === "en" ? "en-US" : "vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                  </button>
+                ))}
+            </div>
+          </section>
+        ) : null}
+
         <section className="issue-grid">
-          <div className="panel">
+          <div className="issue-main-column">
+            <div className="panel">
+              <div className="panel-title">
+                <FileText size={18} />
+                <h2>{ui.taskContext}</h2>
+              </div>
+              <div className="form-grid">
+                <Field label={ui.issueKey} value={issue.key} onChange={(value) => setIssueValue("key", value.toUpperCase())} placeholder="AI-707" required error={validationErrors["issue.key"]} />
+                <Field label={ui.status} value={issue.status} onChange={(value) => setIssueValue("status", value)} placeholder="Ready To Test" />
+                <Field label={ui.issueType} value={issue.issue_type} onChange={(value) => setIssueValue("issue_type", value)} placeholder="Task / Bug / Story" />
+                <Field label={ui.jiraProjectKey} value={issue.project_key || ""} onChange={(value) => setIssueValue("project_key", value)} placeholder="AI" />
+              </div>
+              <Field label={ui.summary} value={issue.summary} onChange={(value) => setIssueValue("summary", value)} placeholder="[Payment] Route callback..." error={validationErrors["issue.summary"]} />
+              <Field label={ui.descriptionAcceptance} value={issue.description} onChange={(value) => setIssueValue("description", value)} textarea rows={8} error={validationErrors["issue.description"]} />
+              <Field
+                label={ui.confluenceDocLinks}
+                value={confluenceLinks}
+                onChange={(value) => {
+                  clearValidationErrors(["confluenceLinks"]);
+                  setConfluenceLinks(value);
+                  const inferredBaseUrl = confluenceBaseUrl.trim() ? "" : inferConfluenceBaseUrl(value);
+                  if (inferredBaseUrl) {
+                    setConfluenceBaseUrl(inferredBaseUrl);
+                    clearValidationErrors(["confluenceBaseUrl"]);
+                  }
+                  clearFetchedDocs(value.trim() ? "Doc link thủ công đã được ghi nhận. Nhấn Fetch để đọc Jira task và fetch doc vào Task context." : "");
+                }}
+                textarea
+                rows={3}
+                placeholder={ui.confluenceDocLinksPlaceholder}
+                error={validationErrors.confluenceLinks}
+              />
+              {docStatus ? <div className="mini-note">{docStatus}</div> : null}
+              {docSources.length ? (
+                <div className="doc-source-list">
+                  {docSources.map((doc) => (
+                    <div className={doc.error ? "doc-source error" : "doc-source"} key={doc.url}>
+                      <strong>{doc.title || doc.url}</strong>
+                      <span>{doc.url}</span>
+                      <small>{doc.error ? `Lỗi: ${doc.error}` : `${doc.text.length.toLocaleString()} ký tự đã fetch`}</small>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <Field
+                label={ui.fetchedDocContext}
+                value={docContext}
+                onChange={(value) => {
+                  setDocContext(value);
+                  setDocIssueKey(value.trim() ? issueKeyFromText(jiraUrl) || issue.key : "");
+                  setDocStatus(value.trim() ? `Doc context thủ công đang gắn với ${issueKeyFromText(jiraUrl) || issue.key}. Generate draft sẽ dùng nội dung này nếu Base URL vẫn có giá trị.` : "");
+                  setDocSources([]);
+                }}
+                textarea
+                rows={5}
+                placeholder={ui.fetchedDocContextPlaceholder}
+              />
+              <Field label={ui.qaNotes} value={notes} onChange={setNotes} textarea rows={4} placeholder={ui.qaNotesPlaceholder} />
+            </div>
+
+            {testCases.length ? (
+              <section className="panel quality-panel">
+                <div className="section-heading">
+                  <div>
+                    <h2>{ui.qualityTitle}</h2>
+                    <p>{qualityItems.every((item) => item.ok) ? ui.qualityGood : "Review các cảnh báo trước khi tạo file hoặc đẩy lên Jira/Zephyr."}</p>
+                  </div>
+                </div>
+                <div className="quality-grid">
+                  {qualityItems.map((item) => (
+                    <div className={`quality-item ${item.severity}`} key={item.id}>
+                      {item.ok ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                      <span>
+                        <strong>{item.label}</strong>
+                        <small>{item.detail}</small>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {coverageRows.length ? (
+                  <div className="coverage-matrix">
+                    <div className="subhead">
+                      <span>{ui.coverageTitle}</span>
+                      <small>{coverageRows.filter((row) => row.matchedIndexes.length).length}/{coverageRows.length} source/risk có case match.</small>
+                    </div>
+                    <div className="coverage-row-list">
+                      {coverageRows.map((row) => (
+                        <div className={row.matchedIndexes.length ? "coverage-row covered" : "coverage-row missing"} key={row.id}>
+                          <div>
+                            <strong>{row.title}</strong>
+                            <small>{row.source}</small>
+                          </div>
+                          <span>{row.matchedIndexes.length ? row.matchedIndexes.map((index) => `#${index + 1}`).join(", ") : "Chưa match"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+          </div>
+
+          <div className="issue-side-column">
+            <div className="panel jira-task-panel">
             <div className="panel-title">
-              <FileText size={18} />
-              <h2>{ui.taskContext}</h2>
+              <Link size={18} />
+              <h2>{ui.jiraTask}</h2>
             </div>
-            <div className="form-grid">
-              <Field label={ui.issueKey} value={issue.key} onChange={(value) => setIssueValue("key", value.toUpperCase())} placeholder="AI-707" required error={validationErrors["issue.key"]} />
-              <Field label={ui.status} value={issue.status} onChange={(value) => setIssueValue("status", value)} placeholder="Ready To Test" />
-              <Field label={ui.issueType} value={issue.issue_type} onChange={(value) => setIssueValue("issue_type", value)} placeholder="Task / Bug / Story" />
-              <Field label={ui.jiraProjectKey} value={issue.project_key || ""} onChange={(value) => setIssueValue("project_key", value)} placeholder="AI" />
-            </div>
-            <Field label={ui.summary} value={issue.summary} onChange={(value) => setIssueValue("summary", value)} placeholder="[Payment] Route callback..." error={validationErrors["issue.summary"]} />
-            <Field label={ui.descriptionAcceptance} value={issue.description} onChange={(value) => setIssueValue("description", value)} textarea rows={8} error={validationErrors["issue.description"]} />
             <Field
-              label={ui.confluenceDocLinks}
-              value={confluenceLinks}
-              onChange={(value) => {
-                clearValidationErrors(["confluenceLinks"]);
-                setConfluenceLinks(value);
-                const inferredBaseUrl = confluenceBaseUrl.trim() ? "" : inferConfluenceBaseUrl(value);
-                if (inferredBaseUrl) {
-                  setConfluenceBaseUrl(inferredBaseUrl);
-                  clearValidationErrors(["confluenceBaseUrl"]);
-                }
-                clearFetchedDocs(value.trim() ? "Doc link thủ công đã được ghi nhận. Nhấn Fetch để đọc Jira task và fetch doc vào Task context." : "");
-              }}
-              textarea
-              rows={3}
-              placeholder={ui.confluenceDocLinksPlaceholder}
-              error={validationErrors.confluenceLinks}
+              label={ui.jiraUrlIssueKey}
+              value={jiraUrl}
+              onChange={handleJiraUrlChange}
+              placeholder="https://jira.vexere.net/browse/AI-707"
+              required
+              error={validationErrors.jiraUrl}
             />
-            {docStatus ? <div className="mini-note">{docStatus}</div> : null}
-            {docSources.length ? (
-              <div className="doc-source-list">
-                {docSources.map((doc) => (
-                  <div className={doc.error ? "doc-source error" : "doc-source"} key={doc.url}>
-                    <strong>{doc.title || doc.url}</strong>
-                    <span>{doc.url}</span>
-                    <small>{doc.error ? `Lỗi: ${doc.error}` : `${doc.text.length.toLocaleString()} ký tự đã fetch`}</small>
+            <Field
+              label={ui.confluenceBaseUrlTask}
+              value={confluenceBaseUrl}
+              onChange={(value) => {
+                clearValidationErrors(["confluenceBaseUrl", "confluenceLinks"]);
+                setConfluenceBaseUrl(value);
+                clearFetchedDocs(
+                  value.trim() && (confluenceLinks.trim() || looksLikeConfluencePageUrl(value))
+                    ? "Confluence config đã đổi. Nhấn Fetch để đọc lại Jira task và doc cho task hiện tại."
+                    : "",
+                );
+              }}
+              placeholder={ui.confluenceBaseUrlPlaceholder}
+              required={Boolean(confluenceLinks.trim() || looksLikeConfluencePageUrl(confluenceBaseUrl))}
+              error={validationErrors.confluenceBaseUrl}
+            />
+            <div className="mini-note">{ui.confluenceBaseUrlNote}</div>
+            <div className="button-row jira-fetch-actions">
+              <IconButton icon={<RefreshCw size={16} />} onClick={parseJiraLink} disabled={isWorking} title={ui.parseTitle}>
+                {ui.parseButton}
+              </IconButton>
+              <IconButton icon={busy === "issue" ? <Loader2 className="spin" size={16} /> : <FileText size={16} />} onClick={fetchIssue} disabled={isWorking}>
+                {ui.fetchButton}
+              </IconButton>
+            </div>
+            <div className="jira-draft-actions">
+              <select value={archetypeKey} onChange={(event) => setArchetypeKey(event.target.value)}>
+                <option value="auto">{ui.autoArchetype}</option>
+                {defaults
+                  ? Object.entries(defaults.archetypes).map(([key, archetype]) => (
+                      <option value={key} key={key}>
+                        {archetype.label}
+                      </option>
+                    ))
+                  : null}
+              </select>
+              <IconButton icon={busy === "draft" ? <Loader2 className="spin" size={16} /> : <Wand2 size={16} />} onClick={generateDraft} disabled={isWorking} variant="success">
+                {ui.generateDraft}
+              </IconButton>
+            </div>
+            <div className="readiness-panel">
+              <div className="subhead">
+                <span>{ui.readinessTitle}</span>
+              </div>
+              <div className="readiness-list">
+                {readinessItems.map((item) => (
+                  <div className={item.ok ? "readiness-item ok" : "readiness-item warn"} key={item.id}>
+                    {item.ok ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
+                    <span>
+                      <strong>{item.label}</strong>
+                      <small>{item.detail}</small>
+                    </span>
                   </div>
                 ))}
               </div>
-            ) : null}
-            <Field
-              label={ui.fetchedDocContext}
-              value={docContext}
-              onChange={(value) => {
-                setDocContext(value);
-                setDocIssueKey(value.trim() ? issueKeyFromText(jiraUrl) || issue.key : "");
-                setDocStatus(value.trim() ? `Doc context thủ công đang gắn với ${issueKeyFromText(jiraUrl) || issue.key}. Generate draft sẽ dùng nội dung này nếu Base URL vẫn có giá trị.` : "");
-                setDocSources([]);
-              }}
-              textarea
-              rows={5}
-              placeholder={ui.fetchedDocContextPlaceholder}
-            />
-            <Field label={ui.qaNotes} value={notes} onChange={setNotes} textarea rows={4} placeholder={ui.qaNotesPlaceholder} />
-          </div>
+            </div>
+            </div>
 
           <div className="panel">
             <div className="panel-title">
@@ -4305,6 +5257,7 @@ function App() {
               </div>
             </div>
           </div>
+          </div>
         </section>
 
         {testCases.length ? (
@@ -4320,6 +5273,7 @@ function App() {
               value={improveInstruction}
               onChange={(value) => {
                 setImproveInstruction(value);
+                setDraftPromptProposal(null);
                 if (promptImproveStatus) setPromptImproveStatus("");
               }}
               textarea
@@ -4337,7 +5291,29 @@ function App() {
               </IconButton>
             </div>
             {promptImproveStatus ? (
-              <div className={promptImproveStatus.startsWith(ui.improvePromptDonePrefix) ? "notice ok improve-status" : "notice improve-status"}>{promptImproveStatus}</div>
+              <div className={promptImproveNoticeClass(promptImproveStatus, ui)}>{promptImproveStatus}</div>
+            ) : null}
+            {draftPromptProposal ? (
+              <PromptImprovePreview
+                ui={ui}
+                proposal={draftPromptProposal}
+                applyLabel={ui.applyPromptImproveAndRegenerate}
+                busy={busy === "promptImprove"}
+                onCompare={() =>
+                  setPromptCompare({
+                    label: ui.aiPromptGuidelines,
+                    summary: draftPromptProposal.summary || draftPromptProposal.instruction || ui.promptImprovePreviewTitle,
+                    before: draftPromptProposal.beforePrompt,
+                    after: draftPromptProposal.nextAiSettings.promptGuidelines,
+                  })
+                }
+                onApply={applyDraftPromptProposal}
+                onDiscard={() => {
+                  setDraftPromptProposal(null);
+                  setPromptCompare(null);
+                  setPromptImproveStatus("");
+                }}
+              />
             ) : null}
             {!savedAiSettings.enabled ? <div className="mini-note">{ui.improveRequiresAi}</div> : null}
           </section>
@@ -4369,8 +5345,28 @@ function App() {
                 {ui.addCase}
               </IconButton>
             </div>
+            {testCases.length ? (
+              <div className="case-filter-bar" aria-label={ui.caseFilterLabel}>
+                <span>{ui.caseFilterLabel}</span>
+                {([
+                  ["all", ui.allCases],
+                  ["happy", ui.happyPath],
+                  ["negative", ui.negativePath],
+                  ["edge", ui.edgeCase],
+                  ["regression", ui.regression],
+                  ["auth", ui.authRisk],
+                  ["validation", ui.validationRisk],
+                  ["doc", ui.docCoverage],
+                ] as Array<[CaseFilter, string]>).map(([filter, label]) => (
+                  <button className={caseFilter === filter ? "active" : ""} type="button" onClick={() => setCaseFilter(filter)} key={filter}>
+                    {label}
+                    <small>{caseFilterCounts[filter]}</small>
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="case-list">
-              {testCases.map((testCase, index) => {
+              {filteredTestCases.map(({ testCase, index }) => {
                 const isExpanded = detailCaseIndex === index;
                 return (
                   <article className="case-card case-card-compact" key={`${testCase.title}-${index}`}>
@@ -4447,6 +5443,7 @@ function App() {
                   </article>
                 );
               })}
+              {testCases.length && !filteredTestCases.length ? <p className="empty">Không có test case match filter này.</p> : null}
             </div>
           </section>
         ) : null}
@@ -4494,6 +5491,22 @@ function App() {
                 <p>{ui.automationRunHelp}</p>
               </div>
             </div>
+            <div className="pipeline-panel">
+              <div className="subhead">
+                <span>{ui.pipelineTitle}</span>
+              </div>
+              <div className="pipeline-list">
+                {runPipelineItems.map((item, index) => (
+                  <div className={item.done ? "pipeline-item done" : "pipeline-item"} key={item.id}>
+                    <strong>{index + 1}</strong>
+                    <span>
+                      <b>{item.label}</b>
+                      <small>{item.detail}</small>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
             <div className="run-grid">
               <div className="run-block">
                 <h3>{ui.testDesignTab}</h3>
@@ -4527,6 +5540,12 @@ function App() {
                 ) : (
                   <div className="mini-note">{ui.buildBeforeDownload}</div>
                 )}
+                {builtDesignFiles?.png ? (
+                  <div className="design-preview">
+                    <span>{ui.designPreview}</span>
+                    <img src={builtDesignFiles.png.url} alt={ui.designPreview} />
+                  </div>
+                ) : null}
               </div>
               <div className="run-block">
                 <h3>{ui.testCasesTab}</h3>
@@ -4562,6 +5581,37 @@ function App() {
         ) : null}
           </>
         )}
+      {promptCompare ? (
+        <div className="field-expand-backdrop history-compare-backdrop" role="presentation" onMouseDown={() => setPromptCompare(null)}>
+          <section
+            className="field-expand-panel history-compare-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="prompt-compare-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="field-expand-header">
+              <div>
+                <h2 id="prompt-compare-title">{ui.historyCompareTitle}: {promptCompare.label}</h2>
+                <small>{promptCompare.summary}</small>
+              </div>
+              <button className="field-expand-close" type="button" onClick={() => setPromptCompare(null)} aria-label={ui.caseCollapse}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="history-compare-grid">
+              <div className="history-compare-column">
+                <span>{ui.historyBefore}</span>
+                <pre className="history-compare-editor history-compare-text">{promptCompare.before || "(empty)"}</pre>
+              </div>
+              <div className="history-compare-column">
+                <span>{ui.historyAfter}</span>
+                <DiffText before={promptCompare.before} after={promptCompare.after} className="history-compare-editor history-compare-text" />
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
       {historyCompare ? (
         <div className="field-expand-backdrop history-compare-backdrop" role="presentation" onMouseDown={() => setHistoryCompare(null)}>
           <section
@@ -4585,11 +5635,11 @@ function App() {
             <div className="history-compare-grid">
               <div className="history-compare-column">
                 <span>{ui.historyBefore}</span>
-                <textarea className="history-compare-editor" value={historyCompare.change.before || "(empty)"} readOnly />
+                <pre className="history-compare-editor history-compare-text">{historyCompare.change.before || "(empty)"}</pre>
               </div>
               <div className="history-compare-column">
                 <span>{ui.historyAfter}</span>
-                <textarea className="history-compare-editor" value={historyCompare.change.after || "(empty)"} readOnly />
+                <DiffText before={historyCompare.change.before} after={historyCompare.change.after} className="history-compare-editor history-compare-text" />
               </div>
             </div>
           </section>
