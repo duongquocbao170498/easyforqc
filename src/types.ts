@@ -1,3 +1,35 @@
+export type AutomationTargetType = "chatwoot" | "web" | "api" | "other";
+
+export type AutomationProfileConfig = {
+  chatwootMode: "adaptive" | "suite";
+  chatwootChatUiMode: "realistic" | "webhook-only";
+  chatwootPlannerBackend: "openai-compatible" | "heuristic" | "codex-cli";
+  chatwootWebhookUrl: string;
+  chatwootHealthcheckUrl: string;
+  chatwootSkipHealthcheck: boolean;
+  chatwootSkipLocalWebhookPost: boolean;
+  chatwootApiBase: string;
+  chatwootInboxId: string;
+  chatwootUiInboxId: string;
+  chatwootCaptainAssistantId: string;
+  chatwootAccountId: string;
+  chatwootMaxUserTurns: string;
+  chatwootPlannerModel: string;
+  chatwootPlannerTimeoutSeconds: string;
+  chatwootLabels: string;
+  chatwootAssigneeName: string;
+  chatwootPinnedConversationId: string;
+};
+
+export type AutomationProfile = {
+  id: string;
+  name: string;
+  targetType: AutomationTargetType;
+  createdAt: string;
+  updatedAt: string;
+  config: AutomationProfileConfig;
+};
+
 export type ProjectConfig = {
   sourceRoot: string;
   jiraBaseUrl: string;
@@ -12,6 +44,25 @@ export type ProjectConfig = {
   testdesignLabels: string;
   testcaseStatusLabels: string;
   testdesignStatusLabels: string;
+  chatwootMode: "adaptive" | "suite";
+  chatwootChatUiMode: "realistic" | "webhook-only";
+  chatwootPlannerBackend: "openai-compatible" | "heuristic" | "codex-cli";
+  chatwootWebhookUrl: string;
+  chatwootHealthcheckUrl: string;
+  chatwootSkipHealthcheck: boolean;
+  chatwootSkipLocalWebhookPost: boolean;
+  chatwootApiBase: string;
+  chatwootInboxId: string;
+  chatwootUiInboxId: string;
+  chatwootCaptainAssistantId: string;
+  chatwootAccountId: string;
+  chatwootMaxUserTurns: string;
+  chatwootPlannerModel: string;
+  chatwootPlannerTimeoutSeconds: string;
+  chatwootLabels: string;
+  chatwootAssigneeName: string;
+  chatwootPinnedConversationId: string;
+  automationProfiles: AutomationProfile[];
 };
 
 export type Credentials = {
@@ -60,6 +111,7 @@ export type AiSettings = {
   model: string;
   apiKey: string;
   promptGuidelines: string;
+  stopConditionGuidelines: string;
   writingStyle: string;
   testCaseGuidelines: string;
   testDesignGuidelines: string;
@@ -127,6 +179,11 @@ export type StructuredStep = {
   expected_result: string;
 };
 
+export type StopConditions = {
+  pass: string[];
+  fail: string[];
+};
+
 export type TestCase = {
   title: string;
   objective: string;
@@ -139,6 +196,9 @@ export type TestCase = {
   precondition: string;
   test_data: string;
   expected_result: string;
+  stop_conditions?: StopConditions;
+  stop_patterns?: string[];
+  fail_patterns?: string[];
   steps?: string[];
   structured_steps: StructuredStep[];
 };
@@ -206,6 +266,25 @@ export type DefaultsResponse = {
     jsonOutputDir: string;
     outputDir: string;
     testCaseNumberTemplate: string;
+    chatwootMode: "adaptive" | "suite";
+    chatwootChatUiMode: "realistic" | "webhook-only";
+    chatwootPlannerBackend: "openai-compatible" | "heuristic" | "codex-cli";
+    chatwootWebhookUrl: string;
+    chatwootHealthcheckUrl: string;
+    chatwootSkipHealthcheck: boolean;
+    chatwootSkipLocalWebhookPost: boolean;
+    chatwootApiBase: string;
+    chatwootInboxId: string;
+    chatwootUiInboxId: string;
+    chatwootCaptainAssistantId: string;
+    chatwootAccountId: string;
+    chatwootMaxUserTurns: string;
+    chatwootPlannerModel: string;
+    chatwootPlannerTimeoutSeconds: string;
+    chatwootLabels: string;
+    chatwootAssigneeName: string;
+    chatwootPinnedConversationId: string;
+    automationProfiles?: AutomationProfile[];
     labelPolicy: {
       mode: string;
       testcaseLabels: string;

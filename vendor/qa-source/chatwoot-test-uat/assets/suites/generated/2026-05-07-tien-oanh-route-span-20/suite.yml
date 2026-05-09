@@ -1,0 +1,575 @@
+suite_name: "tien_oanh_route_span_20"
+generated_at: "2026-05-07T12:00:00+07:00"
+goal_summary: "Twenty Tiến Oanh route-span Chatwoot cases. Each case starts by asking what trips the operator has, then the adaptive planner drills into trip, time, seats, passenger mapping, fare, pickup/dropoff, and booking confirmation."
+defaults:
+  webhook_url: "http://localhost:3000/webhook/chatwoot"
+  chat_ui_mode: "realistic"
+  ui_inbox_id: null
+  inbox_id: null
+  captain_assistant_id: null
+  labels:
+    - "ai"
+    - "bus"
+    - "booking"
+    - "tien-oanh"
+    - "route-span"
+  assignee_name: "Bot"
+  reply_timeout_seconds: 600
+  reply_settle_seconds: 3
+  poll_interval_seconds: 2
+
+success_stop: &success_stop
+  - "(?i)https?://\\S+"
+  - "(?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking)[^\\n]{0,100}[A-Z0-9]{5,12}"
+
+cases:
+  - case_id: "route-span-01-sg-dl-catalog-basic"
+    title: "01. Catalog first, SG -> Đà Lạt, 1 vé"
+    objective: "Start from trip catalog, then book 1 Tiến Oanh ticket from Sài Gòn to Đà Lạt using intermediate pickup/dropoff."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt ngày 22/05/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Nguyễn Minh An", phone: "0908200001", email: "qa.tienoanh.routespan01@example.com"}
+    metadata:
+      difficulty: 1
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Sài Gòn"
+      destination: "Đà Lạt"
+      route_name: "Sài Gòn -> Đà Lạt"
+      departure_date: "2026-05-22"
+      preferred_times: ["23:00", "23:15", "23:30"]
+      preferred_pickup: "Văn Phòng Thủ Đức"
+      preferred_dropoff: "Ngã ba Liên Khương"
+      ticket_count: 1
+      seat_strategy: "choose_any_available_single"
+      passenger_contacts:
+        - {name: "Nguyễn Minh An", phone: "0908200001"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt ngày 22/05/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Đà Lạt", "chuyến", "giờ"], regex_any: []}
+
+  - case_id: "route-span-02-dl-sg-catalog-reverse"
+    title: "02. Catalog first, Đà Lạt -> SG, 1 vé"
+    objective: "Book a reverse route after asking available trips first."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Đà Lạt đi Sài Gòn ngày 23/05/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Lê Quốc Bảo", phone: "0908200002", email: "qa.tienoanh.routespan02@example.com"}
+    metadata:
+      difficulty: 2
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Đà Lạt"
+      destination: "Sài Gòn"
+      route_name: "Đà Lạt -> Sài Gòn"
+      departure_date: "2026-05-23"
+      preferred_times: ["22:30", "22:00", "23:00"]
+      preferred_pickup: "Ngã 3 Tượng Phật"
+      preferred_dropoff: "Đối diện Bến Xe Miền Đông Mới"
+      ticket_count: 1
+      seat_strategy: "choose_any_available_single"
+      passenger_contacts:
+        - {name: "Lê Quốc Bảo", phone: "0908200002"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Đà Lạt đi Sài Gòn ngày 23/05/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Sài Gòn", "Đà Lạt", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-03-sg-daklak-catalog-basic"
+    title: "03. Catalog first, SG -> Đăk Lăk, 1 vé"
+    objective: "Book 1 Sài Gòn to Đăk Lăk ticket with intermediate span after trip catalog."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đăk Lăk ngày 24/05/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Trần Gia Cường", phone: "0908200003", email: "qa.tienoanh.routespan03@example.com"}
+    metadata:
+      difficulty: 3
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Sài Gòn"
+      destination: "Đăk Lăk"
+      route_name: "Sài Gòn -> Đăk Lăk"
+      departure_date: "2026-05-24"
+      preferred_times: ["21:00", "20:30", "22:00"]
+      preferred_pickup: "Văn Phòng Thủ Đức"
+      preferred_dropoff: "Cây Xăng Kiến Tạo Đắk Song"
+      ticket_count: 1
+      seat_strategy: "choose_any_available_single"
+      passenger_contacts:
+        - {name: "Trần Gia Cường", phone: "0908200003"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đăk Lăk ngày 24/05/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Đăk Lăk", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-04-daklak-sg-catalog-basic"
+    title: "04. Catalog first, Đăk Lăk -> SG, 1 vé"
+    objective: "Book 1 Đăk Lăk/Buôn Ma Thuột to Sài Gòn ticket after trip catalog."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Buôn Ma Thuột đi Sài Gòn ngày 25/05/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Bùi Nhật Linh", phone: "0908200004", email: "qa.tienoanh.routespan04@example.com"}
+    metadata:
+      difficulty: 4
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Buôn Ma Thuột"
+      destination: "Sài Gòn"
+      route_name: "Đăk Lăk -> Sài Gòn"
+      departure_date: "2026-05-25"
+      preferred_times: ["21:00", "20:00", "22:00"]
+      preferred_pickup: "Văn phòng Đạt Lý"
+      preferred_dropoff: "Ngã 4 Ga"
+      ticket_count: 1
+      seat_strategy: "choose_any_available_single"
+      passenger_contacts:
+        - {name: "Bùi Nhật Linh", phone: "0908200004"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Buôn Ma Thuột đi Sài Gòn ngày 25/05/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Sài Gòn", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-05-sg-dl-two-passengers"
+    title: "05. Catalog first, SG -> Đà Lạt, 2 khách"
+    objective: "Book 2 passengers with distinct mapping after staged route-span conversation."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt ngày 26/05/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Phạm Khánh Duy", phone: "0908200005", email: "qa.tienoanh.routespan05@example.com"}
+    metadata:
+      difficulty: 5
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Sài Gòn"
+      destination: "Đà Lạt"
+      route_name: "Sài Gòn -> Đà Lạt"
+      departure_date: "2026-05-26"
+      preferred_times: ["23:00", "23:30"]
+      preferred_pickup: "Bến Xe Miền Đông Mới"
+      preferred_dropoff: "Ngã ba Liên Khương"
+      ticket_count: 2
+      seat_strategy: "two_distinct_available_seats"
+      passenger_contacts:
+        - {name: "Phạm Khánh Duy", phone: "0908200005"}
+        - {name: "Hoàng Minh Hạnh", phone: "0908200006"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt ngày 26/05/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Đà Lạt", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-06-dl-sg-two-passengers"
+    title: "06. Catalog first, Đà Lạt -> SG, 2 khách"
+    objective: "Book 2 reverse-direction tickets preserving two passenger identities."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Đà Lạt đi Sài Gòn ngày 27/05/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Võ Thanh Khoa", phone: "0908200007", email: "qa.tienoanh.routespan06@example.com"}
+    metadata:
+      difficulty: 6
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Đà Lạt"
+      destination: "Sài Gòn"
+      route_name: "Đà Lạt -> Sài Gòn"
+      departure_date: "2026-05-27"
+      preferred_times: ["13:00", "12:30", "14:00"]
+      preferred_pickup: "Vòng xoay Liên Khương"
+      preferred_dropoff: "Bến xe Ngã 4 Ga"
+      ticket_count: 2
+      seat_strategy: "two_distinct_available_seats"
+      passenger_contacts:
+        - {name: "Võ Thanh Khoa", phone: "0908200007"}
+        - {name: "Đặng Thị Lan", phone: "0908200008"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Đà Lạt đi Sài Gòn ngày 27/05/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Sài Gòn", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-07-sg-daklak-two-passengers"
+    title: "07. Catalog first, SG -> Đăk Lăk, 2 khách"
+    objective: "Book 2 Sài Gòn to Đăk Lăk tickets with flexible evening time."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đăk Lăk ngày 28/05/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Tạ Đức Quân", phone: "0908200009", email: "qa.tienoanh.routespan07@example.com"}
+    metadata:
+      difficulty: 7
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Sài Gòn"
+      destination: "Đăk Lăk"
+      route_name: "Sài Gòn -> Đăk Lăk"
+      departure_date: "2026-05-28"
+      preferred_times: ["20:00", "21:00", "22:00"]
+      preferred_pickup: "Ngã Tư Chợ Đình"
+      preferred_dropoff: "Chợ Hoà Phú"
+      ticket_count: 2
+      seat_strategy: "two_distinct_available_seats"
+      passenger_contacts:
+        - {name: "Tạ Đức Quân", phone: "0908200009"}
+        - {name: "Dương Hồng Sơn", phone: "0908200010"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đăk Lăk ngày 28/05/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Đăk Lăk", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-08-daklak-sg-two-passengers"
+    title: "08. Catalog first, Đăk Lăk -> SG, 2 khách"
+    objective: "Book 2 return-direction tickets with non-terminal points."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Buôn Ma Thuột đi Sài Gòn ngày 29/05/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Hồ Gia Huy", phone: "0908200011", email: "qa.tienoanh.routespan08@example.com"}
+    metadata:
+      difficulty: 8
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Buôn Ma Thuột"
+      destination: "Sài Gòn"
+      route_name: "Đăk Lăk -> Sài Gòn"
+      departure_date: "2026-05-29"
+      preferred_times: ["20:30", "21:00", "22:00"]
+      preferred_pickup: "Hòa Đông"
+      preferred_dropoff: "Thủ Đức"
+      ticket_count: 2
+      seat_strategy: "two_distinct_available_seats"
+      passenger_contacts:
+        - {name: "Hồ Gia Huy", phone: "0908200011"}
+        - {name: "Nguyễn Thảo My", phone: "0908200012"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Buôn Ma Thuột đi Sài Gòn ngày 29/05/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Sài Gòn", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-09-sg-dl-three-flexible"
+    title: "09. Catalog first, SG -> Đà Lạt, 3 khách flexible"
+    objective: "Book 3 distinct passengers and let bot choose available seats."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt ngày 30/05/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Nguyễn Gia Nam", phone: "0908200013", email: "qa.tienoanh.routespan09@example.com"}
+    metadata:
+      difficulty: 9
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Sài Gòn"
+      destination: "Đà Lạt"
+      route_name: "Sài Gòn -> Đà Lạt"
+      departure_date: "2026-05-30"
+      preferred_times: ["23:00", "23:30"]
+      preferred_pickup: "Văn Phòng Thủ Đức"
+      preferred_dropoff: "Công viên Đức Trọng"
+      ticket_count: 3
+      seat_strategy: "three_available_seats"
+      passenger_contacts:
+        - {name: "Nguyễn Gia Nam", phone: "0908200013"}
+        - {name: "Lâm Thu Ngân", phone: "0908200014"}
+        - {name: "Mai Hoàng Phúc", phone: "0908200015"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt ngày 30/05/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Đà Lạt", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-10-room-shape-one-double-two-single"
+    title: "10. Catalog first, SG -> Đà Lạt, room shape 1 đôi + 2 đơn"
+    objective: "Preserve requested room shape and three distinct customers."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt ngày 31/05/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Thiện Thần Thánh", phone: "0908375751", email: "qa.tienoanh.routespan10@example.com"}
+    metadata:
+      difficulty: 10
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Sài Gòn"
+      destination: "Đà Lạt"
+      route_name: "Sài Gòn -> Đà Lạt"
+      departure_date: "2026-05-31"
+      preferred_times: ["23:00", "23:30"]
+      preferred_pickup: "Văn Phòng Thủ Đức"
+      preferred_dropoff: "Ngã ba Liên Khương"
+      ticket_count: 3
+      requested_shape: "1 Phòng Đôi + 2 Phòng Đơn Lớn"
+      seat_strategy: "one_double_room_two_large_single_rooms"
+      passenger_contacts:
+        - {name: "Thiện Thần Thánh", phone: "0908375751"}
+        - {name: "Khánh Sky", phone: "0908765432"}
+        - {name: "Thiện Thị Khánh", phone: "0901234567"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt ngày 31/05/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Đà Lạt", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-11-sg-dl-price-before-book"
+    title: "11. Catalog first, ask fare before booking"
+    objective: "Ensure fare is confirmed before booking after choosing route/span."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt ngày 01/06/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Đỗ Quang Minh", phone: "0908200016", email: "qa.tienoanh.routespan11@example.com"}
+    metadata:
+      difficulty: 11
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Sài Gòn"
+      destination: "Đà Lạt"
+      route_name: "Sài Gòn -> Đà Lạt"
+      departure_date: "2026-06-01"
+      preferred_times: ["22:30", "23:00"]
+      preferred_pickup: "Bến Xe Miền Đông Mới"
+      preferred_dropoff: "Madagui"
+      ticket_count: 1
+      require_fare_confirmation: true
+      seat_strategy: "choose_any_available_single"
+      passenger_contacts:
+        - {name: "Đỗ Quang Minh", phone: "0908200016"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt ngày 01/06/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Đà Lạt", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-12-dl-sg-pickup-options"
+    title: "12. Catalog first, ask pickup/dropoff options"
+    objective: "Force stop-point discovery before selecting non-endpoint pickup/dropoff."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Đà Lạt đi Sài Gòn ngày 02/06/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Phan Hải Yến", phone: "0908200017", email: "qa.tienoanh.routespan12@example.com"}
+    metadata:
+      difficulty: 12
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Đà Lạt"
+      destination: "Sài Gòn"
+      route_name: "Đà Lạt -> Sài Gòn"
+      departure_date: "2026-06-02"
+      preferred_times: ["22:30", "23:00"]
+      preferred_pickup: "Vòng xoay Liên Khương"
+      preferred_dropoff: "Bưu điện Trảng Bom"
+      ticket_count: 1
+      require_stop_point_discovery: true
+      seat_strategy: "choose_any_available_single"
+      passenger_contacts:
+        - {name: "Phan Hải Yến", phone: "0908200017"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Đà Lạt đi Sài Gòn ngày 02/06/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Sài Gòn", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-13-sg-daklak-three-passengers"
+    title: "13. Catalog first, SG -> Đăk Lăk, 3 khách"
+    objective: "Book 3 passenger mapping on Sài Gòn to Đăk Lăk route."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đăk Lăk ngày 03/06/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Lý Hoàng Anh", phone: "0908200018", email: "qa.tienoanh.routespan13@example.com"}
+    metadata:
+      difficulty: 13
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Sài Gòn"
+      destination: "Đăk Lăk"
+      route_name: "Sài Gòn -> Đăk Lăk"
+      departure_date: "2026-06-03"
+      preferred_times: ["20:30", "21:00"]
+      preferred_pickup: "Văn Phòng Thủ Đức"
+      preferred_dropoff: "Bến xe phía Nam Buôn Ma Thuột"
+      ticket_count: 3
+      seat_strategy: "three_available_seats"
+      passenger_contacts:
+        - {name: "Lý Hoàng Anh", phone: "0908200018"}
+        - {name: "Ngô Bảo Châu", phone: "0908200019"}
+        - {name: "Trịnh Hà My", phone: "0908200020"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đăk Lăk ngày 03/06/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Đăk Lăk", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-14-daklak-sg-three-passengers"
+    title: "14. Catalog first, Đăk Lăk -> SG, 3 khách"
+    objective: "Book 3 distinct passengers on return route."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Buôn Ma Thuột đi Sài Gòn ngày 04/06/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Đinh Tuấn Vũ", phone: "0908200021", email: "qa.tienoanh.routespan14@example.com"}
+    metadata:
+      difficulty: 14
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Buôn Ma Thuột"
+      destination: "Sài Gòn"
+      route_name: "Đăk Lăk -> Sài Gòn"
+      departure_date: "2026-06-04"
+      preferred_times: ["20:00", "21:00"]
+      preferred_pickup: "Bến xe phía Nam Buôn Ma Thuột"
+      preferred_dropoff: "Bến Xe Miền Đông Mới"
+      ticket_count: 3
+      seat_strategy: "three_available_seats"
+      passenger_contacts:
+        - {name: "Đinh Tuấn Vũ", phone: "0908200021"}
+        - {name: "Vũ Khánh Trang", phone: "0908200022"}
+        - {name: "Ngô Hoàng Vy", phone: "0908200023"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Buôn Ma Thuột đi Sài Gòn ngày 04/06/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Sài Gòn", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-15-sg-dl-seat-conflict-flex"
+    title: "15. Catalog first, SG -> Đà Lạt, preferred seats may be busy"
+    objective: "Request preferred seats but allow flexible replacement if busy."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt ngày 05/06/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Cao Minh Khang", phone: "0908200024", email: "qa.tienoanh.routespan15@example.com"}
+    metadata:
+      difficulty: 15
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Sài Gòn"
+      destination: "Đà Lạt"
+      route_name: "Sài Gòn -> Đà Lạt"
+      departure_date: "2026-06-05"
+      preferred_times: ["23:00", "23:30"]
+      preferred_pickup: "Văn Phòng Thủ Đức"
+      preferred_dropoff: "Ngã ba Liên Khương"
+      ticket_count: 3
+      preferred_seats: ["A1", "B2", "B5"]
+      allow_alternate_seats: true
+      seat_strategy: "prefer_requested_else_three_available"
+      passenger_contacts:
+        - {name: "Cao Minh Khang", phone: "0908200024"}
+        - {name: "Lưu An Nhiên", phone: "0908200025"}
+        - {name: "Tô Gia Bảo", phone: "0908200026"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt ngày 05/06/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Đà Lạt", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-16-dl-sg-flexible-time"
+    title: "16. Catalog first, Đà Lạt -> SG, flexible time"
+    objective: "Choose any available evening trip after catalog and book 1 ticket."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Đà Lạt đi Sài Gòn ngày 06/06/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Huỳnh Như Ý", phone: "0908200027", email: "qa.tienoanh.routespan16@example.com"}
+    metadata:
+      difficulty: 16
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Đà Lạt"
+      destination: "Sài Gòn"
+      route_name: "Đà Lạt -> Sài Gòn"
+      departure_date: "2026-06-06"
+      preferred_times: ["18:00", "20:00", "22:30"]
+      preferred_time_window: "18:00-23:00"
+      preferred_pickup: "Đức Trọng"
+      preferred_dropoff: "Ngã 4 Ga"
+      ticket_count: 1
+      seat_strategy: "choose_any_available_single"
+      passenger_contacts:
+        - {name: "Huỳnh Như Ý", phone: "0908200027"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Đà Lạt đi Sài Gòn ngày 06/06/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Sài Gòn", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-17-sg-daklak-stop-fallback"
+    title: "17. Catalog first, SG -> Đăk Lăk, stop fallback"
+    objective: "If preferred stop is unavailable, choose nearest valid stop and continue booking."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đăk Lăk ngày 07/06/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Mai Quốc Thịnh", phone: "0908200028", email: "qa.tienoanh.routespan17@example.com"}
+    metadata:
+      difficulty: 17
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Sài Gòn"
+      destination: "Đăk Lăk"
+      route_name: "Sài Gòn -> Đăk Lăk"
+      departure_date: "2026-06-07"
+      preferred_times: ["20:00", "21:00"]
+      preferred_pickup: "Ngã Tư Chợ Đình"
+      preferred_dropoff: "Cây Xăng Kiến Tạo Đắk Song"
+      alternate_dropoff: "Chợ Hoà Phú"
+      ticket_count: 1
+      seat_strategy: "choose_any_available_single"
+      passenger_contacts:
+        - {name: "Mai Quốc Thịnh", phone: "0908200028"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đăk Lăk ngày 07/06/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Đăk Lăk", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-18-sg-dl-confirm-summary"
+    title: "18. Catalog first, confirm full summary"
+    objective: "Require bot to summarize time, seats, customers, fare, pickup and dropoff before confirmation."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt ngày 08/06/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Nguyễn Thanh Tâm", phone: "0908200029", email: "qa.tienoanh.routespan18@example.com"}
+    metadata:
+      difficulty: 18
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Sài Gòn"
+      destination: "Đà Lạt"
+      route_name: "Sài Gòn -> Đà Lạt"
+      departure_date: "2026-06-08"
+      preferred_times: ["23:00", "23:30"]
+      preferred_pickup: "Bến Xe Miền Đông Mới"
+      preferred_dropoff: "Công viên Đức Trọng"
+      ticket_count: 2
+      require_summary_before_confirm: true
+      seat_strategy: "two_distinct_available_seats"
+      passenger_contacts:
+        - {name: "Nguyễn Thanh Tâm", phone: "0908200029"}
+        - {name: "Phạm Hoài Nam", phone: "0908200030"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt ngày 08/06/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Đà Lạt", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-19-dl-sg-two-passengers-price-check"
+    title: "19. Catalog first, Đà Lạt -> SG, 2 khách with price check"
+    objective: "Book 2 passengers after confirming fare and route span."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Đà Lạt đi Sài Gòn ngày 09/06/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "Trương Minh Nhật", phone: "0908200031", email: "qa.tienoanh.routespan19@example.com"}
+    metadata:
+      difficulty: 19
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Đà Lạt"
+      destination: "Sài Gòn"
+      route_name: "Đà Lạt -> Sài Gòn"
+      departure_date: "2026-06-09"
+      preferred_times: ["13:00", "14:00", "22:30"]
+      preferred_pickup: "Vòng xoay Liên Khương"
+      preferred_dropoff: "Đối diện Bến Xe Miền Đông Mới"
+      ticket_count: 2
+      require_fare_confirmation: true
+      seat_strategy: "two_distinct_available_seats"
+      passenger_contacts:
+        - {name: "Trương Minh Nhật", phone: "0908200031"}
+        - {name: "Lê Bảo Ngọc", phone: "0908200032"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Đà Lạt đi Sài Gòn ngày 09/06/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Sài Gòn", "chuyến"], regex_any: []}
+
+  - case_id: "route-span-20-complex-room-stop-fare"
+    title: "20. Catalog first, complex SG -> Đà Lạt room/stop/fare"
+    objective: "Complex route-span: catalog first, choose trip, discover stop points, preserve room shape, confirm fare, and book 3 distinct passengers."
+    opening_prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt ngày 10/06/2026?"
+    stop_regex_any: *success_stop
+    contact: {name: "An Phước Lộc", phone: "0908200033", email: "qa.tienoanh.routespan20@example.com"}
+    metadata:
+      difficulty: 20
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      origin: "Sài Gòn"
+      destination: "Đà Lạt"
+      route_name: "Sài Gòn -> Đà Lạt"
+      departure_date: "2026-06-10"
+      preferred_times: ["23:00", "23:15", "23:30"]
+      preferred_pickup: "Văn Phòng Thủ Đức"
+      preferred_dropoff: "Ngã ba Liên Khương"
+      ticket_count: 3
+      requested_shape: "1 Phòng Đôi + 2 Phòng Đơn Lớn"
+      require_stop_point_discovery: true
+      require_fare_confirmation: true
+      require_summary_before_confirm: true
+      seat_strategy: "one_double_room_two_large_single_rooms"
+      passenger_contacts:
+        - {name: "An Phước Lộc", phone: "0908200033"}
+        - {name: "Bùi Thảo Linh", phone: "0908200034"}
+        - {name: "Châu Nhật Minh", phone: "0908200035"}
+    steps:
+      - prompt: "Nhà xe Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt ngày 10/06/2026?"
+        expectation: {contains_any: ["Tiến Oanh", "Đà Lạt", "chuyến"], regex_any: []}

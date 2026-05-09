@@ -24,6 +24,22 @@ services:
         value: ""
       - key: QA_SOURCE_ROOT
         value: /app/vendor/qa-source
+      - key: CHATWOOT_UAT_SKILL_ROOT
+        value: /app/vendor/qa-source/chatwoot-test-uat
+      - key: CHATWOOT_UAT_API_BASE
+        value: https://uat-omniagent.vexere.net
+      - key: CHATWOOT_UAT_ACCOUNT_ID
+        value: "3"
+      - key: CHATWOOT_UAT_INBOX_ID
+        value: "3062"
+      - key: CHATWOOT_UAT_UI_INBOX_ID
+        value: "3062"
+      - key: CHATWOOT_UAT_CAPTAIN_ASSISTANT_ID
+        value: "80"
+      - key: CHATWOOT_UAT_DEFAULT_WEBHOOK_URL
+        value: https://uat-omniagent.vexere.net/webhook/chatwoot
+      - key: CHATWOOT_UAT_DEFAULT_HEALTHCHECK_URL
+        value: https://uat-omniagent.vexere.net/health
       - key: PURGE_GENERATED_OUTPUTS_ON_START
         value: "true"
       - key: DATABASE_URL
@@ -37,4 +53,8 @@ services:
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: CHATWOOT_UAT_API_KEY
+        sync: false
+      - key: CHATWOOT_UAT_USER_API_KEY
         sync: false

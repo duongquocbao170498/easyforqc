@@ -1,0 +1,98 @@
+suite_name: "tien_oanh_mixed_stage_pickup_complex_data"
+generated_at: "2026-05-06T00:00:00+07:00"
+goal_summary: "Stress booking data shape for 3 passengers on one Tiến Oanh Sài Gòn - Đà Lạt trip, including distinct passenger name/phone values and mixed pickup route stages in the same booking request."
+defaults:
+  webhook_url: "http://localhost:3000/webhook/chatwoot"
+  labels: ["ai"]
+  assignee_name: "Bot"
+  reply_timeout_seconds: 300
+  reply_settle_seconds: 3
+  poll_interval_seconds: 2
+  inbox_id: 3049
+  ui_inbox_id: 3052
+  captain_assistant_id: 80
+cases:
+  - case_id: "tien-oanh-3-pax-same-trip-mixed-pickup-stages"
+    title: "3 passengers on one Tiến Oanh trip with two pickup route stages"
+    objective: "Verify the bot preserves per-ticket passenger data and either creates the booking or fails explicitly when mixed pickup route stages in one booking are unsupported."
+    metadata:
+      company_name: "Tiến Oanh"
+      company_id: 2
+      route_name: "Sài Gòn - Đà Lạt"
+      base_trip_id: 10613349
+      requested_time: "23:00"
+      requested_date_text: "ngày mai"
+      route_stage_expectation:
+        - code: "VPTB"
+          area_id: 1730
+          name: "Văn Phòng Tân Bình"
+        - code: "VPTĐ"
+          area_id: 159093
+          name: "Văn Phòng Thủ Đức"
+        - code: "VPDL"
+          area_id: 153096
+          name: "Văn Phòng Đà Lạt"
+      passenger_ticket_details:
+        - name: "Nguyễn Văn An"
+          phone: "0908000101"
+          pickup_stage: "Văn Phòng Tân Bình"
+          pickup_stage_code: "VPTB"
+        - name: "Trần Thị Bình"
+          phone: "0908000102"
+          pickup_stage: "Văn Phòng Thủ Đức"
+          pickup_stage_code: "VPTĐ"
+        - name: "Lê Minh Cường"
+          phone: "0908000103"
+          pickup_stage: "Văn Phòng Tân Bình"
+          pickup_stage_code: "VPTB"
+    contact:
+      name: "Nguyễn Văn An"
+      phone: "0908000101"
+    stop_regex_any:
+      - "(?i)(mã vé|ticket code|booking code|mã đặt chỗ|link thanh toán|payment link)"
+      - "(?i)(không hỗ trợ|không thể|lỗi|handoff|chuyển.*nhân viên)"
+    opening_prompt: >-
+      Anh cần đặt 3 vé Tiến Oanh tuyến Sài Gòn đi Đà Lạt chuyến 23:00 ngày mai.
+      Cả 3 khách đi cùng một chuyến, trả tại Văn Phòng Đà Lạt.
+      Dữ liệu khách:
+      1. Nguyễn Văn An - 0908000101 - đón tại Văn Phòng Tân Bình.
+      2. Trần Thị Bình - 0908000102 - đón tại Văn Phòng Thủ Đức.
+      3. Lê Minh Cường - 0908000103 - đón tại Văn Phòng Tân Bình.
+      Lưu ý quan trọng: khách 1 và khách 2 cùng chuyến nhưng pickup thuộc 2 chặng khác nhau
+      là VPTB và VPTĐ; không phải cùng một chặng có hai điểm đón. Nếu cần chọn ghế,
+      chọn giúp 3 ghế còn trống bất kỳ cùng hạng phù hợp.
+    steps:
+      - prompt: >-
+          Anh cần đặt 3 vé Tiến Oanh tuyến Sài Gòn đi Đà Lạt chuyến 23:00 ngày mai.
+          Cả 3 khách đi cùng một chuyến, trả tại Văn Phòng Đà Lạt.
+          Dữ liệu khách:
+          1. Nguyễn Văn An - 0908000101 - đón tại Văn Phòng Tân Bình.
+          2. Trần Thị Bình - 0908000102 - đón tại Văn Phòng Thủ Đức.
+          3. Lê Minh Cường - 0908000103 - đón tại Văn Phòng Tân Bình.
+          Lưu ý khách 1 và khách 2 pickup thuộc 2 chặng khác nhau là VPTB và VPTĐ,
+          không phải cùng một chặng có hai điểm đón. Nếu cần chọn ghế, chọn giúp
+          3 ghế còn trống bất kỳ cùng hạng phù hợp.
+        expectation:
+          contains_any:
+            - "Tiến Oanh"
+            - "Sài Gòn"
+            - "Đà Lạt"
+            - "23:00"
+      - prompt: >-
+          Đúng rồi, tiếp tục đặt 3 vé trên cùng chuyến đó. Nhớ giữ đúng từng khách:
+          Nguyễn Văn An 0908000101 đón Văn Phòng Tân Bình; Trần Thị Bình 0908000102
+          đón Văn Phòng Thủ Đức; Lê Minh Cường 0908000103 đón Văn Phòng Tân Bình.
+          Cả 3 trả tại Văn Phòng Đà Lạt.
+        expectation:
+          contains_any:
+            - "Nguyễn Văn An"
+            - "Trần Thị Bình"
+            - "Lê Minh Cường"
+            - "Tân Bình"
+            - "Thủ Đức"
+      - prompt: >-
+          Xác nhận đặt vé. Nếu hệ thống không hỗ trợ hai chặng đón khác nhau trong
+          cùng một booking thì nói rõ lỗi business/tool, đừng tự đổi về cùng điểm đón.
+        expectation:
+          regex_any:
+            - "(?i)(mã vé|ticket code|booking code|mã đặt chỗ|link thanh toán|payment link|không hỗ trợ|không thể|lỗi|chuyển.*nhân viên|handoff)"

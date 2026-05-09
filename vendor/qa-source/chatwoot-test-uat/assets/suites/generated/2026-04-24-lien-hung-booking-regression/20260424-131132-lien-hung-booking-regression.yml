@@ -1,0 +1,89 @@
+suite_name: lien-hung-uat-local-booking-regression
+generated_at: '2026-04-24T06:12:25.328337+00:00'
+goal_summary: Reusable near-E2E regression coverage for Liên Hưng booking flows on
+  local UAT, focusing on route and pickup handling, VVIP seat requests, and collecting
+  passenger contact details before completion.
+defaults:
+  webhook_url: http://localhost:3000/webhook/chatwoot
+  labels:
+  - ai
+  assignee_name: Bot
+  reply_timeout_seconds: 180
+  reply_settle_seconds: 3
+  poll_interval_seconds: 2
+  inbox_id: null
+  captain_assistant_id: null
+cases:
+- case_id: booking-nha-trang-tra-vinh-pickup-agribank
+  title: Nha Trang to Trà Vinh with Agribank Cam Lâm pickup
+  objective: Book a Liên Hưng trip from Nha Trang to Trà Vinh with pickup at Agribank
+    CN Cam Lâm and return a booking code or payment link.
+  contact:
+    name: Khánh Thị Thiện
+    phone: 0967142713
+  stop_regex_any:
+  - (?i)(mã (vé|đặt chỗ)|ticket code|booking code)\s*[:#-]?\s*[A-Z0-9]{6,10}
+  - (?i)https?://[^\s]+
+  steps:
+  - prompt: Mình muốn đặt 1 vé Liên Hưng đi từ Nha Trang đến Trà Vinh, đón tại Agribank
+      CN Cam Lâm, đi ngày 28/04/2026. Hành khách là Khánh Thị Thiện, SĐT 0967142713.
+    timeout_seconds: 180.0
+    expectation:
+      regex_any:
+      - (?i)(mã (vé|đặt chỗ)|ticket code|booking code)\s*[:#-]?\s*[A-Z0-9]{6,10}
+      - (?i)https?://[^\s]+
+  assignee_name: Bot
+  labels:
+  - ai
+- case_id: booking-vvip-seat-request
+  title: Booking with VVIP seat request
+  objective: Reserve a VVIP seat on a Liên Hưng trip and return concrete booking confirmation.
+  contact:
+    name: Minh Tran
+    phone: 0903123456
+  stop_regex_any:
+  - (?i)(mã (vé|đặt chỗ)|ticket code|booking code)\s*[:#-]?\s*[A-Z0-9]{6,10}
+  - (?i)https?://[^\s]+
+  steps:
+  - prompt: Cho mình đặt 1 vé Liên Hưng ghế VVIP từ Nha Trang đi Trà Vinh, đón tại
+      Agribank CN Cam Lâm, đi ngày 28/04/2026. Hành khách là Minh Tran, SĐT 0903123456.
+    timeout_seconds: 180.0
+    expectation:
+      contains_any:
+      - VVIP
+      - ghế VVIP
+      regex_any:
+      - (?i)(mã (vé|đặt chỗ)|ticket code|booking code)\s*[:#-]?\s*[A-Z0-9]{6,10}
+      - (?i)https?://[^\s]+
+  assignee_name: Bot
+  labels:
+  - ai
+- case_id: booking-capture-passenger-contact
+  title: Capture passenger name and phone before completion
+  objective: Ensure the bot asks for and uses passenger name and phone before completing
+    the booking.
+  contact:
+    name: Phuong Le
+    phone: 0918234567
+  stop_regex_any:
+  - (?i)(mã (vé|đặt chỗ)|ticket code|booking code)\s*[:#-]?\s*[A-Z0-9]{6,10}
+  - (?i)https?://[^\s]+
+  steps:
+  - prompt: Mình muốn đặt 1 vé Liên Hưng từ Nha Trang đi Trà Vinh, đón tại Agribank
+      CN Cam Lâm ngày 28/04/2026. Bạn cho mình biết cần cung cấp thông tin gì để giữ
+      chỗ?
+    timeout_seconds: 180.0
+    expectation:
+      contains_any:
+      - họ tên
+      - số điện thoại
+      - thông tin
+  - prompt: Thông tin của mình là Phuong Le, 0918234567. Nhờ bạn tiếp tục đặt vé.
+    timeout_seconds: 180.0
+    expectation:
+      regex_any:
+      - (?i)(mã (vé|đặt chỗ)|ticket code|booking code)\s*[:#-]?\s*[A-Z0-9]{6,10}
+      - (?i)https?://[^\s]+
+  assignee_name: Bot
+  labels:
+  - ai

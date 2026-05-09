@@ -1,0 +1,337 @@
+suite_name: "tien_oanh_span_route_10"
+generated_at: "2026-05-07T09:30:00+07:00"
+goal_summary: "Ten Tiến Oanh span-route Chatwoot booking cases, ordered from simple to complex, covering intermediate pickup/dropoff spans and multi-passenger shape preservation."
+defaults:
+  webhook_url: "http://localhost:3000/webhook/chatwoot"
+  chat_ui_mode: "realistic"
+  ui_inbox_id: null
+  inbox_id: null
+  captain_assistant_id: null
+  labels:
+    - "ai"
+    - "bus"
+    - "booking"
+    - "tien-oanh"
+    - "span-route"
+  assignee_name: "Bot"
+  reply_timeout_seconds: 600
+  reply_settle_seconds: 3
+  poll_interval_seconds: 2
+
+cases:
+  - case_id: "span-01-sg-dl-one-ticket-basic"
+    title: "01. Simple span Sài Gòn -> Đà Lạt, 1 vé"
+    objective: "Book 1 Tiến Oanh ticket from Sài Gòn to Đà Lạt using intermediate pickup/dropoff."
+    opening_prompt: "Anh cần đặt 1 vé Tiến Oanh tuyến Sài Gòn đi Đà Lạt ngày 13/05/2026, chuyến khoảng 23:00. Anh muốn đón ở Văn Phòng Thủ Đức và trả ở Ngã ba Liên Khương. Hành khách tên Nguyễn Minh An, số điện thoại 0908100001. Em hỗ trợ đặt giúp anh nhé."
+    stop_regex_any: &success_stop
+      - "(?i)https?://\\S+"
+      - "(?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking)[^\\n]{0,100}[A-Z0-9]{5,12}"
+    contact: &contact01
+      name: "Nguyễn Minh An"
+      phone: "0908100001"
+      email: "qa.tienoanh.span01@example.com"
+    metadata:
+      difficulty: 1
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      route_name: "Sài Gòn -> Đà Lạt"
+      departure_date: "2026-05-13"
+      preferred_time: "23:00"
+      preferred_pickup: "Văn Phòng Thủ Đức"
+      preferred_dropoff: "Ngã ba Liên Khương"
+      ticket_count: 1
+      passenger_contacts:
+        - name: "Nguyễn Minh An"
+          phone: "0908100001"
+    steps:
+      - prompt: "Anh cần đặt 1 vé Tiến Oanh tuyến Sài Gòn đi Đà Lạt ngày 13/05/2026, chuyến khoảng 23:00. Anh muốn đón ở Văn Phòng Thủ Đức và trả ở Ngã ba Liên Khương. Hành khách tên Nguyễn Minh An, số điện thoại 0908100001."
+        expectation:
+          contains_any: ["Tiến Oanh", "Đà Lạt", "Thủ Đức", "Liên Khương", "chuyến", "vé"]
+          regex_any: []
+
+  - case_id: "span-02-dl-sg-one-ticket-reverse"
+    title: "02. Reverse span Đà Lạt -> Sài Gòn, 1 vé"
+    objective: "Book 1 reverse-direction ticket using non-endpoint pickup/dropoff."
+    opening_prompt: "Anh cần đặt 1 vé Tiến Oanh tuyến Đà Lạt đi Sài Gòn ngày 14/05/2026, chuyến khoảng 22:30. Anh muốn đón ở Ngã 3 Tượng Phật hoặc điểm gần đó, trả ở Bến Xe Miền Đông Mới. Hành khách tên Lê Quốc Bảo, số điện thoại 0908100002. Em đặt giúp anh một chiều nhé."
+    stop_regex_any: *success_stop
+    contact:
+      name: "Lê Quốc Bảo"
+      phone: "0908100002"
+      email: "qa.tienoanh.span02@example.com"
+    metadata:
+      difficulty: 2
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      route_name: "Đà Lạt -> Sài Gòn"
+      departure_date: "2026-05-14"
+      preferred_time: "22:30"
+      preferred_pickup: "Ngã 3 Tượng Phật"
+      preferred_dropoff: "Bến Xe Miền Đông Mới"
+      ticket_count: 1
+      passenger_contacts:
+        - name: "Lê Quốc Bảo"
+          phone: "0908100002"
+    steps:
+      - prompt: "Anh cần đặt 1 vé Tiến Oanh tuyến Đà Lạt đi Sài Gòn ngày 14/05/2026, chuyến khoảng 22:30. Anh muốn đón ở Ngã 3 Tượng Phật hoặc điểm gần đó, trả ở Bến Xe Miền Đông Mới. Hành khách tên Lê Quốc Bảo, số điện thoại 0908100002."
+        expectation:
+          contains_any: ["Tiến Oanh", "Sài Gòn", "Đà Lạt", "chuyến", "vé"]
+          regex_any: []
+
+  - case_id: "span-03-sg-daklak-one-ticket"
+    title: "03. Sài Gòn -> Đăk Lăk intermediate span, 1 vé"
+    objective: "Book 1 Sài Gòn to Đăk Lăk ticket with intermediate pickup and dropoff."
+    opening_prompt: "Anh cần đặt 1 vé Tiến Oanh tuyến Sài Gòn đi Đăk Lăk ngày 15/05/2026, chuyến tối khoảng 21:00. Anh muốn đón ở Văn Phòng Thủ Đức và trả ở Cây Xăng Kiến Tạo Đắk Song nếu có. Hành khách tên Trần Gia Cường, số điện thoại 0908100003. Em hỗ trợ đặt giúp anh."
+    stop_regex_any: *success_stop
+    contact:
+      name: "Trần Gia Cường"
+      phone: "0908100003"
+      email: "qa.tienoanh.span03@example.com"
+    metadata:
+      difficulty: 3
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      route_name: "Sài Gòn -> Đăk Lăk"
+      departure_date: "2026-05-15"
+      preferred_time: "21:00"
+      preferred_pickup: "Văn Phòng Thủ Đức"
+      preferred_dropoff: "Cây Xăng Kiến Tạo Đắk Song"
+      ticket_count: 1
+      passenger_contacts:
+        - name: "Trần Gia Cường"
+          phone: "0908100003"
+    steps:
+      - prompt: "Anh cần đặt 1 vé Tiến Oanh tuyến Sài Gòn đi Đăk Lăk ngày 15/05/2026, chuyến tối khoảng 21:00. Anh muốn đón ở Văn Phòng Thủ Đức và trả ở Cây Xăng Kiến Tạo Đắk Song nếu có. Hành khách tên Trần Gia Cường, số điện thoại 0908100003."
+        expectation:
+          contains_any: ["Tiến Oanh", "Đăk Lăk", "Thủ Đức", "vé", "chuyến"]
+          regex_any: []
+
+  - case_id: "span-04-sg-dl-two-passengers-distinct"
+    title: "04. Sài Gòn -> Đà Lạt, 2 vé distinct passengers"
+    objective: "Book 2 tickets on the same span and preserve two distinct passenger names/phones."
+    opening_prompt: "Anh cần đặt 2 vé Tiến Oanh tuyến Sài Gòn đi Đà Lạt ngày 16/05/2026, chuyến khoảng 23:15. Đón ở Bến Xe Miền Đông Mới, trả ở Ngã ba Liên Khương. Vé 1 tên Phạm Khánh Duy, số điện thoại 0908100004. Vé 2 tên Hoàng Minh Hạnh, số điện thoại 0908100005. Mỗi vé dùng đúng thông tin từng khách giúp anh."
+    stop_regex_any: *success_stop
+    contact:
+      name: "Phạm Khánh Duy"
+      phone: "0908100004"
+      email: "qa.tienoanh.span04@example.com"
+    metadata:
+      difficulty: 4
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      route_name: "Sài Gòn -> Đà Lạt"
+      departure_date: "2026-05-16"
+      preferred_time: "23:15"
+      preferred_pickup: "Bến Xe Miền Đông Mới"
+      preferred_dropoff: "Ngã ba Liên Khương"
+      ticket_count: 2
+      passenger_contacts:
+        - name: "Phạm Khánh Duy"
+          phone: "0908100004"
+        - name: "Hoàng Minh Hạnh"
+          phone: "0908100005"
+    steps:
+      - prompt: "Anh cần đặt 2 vé Tiến Oanh tuyến Sài Gòn đi Đà Lạt ngày 16/05/2026, chuyến khoảng 23:15. Đón ở Bến Xe Miền Đông Mới, trả ở Ngã ba Liên Khương. Vé 1 tên Phạm Khánh Duy, số điện thoại 0908100004. Vé 2 tên Hoàng Minh Hạnh, số điện thoại 0908100005."
+        expectation:
+          contains_any: ["Tiến Oanh", "Đà Lạt", "2 vé", "chuyến", "ghế", "phòng"]
+          regex_any: []
+
+  - case_id: "span-05-dl-sg-n-two-passengers"
+    title: "05. Đà Lạt -> Sài Gòn (N), 2 vé distinct"
+    objective: "Book 2 reverse night-route tickets with intermediate pickup/dropoff."
+    opening_prompt: "Anh cần đặt 2 vé Tiến Oanh tuyến Đà Lạt đi Sài Gòn ngày 17/05/2026, chuyến trưa hoặc chiều gần 13:00 nếu có. Đón ở Vòng xoay Liên Khương, trả ở Bến xe Ngã 4 Ga. Vé 1 tên Võ Thanh Khoa, số điện thoại 0908100006. Vé 2 tên Đặng Thị Lan, số điện thoại 0908100007. Nhờ em đặt một chiều, mỗi vé đúng khách."
+    stop_regex_any: *success_stop
+    contact:
+      name: "Võ Thanh Khoa"
+      phone: "0908100006"
+      email: "qa.tienoanh.span05@example.com"
+    metadata:
+      difficulty: 5
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      route_name: "Đà Lạt -> Sài Gòn"
+      departure_date: "2026-05-17"
+      preferred_time: "13:00"
+      preferred_pickup: "Vòng xoay Liên Khương"
+      preferred_dropoff: "Bến xe Ngã 4 Ga"
+      ticket_count: 2
+      passenger_contacts:
+        - name: "Võ Thanh Khoa"
+          phone: "0908100006"
+        - name: "Đặng Thị Lan"
+          phone: "0908100007"
+    steps:
+      - prompt: "Anh cần đặt 2 vé Tiến Oanh tuyến Đà Lạt đi Sài Gòn ngày 17/05/2026, chuyến trưa hoặc chiều gần 13:00 nếu có. Đón ở Vòng xoay Liên Khương, trả ở Bến xe Ngã 4 Ga. Vé 1 tên Võ Thanh Khoa, số điện thoại 0908100006. Vé 2 tên Đặng Thị Lan, số điện thoại 0908100007."
+        expectation:
+          contains_any: ["Tiến Oanh", "Sài Gòn", "Đà Lạt", "2 vé", "chuyến"]
+          regex_any: []
+
+  - case_id: "span-06-daklak-sg-one-ticket-return"
+    title: "06. Đăk Lăk -> Sài Gòn return span, 1 vé"
+    objective: "Book 1 return-direction ticket from Đăk Lăk/Buôn Ma Thuột toward Sài Gòn with non-endpoint dropoff."
+    opening_prompt: "Anh cần đặt 1 vé Tiến Oanh tuyến Buôn Ma Thuột đi Sài Gòn ngày 18/05/2026, chuyến tối khoảng 21:00. Anh muốn đón ở Văn phòng Đạt Lý hoặc Văn Phòng Buôn Ma Thuột, trả ở Ngã 4 Ga nếu có. Hành khách tên Bùi Nhật Linh, số điện thoại 0908100008. Nhờ em hỗ trợ đặt giúp."
+    stop_regex_any: *success_stop
+    contact:
+      name: "Bùi Nhật Linh"
+      phone: "0908100008"
+      email: "qa.tienoanh.span06@example.com"
+    metadata:
+      difficulty: 6
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      route_name: "Đăk Lăk -> Sài Gòn"
+      departure_date: "2026-05-18"
+      preferred_time: "21:00"
+      preferred_pickup: "Văn phòng Đạt Lý"
+      preferred_dropoff: "Ngã 4 Ga"
+      ticket_count: 1
+      passenger_contacts:
+        - name: "Bùi Nhật Linh"
+          phone: "0908100008"
+    steps:
+      - prompt: "Anh cần đặt 1 vé Tiến Oanh tuyến Buôn Ma Thuột đi Sài Gòn ngày 18/05/2026, chuyến tối khoảng 21:00. Anh muốn đón ở Văn phòng Đạt Lý hoặc Văn Phòng Buôn Ma Thuột, trả ở Ngã 4 Ga nếu có. Hành khách tên Bùi Nhật Linh, số điện thoại 0908100008."
+        expectation:
+          contains_any: ["Tiến Oanh", "Buôn Ma Thuột", "Sài Gòn", "vé", "chuyến"]
+          regex_any: []
+
+  - case_id: "span-07-sg-dl-three-passengers-flexible-seat"
+    title: "07. Sài Gòn -> Đà Lạt, 3 vé flexible seats"
+    objective: "Book 3 passengers with distinct identities; let bot suggest available seats."
+    opening_prompt: "Anh cần đặt 3 vé Tiến Oanh tuyến Sài Gòn đi Đà Lạt ngày 19/05/2026, chuyến 23:30 hoặc chuyến gần đó còn đủ 3 chỗ. Đón ở Văn Phòng Thủ Đức, trả ở Công viên Đức Trọng hoặc Ngã ba Liên Khương. Khách 1 Nguyễn Gia Nam 0908100009, khách 2 Lâm Thu Ngân 0908100010, khách 3 Mai Hoàng Phúc 0908100011. Một chiều, nhờ em chọn ghế còn trống phù hợp."
+    stop_regex_any: *success_stop
+    contact:
+      name: "Nguyễn Gia Nam"
+      phone: "0908100009"
+      email: "qa.tienoanh.span07@example.com"
+    metadata:
+      difficulty: 7
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      route_name: "Sài Gòn -> Đà Lạt"
+      departure_date: "2026-05-19"
+      preferred_time: "23:30"
+      preferred_pickup: "Văn Phòng Thủ Đức"
+      preferred_dropoff: "Ngã ba Liên Khương"
+      ticket_count: 3
+      passenger_contacts:
+        - name: "Nguyễn Gia Nam"
+          phone: "0908100009"
+        - name: "Lâm Thu Ngân"
+          phone: "0908100010"
+        - name: "Mai Hoàng Phúc"
+          phone: "0908100011"
+    steps:
+      - prompt: "Anh cần đặt 3 vé Tiến Oanh tuyến Sài Gòn đi Đà Lạt ngày 19/05/2026, chuyến 23:30 hoặc chuyến gần đó còn đủ 3 chỗ. Đón ở Văn Phòng Thủ Đức, trả ở Công viên Đức Trọng hoặc Ngã ba Liên Khương. Khách 1 Nguyễn Gia Nam 0908100009, khách 2 Lâm Thu Ngân 0908100010, khách 3 Mai Hoàng Phúc 0908100011."
+        expectation:
+          contains_any: ["Tiến Oanh", "Đà Lạt", "3", "chỗ", "ghế", "phòng"]
+          regex_any: []
+
+  - case_id: "span-08-sg-daklak-two-passengers-flexible-time"
+    title: "08. Sài Gòn -> Đăk Lăk flexible time, 2 vé"
+    objective: "Book 2 passengers with flexible time and intermediate span."
+    opening_prompt: "Anh cần đặt 2 vé Tiến Oanh tuyến Sài Gòn đi Đăk Lăk ngày 20/05/2026. Giờ nào tối từ 20:00 đến 22:00 còn chỗ cũng được. Đón ở Văn Phòng Thủ Đức hoặc Ngã Tư Chợ Đình, trả ở Chợ Hoà Phú hoặc Cây Xăng Kiến Tạo Đắk Song. Vé 1 tên Tạ Đức Quân 0908100012, vé 2 tên Dương Hồng Sơn 0908100013. Mỗi vé đúng khách giúp anh."
+    stop_regex_any: *success_stop
+    contact:
+      name: "Tạ Đức Quân"
+      phone: "0908100012"
+      email: "qa.tienoanh.span08@example.com"
+    metadata:
+      difficulty: 8
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      route_name: "Sài Gòn -> Đăk Lăk"
+      departure_date: "2026-05-20"
+      preferred_time_window: "20:00-22:00"
+      preferred_pickup: "Văn Phòng Thủ Đức"
+      preferred_dropoff: "Cây Xăng Kiến Tạo Đắk Song"
+      ticket_count: 2
+      passenger_contacts:
+        - name: "Tạ Đức Quân"
+          phone: "0908100012"
+        - name: "Dương Hồng Sơn"
+          phone: "0908100013"
+    steps:
+      - prompt: "Anh cần đặt 2 vé Tiến Oanh tuyến Sài Gòn đi Đăk Lăk ngày 20/05/2026. Giờ nào tối từ 20:00 đến 22:00 còn chỗ cũng được. Đón ở Văn Phòng Thủ Đức hoặc Ngã Tư Chợ Đình, trả ở Chợ Hoà Phú hoặc Cây Xăng Kiến Tạo Đắk Song. Vé 1 tên Tạ Đức Quân 0908100012, vé 2 tên Dương Hồng Sơn 0908100013."
+        expectation:
+          contains_any: ["Tiến Oanh", "Đăk Lăk", "2 vé", "chuyến", "ghế"]
+          regex_any: []
+
+  - case_id: "span-09-sg-dl-room-shape-three-passengers"
+    title: "09. Sài Gòn -> Đà Lạt room shape 1 đôi + 2 đơn lớn"
+    objective: "Book complex room-shape case with span-route pickup/dropoff and three distinct passengers."
+    opening_prompt: "Anh cần đặt Tiến Oanh tuyến Sài Gòn đi Đà Lạt ngày 21/05/2026 chuyến 23:00 hoặc gần nhất còn đủ đúng combo. Cần 1 phòng đôi và 2 phòng đơn lớn, tổng 3 khách. Đón ở Văn Phòng Thủ Đức, trả ở Ngã ba Liên Khương. Phòng đôi cho Thiện Thần Thánh 0908375751; phòng đơn lớn 1 cho Khánh Sky 0908765432; phòng đơn lớn 2 cho Thiện Thị Khánh 0901234567. Nhờ em giữ đúng từng khách theo từng phòng."
+    stop_regex_any: *success_stop
+    contact:
+      name: "Thiện Thần Thánh"
+      phone: "0908375751"
+      email: "qa.tienoanh.span09@example.com"
+    metadata:
+      difficulty: 9
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      route_name: "Sài Gòn -> Đà Lạt"
+      departure_date: "2026-05-21"
+      preferred_time: "23:00"
+      preferred_pickup: "Văn Phòng Thủ Đức"
+      preferred_dropoff: "Ngã ba Liên Khương"
+      ticket_count: 3
+      room_shape: "1 phòng đôi + 2 phòng đơn lớn"
+      passenger_contacts:
+        - name: "Thiện Thần Thánh"
+          phone: "0908375751"
+        - name: "Khánh Sky"
+          phone: "0908765432"
+        - name: "Thiện Thị Khánh"
+          phone: "0901234567"
+    steps:
+      - prompt: "Anh cần đặt Tiến Oanh tuyến Sài Gòn đi Đà Lạt ngày 21/05/2026 chuyến 23:00 hoặc gần nhất còn đủ đúng combo. Cần 1 phòng đôi và 2 phòng đơn lớn, tổng 3 khách. Đón ở Văn Phòng Thủ Đức, trả ở Ngã ba Liên Khương. Phòng đôi cho Thiện Thần Thánh 0908375751; phòng đơn lớn 1 cho Khánh Sky 0908765432; phòng đơn lớn 2 cho Thiện Thị Khánh 0901234567."
+        expectation:
+          contains_any: ["Tiến Oanh", "phòng đôi", "phòng đơn", "Đà Lạt", "chuyến"]
+          regex_any: []
+
+  - case_id: "span-10-mixed-stage-same-trip-three-passengers"
+    title: "10. Mixed pickup/dropoff stage, 3 khách same trip"
+    objective: "Stress span-route handling with three passengers on the same Tiến Oanh trip and mixed stage preferences."
+    opening_prompt: "Anh cần đặt 3 vé Tiến Oanh tuyến Sài Gòn đi Đà Lạt ngày 22/05/2026, chuyến 23:15 hoặc chuyến gần đó còn 3 chỗ. Cả 3 đi cùng chuyến nhưng nếu hệ thống hỗ trợ thì khách 1 đón Văn Phòng Tân Bình trả Văn Phòng Đà Lạt, khách 2 đón Văn Phòng Thủ Đức trả Ngã ba Liên Khương, khách 3 đón Bến Xe Miền Đông Mới trả Công viên Đức Trọng. Khách 1 Vũ Khánh Trang 0908100014, khách 2 Đinh Tuấn Vũ 0908100015, khách 3 Ngô Hoàng Vy 0908100016. Nếu không hỗ trợ mixed stage trên cùng booking thì chọn span chung Văn Phòng Thủ Đức -> Ngã ba Liên Khương để hoàn tất booking, nhưng vẫn giữ đúng 3 khách khác nhau."
+    stop_regex_any: *success_stop
+    contact:
+      name: "Vũ Khánh Trang"
+      phone: "0908100014"
+      email: "qa.tienoanh.span10@example.com"
+    metadata:
+      difficulty: 10
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      route_span_case: true
+      route_name: "Sài Gòn -> Đà Lạt"
+      departure_date: "2026-05-22"
+      preferred_time: "23:15"
+      mixed_stage_requested: true
+      fallback_common_span: "Văn Phòng Thủ Đức -> Ngã ba Liên Khương"
+      ticket_count: 3
+      passenger_contacts:
+        - name: "Vũ Khánh Trang"
+          phone: "0908100014"
+          preferred_pickup: "Văn Phòng Tân Bình"
+          preferred_dropoff: "Văn Phòng Đà Lạt"
+        - name: "Đinh Tuấn Vũ"
+          phone: "0908100015"
+          preferred_pickup: "Văn Phòng Thủ Đức"
+          preferred_dropoff: "Ngã ba Liên Khương"
+        - name: "Ngô Hoàng Vy"
+          phone: "0908100016"
+          preferred_pickup: "Bến Xe Miền Đông Mới"
+          preferred_dropoff: "Công viên Đức Trọng"
+    steps:
+      - prompt: "Anh cần đặt 3 vé Tiến Oanh tuyến Sài Gòn đi Đà Lạt ngày 22/05/2026, chuyến 23:15 hoặc chuyến gần đó còn 3 chỗ. Cả 3 đi cùng chuyến nhưng nếu hệ thống hỗ trợ thì khách 1 đón Văn Phòng Tân Bình trả Văn Phòng Đà Lạt, khách 2 đón Văn Phòng Thủ Đức trả Ngã ba Liên Khương, khách 3 đón Bến Xe Miền Đông Mới trả Công viên Đức Trọng. Khách 1 Vũ Khánh Trang 0908100014, khách 2 Đinh Tuấn Vũ 0908100015, khách 3 Ngô Hoàng Vy 0908100016."
+        expectation:
+          contains_any: ["Tiến Oanh", "Đà Lạt", "3 vé", "chuyến", "đón", "trả"]
+          regex_any: []

@@ -1,0 +1,91 @@
+suite_name: "ai_726_tien_oanh_flexible_seat_type"
+generated_at: "2026-05-06T14:40:00+07:00"
+goal_summary: "AI-726 realistic flexible regression: preserve selected room/seat type while allowing planner to choose an alternate time or available suggested seats."
+defaults:
+  webhook_url: "http://localhost:3000/webhook/chatwoot"
+  chat_ui_mode: "realistic"
+  ui_inbox_id: null
+  inbox_id: null
+  captain_assistant_id: null
+  labels:
+    - "ai"
+    - "bus"
+    - "booking"
+  assignee_name: "Bot"
+  reply_timeout_seconds: 300
+  reply_settle_seconds: 3
+  poll_interval_seconds: 2
+cases:
+  - case_id: "ai-726-flexible-contact-mapping"
+    title: "Flexible room selection still maps double-room contact correctly"
+    objective: "Verify the bot preserves one double room and two single large rooms after the planner chooses available suggested seats."
+    opening_prompt: "Mình cần đi Sài Gòn lên Đà Lạt ngày mai buổi tối, 3 người nha. Mình muốn 1 phòng đôi và 2 phòng đơn lớn."
+    metadata:
+      jira_key: "AI-726"
+      operator_name: "Tiến Oanh"
+      route_name: "Sài Gòn -> Đà Lạt"
+      shape: "1 phòng đôi + 2 phòng đơn lớn"
+      flexible_time: true
+      flexible_seats: true
+    conversation_id: null
+    contact_id: null
+    inbox_id: null
+    captain_assistant_id: null
+    labels:
+      - "ai"
+      - "bus"
+      - "booking"
+    assignee_name: "Bot"
+    contact:
+      name: "AI 726 Flexible Mapping"
+      phone: "0908375751"
+      email: null
+    stop_regex_any:
+      - "(?i)(mã vé|mã đặt chỗ|link thanh toán|đã tạo|đã giữ chỗ)"
+    steps:
+      - prompt: "Mình cần đi Sài Gòn lên Đà Lạt ngày mai buổi tối, 3 người nha. Mình muốn 1 phòng đôi và 2 phòng đơn lớn."
+        timeout_seconds: null
+        expectation:
+          contains_any:
+            - "Đà Lạt"
+            - "Sài Gòn"
+            - "phòng"
+            - "ghế"
+          regex_any: []
+
+  - case_id: "ai-726-flexible-no-generic-summary"
+    title: "Flexible summary must not collapse selected room types"
+    objective: "Validate the bot renders explicit type next to each selected code, even when planner changes time or seat codes."
+    opening_prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày mai buổi tối, 3 khách. Ưu tiên chuyến nào còn nhiều chỗ, lấy 1 phòng đôi và 2 phòng đơn lớn."
+    metadata:
+      jira_key: "AI-726"
+      operator_name: "Tiến Oanh"
+      route_name: "Sài Gòn -> Đà Lạt"
+      shape: "1 phòng đôi + 2 phòng đơn lớn"
+      flexible_time: true
+      flexible_seats: true
+    conversation_id: null
+    contact_id: null
+    inbox_id: null
+    captain_assistant_id: null
+    labels:
+      - "ai"
+      - "bus"
+      - "booking"
+    assignee_name: "Bot"
+    contact:
+      name: "AI 726 Flexible Summary"
+      phone: "0908375751"
+      email: null
+    stop_regex_any:
+      - "(?i)(mã vé|mã đặt chỗ|link thanh toán|đã tạo|đã giữ chỗ)"
+    steps:
+      - prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày mai buổi tối, 3 khách. Ưu tiên chuyến nào còn nhiều chỗ, lấy 1 phòng đôi và 2 phòng đơn lớn."
+        timeout_seconds: null
+        expectation:
+          contains_any:
+            - "Đà Lạt"
+            - "Sài Gòn"
+            - "phòng"
+            - "ghế"
+          regex_any: []

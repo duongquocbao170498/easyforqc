@@ -1,0 +1,234 @@
+suite_name: "ai_726_tien_oanh_seat_type_booking"
+generated_at: "2026-05-06T13:55:00+07:00"
+goal_summary: "AI-726 regression: Tiến Oanh booking payload must preserve exact selected room/seat type for overlapping seat codes before bms_create_booking_tool."
+defaults:
+  webhook_url: "http://localhost:3000/webhook/chatwoot"
+  chat_ui_mode: "realistic"
+  ui_inbox_id: null
+  inbox_id: null
+  captain_assistant_id: null
+  labels:
+    - "ai"
+    - "bus"
+    - "booking"
+  assignee_name: "Bot"
+  reply_timeout_seconds: 300
+  reply_settle_seconds: 3
+  poll_interval_seconds: 2
+cases:
+  - case_id: "ai-726-main-replay-b2-double-a1-b3-single"
+    title: "AI-726 main replay: B2 phòng đôi plus A1/B3 ghế đơn"
+    objective: "Replay Jira AI-726 and verify the pre-booking summary keeps B2 as phòng đôi and A1/B3 as single rooms/seats with distinct passenger mapping."
+    opening_prompt: "Bạn ơi cho Mình đặt 3 vé đi Sài gòn đà lạt vào chiều tối ngày mai nha"
+    metadata:
+      jira_key: "AI-726"
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      origin: "Sài Gòn"
+      destination: "Đà Lạt"
+      route_name: "Sài Gòn -> Đà Lạt"
+      preferred_times:
+        - "23:30"
+      route: "Sài Gòn -> Đà Lạt"
+      expected_guard: "Do not send bms_create_booking_tool with only seat codes and no exact room/seat type."
+    conversation_id: null
+    contact_id: null
+    inbox_id: null
+    captain_assistant_id: null
+    labels:
+      - "ai"
+      - "bus"
+      - "booking"
+    assignee_name: "Bot"
+    contact:
+      name: "AI 726 Replay"
+      phone: "0908375751"
+      email: null
+    stop_regex_any:
+      - "(?i)(mã vé|mã đặt chỗ|link thanh toán|đã tạo|đã giữ chỗ|nhân viên)"
+    steps:
+      - prompt: "Bạn ơi cho Mình đặt 3 vé đi Sài gòn đà lạt vào chiều tối ngày mai nha"
+        timeout_seconds: null
+        expectation:
+          contains_any:
+            - "Đà Lạt"
+            - "Sài Gòn"
+            - "ngày mai"
+            - "khung giờ"
+          regex_any: []
+      - prompt: "23h30 nha"
+        timeout_seconds: null
+        expectation:
+          contains_any:
+            - "23"
+            - "23:30"
+            - "23h30"
+            - "phòng"
+            - "ghế"
+          regex_any: []
+      - prompt: "phòng đôi b2, 2 ghế đơn A1 và B3"
+        timeout_seconds: null
+        expectation:
+          contains_any:
+            - "B2"
+            - "A1"
+            - "B3"
+            - "Phòng Đôi"
+            - "Phòng Đơn"
+          regex_any:
+            - "(?is)(?=.*B2)(?=.*(phòng\\s*đôi|phong\\s*doi))"
+      - prompt: "Văn Phòng Tân Bình đến Công viên Đức Trọng nha"
+        timeout_seconds: null
+        expectation:
+          contains_any:
+            - "Văn Phòng Tân Bình"
+            - "Công viên Đức Trọng"
+            - "B2"
+            - "A1"
+            - "B3"
+          regex_any: []
+      - prompt: "Ghế đôi dùng thông tin này Thiện Thần Thánh - 0908375751. Ghế đơn lớn Khánh Sky - 0908765432, Thiện Thị Khánh - 0901234567"
+        timeout_seconds: null
+        expectation:
+          contains_any:
+            - "Thiện Thần Thánh"
+            - "Khánh Sky"
+            - "Thiện Thị Khánh"
+            - "B2"
+            - "A1"
+            - "B3"
+          regex_any:
+            - "(?is)(?=.*B2)(?=.*(phòng\\s*đôi|phong\\s*doi))(?=.*A1)(?=.*B3)(?=.*(phòng\\s*đơn|phong\\s*don|ghế\\s*đơn|ghe\\s*don))"
+      - prompt: "oke xác nhận nha"
+        timeout_seconds: null
+        expectation:
+          contains_any:
+            - "đặt vé"
+            - "giữ chỗ"
+            - "mã vé"
+            - "link thanh toán"
+            - "nhân viên"
+            - "B2"
+          regex_any: []
+
+  - case_id: "ai-726-b2-double-contact-mapping"
+    title: "B2 phòng đôi must stay mapped to the double-room contact"
+    objective: "Verify B2 remains a double room when the user gives one contact for the double room and two contacts for single rooms."
+    opening_prompt: "Mình cần đi Sài Gòn lên Đà Lạt ngày mai chuyến 23h30, 3 người nha"
+    metadata:
+      jira_key: "AI-726"
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      origin: "Sài Gòn"
+      destination: "Đà Lạt"
+      route_name: "Sài Gòn -> Đà Lạt"
+      preferred_times:
+        - "23:30"
+      focus: "B2 selected as phòng đôi must not be remapped to a single-room option."
+    conversation_id: null
+    contact_id: null
+    inbox_id: null
+    captain_assistant_id: null
+    labels:
+      - "ai"
+      - "bus"
+      - "booking"
+    assignee_name: "Bot"
+    contact:
+      name: "AI 726 B2 Double"
+      phone: "0908375751"
+      email: null
+    stop_regex_any:
+      - "(?i)(mã vé|mã đặt chỗ|link thanh toán|đã tạo|đã giữ chỗ|nhân viên)"
+    steps:
+      - prompt: "Mình cần đi Sài Gòn lên Đà Lạt ngày mai chuyến 23h30, 3 người nha"
+        timeout_seconds: null
+        expectation:
+          contains_any:
+            - "23"
+            - "Đà Lạt"
+            - "Sài Gòn"
+            - "phòng"
+          regex_any: []
+      - prompt: "Mình lấy B2 phòng đôi, thêm A1 và B3 là ghế đơn lớn nha"
+        timeout_seconds: null
+        expectation:
+          contains_any:
+            - "B2"
+            - "A1"
+            - "B3"
+            - "Phòng Đôi"
+          regex_any:
+            - "(?is)(?=.*B2)(?=.*(phòng\\s*đôi|phong\\s*doi))"
+      - prompt: "Điểm đón Văn Phòng Tân Bình, trả ở Công viên Đức Trọng"
+        timeout_seconds: null
+        expectation:
+          contains_any:
+            - "Văn Phòng Tân Bình"
+            - "Công viên Đức Trọng"
+            - "B2"
+          regex_any: []
+      - prompt: "B2 phòng đôi dùng thông tin Thiện Thần Thánh - 0908375751. A1 là Khánh Sky - 0908765432. B3 là Thiện Thị Khánh - 0901234567"
+        timeout_seconds: null
+        expectation:
+          contains_any:
+            - "Thiện Thần Thánh"
+            - "Khánh Sky"
+            - "Thiện Thị Khánh"
+            - "B2"
+          regex_any:
+            - "(?is)(?=.*B2)(?=.*(phòng\\s*đôi|phong\\s*doi))(?=.*Thiện Thần Thánh)(?=.*A1)(?=.*Khánh Sky)(?=.*B3)(?=.*Thiện Thị Khánh)"
+
+  - case_id: "ai-726-no-generic-seat-summary"
+    title: "Summary must not be generic when seat codes overlap price options"
+    objective: "Force an exact-seat summary and validate the bot renders room/seat type next to each code instead of a generic seat list."
+    opening_prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày mai 23h30, lấy phòng đôi B2 và 2 phòng đơn A1 B3"
+    metadata:
+      jira_key: "AI-726"
+      operator_name: "Tiến Oanh"
+      company_id: "2"
+      origin: "Sài Gòn"
+      destination: "Đà Lạt"
+      route_name: "Sài Gòn -> Đà Lạt"
+      preferred_times:
+        - "23:30"
+      focus: "Positive assertion for non-generic summary because runner has no negative matcher."
+    conversation_id: null
+    contact_id: null
+    inbox_id: null
+    captain_assistant_id: null
+    labels:
+      - "ai"
+      - "bus"
+      - "booking"
+    assignee_name: "Bot"
+    contact:
+      name: "AI 726 Summary"
+      phone: "0908375751"
+      email: null
+    stop_regex_any:
+      - "(?i)(mã vé|mã đặt chỗ|link thanh toán|đã tạo|đã giữ chỗ|nhân viên)"
+    steps:
+      - prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày mai 23h30, lấy phòng đôi B2 và 2 phòng đơn A1 B3"
+        timeout_seconds: null
+        expectation:
+          contains_any:
+            - "B2"
+            - "A1"
+            - "B3"
+            - "Phòng Đôi"
+            - "Phòng Đơn"
+          regex_any:
+            - "(?is)(?=.*B2)(?=.*(phòng\\s*đôi|phong\\s*doi))(?=.*A1)(?=.*B3)"
+      - prompt: "Đón ở Văn Phòng Tân Bình, trả Công viên Đức Trọng. B2 Thiện Thần Thánh 0908375751, A1 Khánh Sky 0908765432, B3 Thiện Thị Khánh 0901234567"
+        timeout_seconds: null
+        expectation:
+          contains_any:
+            - "B2"
+            - "Phòng Đôi"
+            - "A1"
+            - "B3"
+            - "tổng"
+            - "xác nhận"
+          regex_any:
+            - "(?is)(?=.*B2)(?=.*(phòng\\s*đôi|phong\\s*doi))(?=.*A1)(?=.*B3)(?=.*(Phòng\\s*Đơn|phong\\s*don|ghế\\s*đơn|ghe\\s*don))(?=.*(tổng|tiền|giá))"

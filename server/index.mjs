@@ -50,11 +50,13 @@ if (DATABASE_URL) {
   const { Pool } = pg;
   db = new Pool({ connectionString: DATABASE_URL });
 }
+let easyForQcUatStateSeedCache;
 
 const HOME_DIR = process.env.HOME || "";
 const LOCAL_OMNIAGENT_ROOT = path.join(HOME_DIR, "Vexere", "knowledge_base", "omniagent");
 const LOCAL_QA_REFERENCE_DIR = path.join(HOME_DIR, "Vexere", "qa");
 const VENDOR_DIR = path.join(ROOT_DIR, "vendor");
+const DOCKER_OMNIAGENT_ROOT = "/omniagent";
 const VENDOR_JIRA_WRAPPER = path.join(
   VENDOR_DIR,
   "portable-skills",
@@ -92,6 +94,44 @@ const XMIND_WRAPPER =
   process.env.XMIND_WRAPPER_PATH ||
   (fsSync.existsSync(VENDOR_XMIND_WRAPPER) ? VENDOR_XMIND_WRAPPER : HOME_XMIND_WRAPPER);
 const VENDOR_SOURCE_ROOT = path.join(VENDOR_DIR, "qa-source");
+const VENDOR_CHATWOOT_UAT_SKILL_ROOT = path.join(VENDOR_SOURCE_ROOT, "chatwoot-test-uat");
+const LOCAL_CHATWOOT_UAT_SKILL_ROOT = path.join(LOCAL_OMNIAGENT_ROOT, ".agent", "skills", "chatwoot-test-uat");
+const DOCKER_CHATWOOT_UAT_SKILL_ROOT = path.join(DOCKER_OMNIAGENT_ROOT, ".agent", "skills", "chatwoot-test-uat");
+const DEFAULT_CHATWOOT_UAT_WEBHOOK_URL = process.env.CHATWOOT_UAT_DEFAULT_WEBHOOK_URL ||
+  (fsSync.existsSync("/.dockerenv") ? "http://host.docker.internal:3000/webhook/chatwoot" : "http://localhost:3000/webhook/chatwoot");
+const DEFAULT_CHATWOOT_UAT_HEALTHCHECK_URL = process.env.CHATWOOT_UAT_DEFAULT_HEALTHCHECK_URL ||
+  (fsSync.existsSync("/.dockerenv") ? "http://host.docker.internal:3000/health" : "http://localhost:3000/health");
+const DEFAULT_CHATWOOT_UAT_API_BASE = asText(process.env.CHATWOOT_UAT_API_BASE);
+const DEFAULT_CHATWOOT_UAT_ACCOUNT_ID = asText(process.env.CHATWOOT_UAT_ACCOUNT_ID);
+const DEFAULT_CHATWOOT_UAT_INBOX_ID = asText(process.env.CHATWOOT_UAT_INBOX_ID || "3062");
+const DEFAULT_CHATWOOT_UAT_UI_INBOX_ID = asText(process.env.CHATWOOT_UAT_UI_INBOX_ID || DEFAULT_CHATWOOT_UAT_INBOX_ID);
+const DEFAULT_CHATWOOT_UAT_CAPTAIN_ASSISTANT_ID = asText(process.env.CHATWOOT_UAT_CAPTAIN_ASSISTANT_ID || "80");
+const CHATWOOT_UAT_API_KEY = asText(process.env.CHATWOOT_UAT_API_KEY);
+const CHATWOOT_UAT_USER_API_KEY = asText(process.env.CHATWOOT_UAT_USER_API_KEY);
+const CHATWOOT_UAT_JOBS = new Map();
+const CHATWOOT_UAT_JOB_PROCESSES = new Map();
+const QA_WORKSPACE_MEMORY = new Map();
+const AI_548_CHATWOOT_SUITE_RELATIVE = path.join(
+  "assets",
+  "suites",
+  "generated",
+  "2026-05-07-ai-548-chatwoot-uat",
+  "ai-548-create-booking-pending-chatwoot-uat.yml",
+);
+const AI_547_REFERENCE_FILES = [
+  path.join(ROOT_DIR, "vendor", "qa-reference", "testcase-style", "ai_547_test_cases.json"),
+  path.join(ROOT_DIR, "vendor", "qa-reference", "testcase-style", "ai_547_stop_catalog_additional_test_cases.json"),
+];
+const AI_547_CHATWOOT_SUITE_RELATIVE = path.join(
+  "assets",
+  "suites",
+  "generated",
+  "easyforqc",
+  "imported-ai-547",
+  "ai-547-bus-trip-tools-chatwoot-uat.yml",
+);
+const EASYFORQC_CHATWOOT_GENERATED_RELATIVE = path.join("assets", "suites", "generated", "easyforqc");
+const EASYFORQC_UAT_STATE_SEED_FILE = path.join(ROOT_DIR, "server", "seeds", "easyforqc-uat-state.json");
 const DEFAULT_SOURCE_ROOT = fsSync.existsSync(VENDOR_SOURCE_ROOT)
   ? VENDOR_SOURCE_ROOT
   : "/Users/gumball.bi/Vexere/knowledge_base/omniagent/.agent/skills";
@@ -142,6 +182,25 @@ const DEFAULTS = {
   jsonOutputDir: path.join(ROOT_DIR, "qa", "jira"),
   outputDir: path.join(ROOT_DIR, "qa", "xmind-test-design"),
   testCaseNumberTemplate: "TC_{0000}",
+  chatwootMode: "adaptive",
+  chatwootChatUiMode: "realistic",
+  chatwootPlannerBackend: "openai-compatible",
+  chatwootWebhookUrl: DEFAULT_CHATWOOT_UAT_WEBHOOK_URL,
+  chatwootHealthcheckUrl: DEFAULT_CHATWOOT_UAT_HEALTHCHECK_URL,
+  chatwootSkipHealthcheck: true,
+  chatwootSkipLocalWebhookPost: true,
+  chatwootApiBase: DEFAULT_CHATWOOT_UAT_API_BASE,
+  chatwootInboxId: DEFAULT_CHATWOOT_UAT_INBOX_ID,
+  chatwootUiInboxId: DEFAULT_CHATWOOT_UAT_UI_INBOX_ID,
+  chatwootCaptainAssistantId: DEFAULT_CHATWOOT_UAT_CAPTAIN_ASSISTANT_ID,
+  chatwootAccountId: DEFAULT_CHATWOOT_UAT_ACCOUNT_ID,
+  chatwootMaxUserTurns: "10",
+  chatwootPlannerModel: "gpt-5.4-mini",
+  chatwootPlannerTimeoutSeconds: "60",
+  chatwootLabels: "ai",
+  chatwootAssigneeName: "Bot",
+  chatwootPinnedConversationId: "",
+  automationProfiles: [],
   repoContext: {
     enabled: process.env.QA_REPO_CONTEXT_ENABLED === "true",
     productRepoRoot: process.env.QA_PRODUCT_REPO_ROOT || (fsSync.existsSync(LOCAL_OMNIAGENT_ROOT) ? LOCAL_OMNIAGENT_ROOT : ""),
@@ -431,6 +490,7 @@ async function initializeDatabase() {
       ai_settings_history JSONB NOT NULL DEFAULT '[]'::jsonb,
       repo_context_encrypted TEXT NOT NULL DEFAULT '',
       knowledge_articles JSONB NOT NULL DEFAULT '[]'::jsonb,
+      qa_workspace_items JSONB NOT NULL DEFAULT '[]'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
@@ -441,6 +501,32 @@ async function initializeDatabase() {
   await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_settings_history JSONB NOT NULL DEFAULT '[]'::jsonb");
   await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS repo_context_encrypted TEXT NOT NULL DEFAULT ''");
   await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS knowledge_articles JSONB NOT NULL DEFAULT '[]'::jsonb");
+  await db.query("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS qa_workspace_items JSONB NOT NULL DEFAULT '[]'::jsonb");
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS chatwoot_uat_runs (
+      id TEXT PRIMARY KEY,
+      user_email TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'queued',
+      suite_name TEXT NOT NULL DEFAULT '',
+      suite_file TEXT NOT NULL DEFAULT '',
+      run_dir TEXT NOT NULL DEFAULT '',
+      request_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+      result_payload JSONB,
+      error TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      started_at TIMESTAMPTZ,
+      finished_at TIMESTAMPTZ,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await db.query("ALTER TABLE chatwoot_uat_runs ADD COLUMN IF NOT EXISTS suite_name TEXT NOT NULL DEFAULT ''");
+  await db.query("ALTER TABLE chatwoot_uat_runs ADD COLUMN IF NOT EXISTS suite_file TEXT NOT NULL DEFAULT ''");
+  await db.query("ALTER TABLE chatwoot_uat_runs ADD COLUMN IF NOT EXISTS run_dir TEXT NOT NULL DEFAULT ''");
+  await db.query("ALTER TABLE chatwoot_uat_runs ADD COLUMN IF NOT EXISTS request_payload JSONB NOT NULL DEFAULT '{}'::jsonb");
+  await db.query("ALTER TABLE chatwoot_uat_runs ADD COLUMN IF NOT EXISTS result_payload JSONB");
+  await db.query("ALTER TABLE chatwoot_uat_runs ADD COLUMN IF NOT EXISTS error TEXT NOT NULL DEFAULT ''");
+  await db.query("UPDATE chatwoot_uat_runs SET status = 'interrupted', finished_at = NOW(), updated_at = NOW() WHERE status IN ('queued', 'running')");
 
   const adminEmail = normalizeEmail(APP_ADMIN_EMAIL);
   if (!adminEmail || !APP_ADMIN_PASSWORD) {
@@ -906,6 +992,7 @@ function aiSettingsRevisionChanges(previousSettings = {}, nextSettings = {}, sec
           ["model", "Model", false],
           ["apiKey", "API key", true],
           ["promptGuidelines", "Prompt tạo test case/test design", false],
+          ["stopConditionGuidelines", "Prompt sinh điều kiện dừng automation", false],
           ["writingStyle", "Phong cách viết", false],
           ["testCaseGuidelines", "Quy tắc test case", false],
           ["testDesignGuidelines", "Quy tắc test design", false],
@@ -965,7 +1052,7 @@ function buildAiSettingsHistoryEntry(previousSettings = {}, nextSettings = {}, m
 
 function publicUserSettings(settings = {}) {
   return {
-    project: settings.project || null,
+    project: settings.project ? normalizeProject(settings.project) : null,
     credentials: settings.credentials ? publicCredentials(settings.credentials) : null,
     confluenceCredentials: settings.confluenceCredentials ? publicConfluenceCredentials(settings.confluenceCredentials) : null,
     authEntries: publicAuthEntries(settings.authEntries),
@@ -973,16 +1060,56 @@ function publicUserSettings(settings = {}) {
     aiSettingsHistory: normalizeAiSettingsHistory(settings.aiSettingsHistory),
     repoContext: settings.repoContext || null,
     knowledgeArticles: normalizeKnowledgeArticles(settings.knowledgeArticles),
+    qaWorkspaceItems: normalizeQaWorkspaceItems(settings.qaWorkspaceItems),
   };
+}
+
+function readEasyForQcUatStateSeed() {
+  if (easyForQcUatStateSeedCache !== undefined) return easyForQcUatStateSeedCache;
+  try {
+    const payload = JSON.parse(fsSync.readFileSync(EASYFORQC_UAT_STATE_SEED_FILE, "utf8"));
+    easyForQcUatStateSeedCache = payload && typeof payload === "object" ? payload : null;
+  } catch {
+    easyForQcUatStateSeedCache = null;
+  }
+  return easyForQcUatStateSeedCache;
+}
+
+function seededPromptDefaults() {
+  const seed = readEasyForQcUatStateSeed();
+  const defaults = seed?.promptDefaults && typeof seed.promptDefaults === "object" ? seed.promptDefaults : {};
+  return {
+    promptGuidelines: asText(defaults.promptGuidelines),
+    stopConditionGuidelines: asText(defaults.stopConditionGuidelines),
+    writingStyle: asText(defaults.writingStyle),
+    testCaseGuidelines: asText(defaults.testCaseGuidelines),
+    testDesignGuidelines: asText(defaults.testDesignGuidelines),
+    improvementNotes: asText(defaults.improvementNotes),
+  };
+}
+
+function mergeSeededAiPromptDefaults(aiSettings = {}) {
+  const normalized = normalizeAiSettings(aiSettings);
+  const defaults = seededPromptDefaults();
+  const fields = ["promptGuidelines", "stopConditionGuidelines", "writingStyle", "testCaseGuidelines", "testDesignGuidelines", "improvementNotes"];
+  const hasSeed = fields.some((field) => asText(defaults[field]).trim());
+  if (!hasSeed) return normalized;
+  const next = { ...normalized };
+  for (const field of fields) {
+    if (!asText(next[field]).trim() && asText(defaults[field]).trim()) {
+      next[field] = defaults[field];
+    }
+  }
+  return next;
 }
 
 async function readUserSettings(email) {
   if (!db || !email) {
-    return { project: null, credentials: {}, confluenceCredentials: {}, authEntries: [], aiSettings: {}, aiSettingsHistory: [], repoContext: null, knowledgeArticles: [] };
+    return { project: null, credentials: {}, confluenceCredentials: {}, authEntries: [], aiSettings: mergeSeededAiPromptDefaults({}), aiSettingsHistory: [], repoContext: null, knowledgeArticles: [], qaWorkspaceItems: QA_WORKSPACE_MEMORY.get(normalizeEmail(email)) || [] };
   }
   const result = await db.query(
     `
-      SELECT project_config, credentials_encrypted, confluence_credentials_encrypted, auth_entries_encrypted, ai_settings_encrypted, ai_settings_history, repo_context_encrypted, knowledge_articles
+      SELECT project_config, credentials_encrypted, confluence_credentials_encrypted, auth_entries_encrypted, ai_settings_encrypted, ai_settings_history, repo_context_encrypted, knowledge_articles, qa_workspace_items
       FROM user_settings
       WHERE user_email = $1
     `,
@@ -994,10 +1121,11 @@ async function readUserSettings(email) {
     credentials: decryptSettingsJson(row?.credentials_encrypted),
     confluenceCredentials: decryptSettingsJson(row?.confluence_credentials_encrypted),
     authEntries: normalizeAuthEntries(decryptSettingsJson(row?.auth_entries_encrypted)),
-    aiSettings: decryptSettingsJson(row?.ai_settings_encrypted),
+    aiSettings: mergeSeededAiPromptDefaults(decryptSettingsJson(row?.ai_settings_encrypted)),
     aiSettingsHistory: normalizeAiSettingsHistory(row?.ai_settings_history),
     repoContext: decryptSettingsJson(row?.repo_context_encrypted),
     knowledgeArticles: normalizeKnowledgeArticles(row?.knowledge_articles),
+    qaWorkspaceItems: normalizeQaWorkspaceItems(row?.qa_workspace_items),
   };
 }
 
@@ -1181,10 +1309,34 @@ app.get("/api/download-file", async (req, res) => {
   }
 });
 
+app.get("/api/view-file", async (req, res) => {
+  try {
+    const filePath = path.resolve(asText(req.query.path));
+    if (!filePath || !isAllowedDownloadPath(filePath)) {
+      res.status(403).json({ error: "File view chỉ cho phép trong thư mục output QA của app." });
+      return;
+    }
+    await fs.access(filePath);
+    const extension = path.extname(filePath).toLowerCase();
+    const contentTypes = {
+      ".html": "text/html; charset=utf-8",
+      ".json": "application/json; charset=utf-8",
+      ".yml": "text/yaml; charset=utf-8",
+      ".yaml": "text/yaml; charset=utf-8",
+      ".txt": "text/plain; charset=utf-8",
+      ".log": "text/plain; charset=utf-8",
+    };
+    res.type(contentTypes[extension] || "application/octet-stream");
+    res.sendFile(filePath);
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
 app.get("/api/user-settings", async (req, res) => {
   try {
     if (!db) {
-      res.json({ project: null, credentials: null, confluenceCredentials: null, authEntries: [], aiSettings: null, aiSettingsHistory: [], repoContext: null });
+      res.json({ project: null, credentials: null, confluenceCredentials: null, authEntries: [], aiSettings: null, aiSettingsHistory: [], repoContext: null, knowledgeArticles: [], qaWorkspaceItems: normalizeQaWorkspaceItems(QA_WORKSPACE_MEMORY.get(normalizeEmail(req.session?.email)) || []) });
       return;
     }
     res.json(publicUserSettings(await requestUserSettings(req)));
@@ -2982,7 +3134,68 @@ async function fetchConfluenceDocuments(linksText, credentials = {}) {
   return { documents, combinedText };
 }
 
+function normalizeAutomationBoolean(rawValue, fallbackValue, defaultValue) {
+  if (rawValue === false || asText(rawValue).toLowerCase() === "false") return false;
+  if (rawValue === true || asText(rawValue).toLowerCase() === "true") return true;
+  if (fallbackValue === false || asText(fallbackValue).toLowerCase() === "false") return false;
+  if (fallbackValue === true || asText(fallbackValue).toLowerCase() === "true") return true;
+  return defaultValue;
+}
+
+function normalizeAutomationProfileConfig(raw = {}, fallback = {}) {
+  return {
+    chatwootMode: raw.chatwootMode === "suite" || fallback.chatwootMode === "suite" ? "suite" : DEFAULTS.chatwootMode,
+    chatwootChatUiMode: raw.chatwootChatUiMode === "webhook-only" || fallback.chatwootChatUiMode === "webhook-only" ? "webhook-only" : DEFAULTS.chatwootChatUiMode,
+    chatwootPlannerBackend: ["openai-compatible", "heuristic", "codex-cli"].includes(asText(raw.chatwootPlannerBackend))
+      ? asText(raw.chatwootPlannerBackend)
+      : ["openai-compatible", "heuristic", "codex-cli"].includes(asText(fallback.chatwootPlannerBackend))
+        ? asText(fallback.chatwootPlannerBackend)
+        : DEFAULTS.chatwootPlannerBackend,
+    chatwootWebhookUrl: asText(raw.chatwootWebhookUrl) || asText(fallback.chatwootWebhookUrl) || DEFAULTS.chatwootWebhookUrl,
+    chatwootHealthcheckUrl: asText(raw.chatwootHealthcheckUrl) || asText(fallback.chatwootHealthcheckUrl) || DEFAULTS.chatwootHealthcheckUrl,
+    chatwootSkipHealthcheck: normalizeAutomationBoolean(raw.chatwootSkipHealthcheck, fallback.chatwootSkipHealthcheck, DEFAULTS.chatwootSkipHealthcheck),
+    chatwootSkipLocalWebhookPost: normalizeAutomationBoolean(raw.chatwootSkipLocalWebhookPost, fallback.chatwootSkipLocalWebhookPost, DEFAULTS.chatwootSkipLocalWebhookPost),
+    chatwootApiBase: asText(raw.chatwootApiBase) || asText(fallback.chatwootApiBase) || DEFAULTS.chatwootApiBase,
+    chatwootInboxId: asText(raw.chatwootInboxId) || asText(fallback.chatwootInboxId) || DEFAULTS.chatwootInboxId,
+    chatwootUiInboxId: asText(raw.chatwootUiInboxId) || asText(fallback.chatwootUiInboxId) || DEFAULTS.chatwootUiInboxId,
+    chatwootCaptainAssistantId: asText(raw.chatwootCaptainAssistantId) || asText(fallback.chatwootCaptainAssistantId) || DEFAULTS.chatwootCaptainAssistantId,
+    chatwootAccountId: asText(raw.chatwootAccountId) || asText(fallback.chatwootAccountId) || DEFAULTS.chatwootAccountId,
+    chatwootMaxUserTurns: asText(raw.chatwootMaxUserTurns) || asText(fallback.chatwootMaxUserTurns) || DEFAULTS.chatwootMaxUserTurns,
+    chatwootPlannerModel: asText(raw.chatwootPlannerModel) || asText(fallback.chatwootPlannerModel) || DEFAULTS.chatwootPlannerModel,
+    chatwootPlannerTimeoutSeconds: asText(raw.chatwootPlannerTimeoutSeconds) || asText(fallback.chatwootPlannerTimeoutSeconds) || DEFAULTS.chatwootPlannerTimeoutSeconds,
+    chatwootLabels: asText(raw.chatwootLabels) || asText(fallback.chatwootLabels) || DEFAULTS.chatwootLabels,
+    chatwootAssigneeName: asText(raw.chatwootAssigneeName) || asText(fallback.chatwootAssigneeName) || DEFAULTS.chatwootAssigneeName,
+    chatwootPinnedConversationId: asText(raw.chatwootPinnedConversationId) || asText(fallback.chatwootPinnedConversationId) || DEFAULTS.chatwootPinnedConversationId,
+  };
+}
+
+function normalizeAutomationProfiles(rawProfiles, fallbackProfiles = []) {
+  const source = Array.isArray(rawProfiles) ? rawProfiles : Array.isArray(fallbackProfiles) ? fallbackProfiles : [];
+  const seen = new Set();
+  return source
+    .map((profile, index) => {
+      const rawName = asText(profile?.name) || `Automation ${index + 1}`;
+      const normalizedName = rawName.slice(0, 120);
+      const dedupeKey = normalizedName.toLowerCase();
+      if (seen.has(dedupeKey)) return null;
+      seen.add(dedupeKey);
+      const targetType = ["chatwoot", "web", "api", "other"].includes(asText(profile?.targetType)) ? asText(profile.targetType) : "chatwoot";
+      const now = new Date().toISOString();
+      return {
+        id: asText(profile?.id) || `automation-${index + 1}`,
+        name: normalizedName,
+        targetType,
+        createdAt: asText(profile?.createdAt) || asText(profile?.updatedAt) || now,
+        updatedAt: asText(profile?.updatedAt) || now,
+        config: normalizeAutomationProfileConfig(profile?.config || profile || {}),
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 20);
+}
+
 function normalizeProject(raw = {}, fallback = {}) {
+  const automationConfig = normalizeAutomationProfileConfig(raw, fallback);
   return {
     sourceRoot: asText(raw.sourceRoot) || asText(fallback.sourceRoot) || DEFAULTS.sourceRoot,
     jiraBaseUrl: asText(raw.jiraBaseUrl) || asText(fallback.jiraBaseUrl) || DEFAULTS.jiraBaseUrl,
@@ -2997,6 +3210,8 @@ function normalizeProject(raw = {}, fallback = {}) {
     testdesignLabels: asText(raw.testdesignLabels) || DEFAULTS.labelPolicy.testdesignLabels,
     testcaseStatusLabels: asText(raw.testcaseStatusLabels) || DEFAULTS.labelPolicy.testcaseStatusLabels,
     testdesignStatusLabels: asText(raw.testdesignStatusLabels) || DEFAULTS.labelPolicy.testdesignStatusLabels,
+    ...automationConfig,
+    automationProfiles: normalizeAutomationProfiles(raw.automationProfiles, fallback.automationProfiles),
   };
 }
 
@@ -3013,9 +3228,17 @@ function fileDownloadMeta(filePath) {
   };
 }
 
+function fileViewMeta(filePath) {
+  return {
+    ...fileDownloadMeta(filePath),
+    url: `/api/view-file?path=${encodeURIComponent(filePath)}`,
+    downloadUrl: `/api/download-file?path=${encodeURIComponent(filePath)}`,
+  };
+}
+
 function isAllowedDownloadPath(filePath) {
   const resolved = path.resolve(filePath);
-  const allowedRoots = [path.resolve(ROOT_DIR, "qa")];
+  const allowedRoots = [path.resolve(ROOT_DIR, "qa"), path.resolve(RUNS_DIR)];
   return allowedRoots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`));
 }
 
@@ -3212,6 +3435,7 @@ function normalizeAiSettings(raw = {}) {
     model: asText(raw.model),
     apiKey: asText(raw.apiKey || raw.token),
     promptGuidelines: consolidatedAiPromptGuidelines(raw),
+    stopConditionGuidelines: asText(raw.stopConditionGuidelines || raw.stop_condition_guidelines || raw.stopConditionPrompt || raw.stop_condition_prompt),
     writingStyle: asText(raw.writingStyle),
     testCaseGuidelines: asText(raw.testCaseGuidelines),
     testDesignGuidelines: asText(raw.testDesignGuidelines),
@@ -3243,6 +3467,589 @@ function normalizeKnowledgeArticles(raw = []) {
     .map(normalizeKnowledgeArticle)
     .filter((item) => item.title || item.content)
     .slice(0, 200);
+}
+
+function normalizeWorkspaceOutline(raw = {}, fallback = {}) {
+  const branches = Array.isArray(raw?.branches)
+    ? raw.branches
+        .map((branch) => ({
+          title: asText(branch?.title),
+          items: Array.isArray(branch?.items)
+            ? branch.items.map(asText).filter(Boolean)
+            : asText(branch?.items)
+                .split(/\r?\n/)
+                .map((item) => item.trim())
+                .filter(Boolean),
+        }))
+        .filter((branch) => branch.title || branch.items.length)
+    : [];
+  return {
+    issue_key: asText(raw?.issue_key || raw?.issueKey || fallback.issueKey),
+    title: asText(raw?.title) || fallback.title || "QA test design",
+    sheet_title: asText(raw?.sheet_title || raw?.sheetTitle),
+    template: asText(raw?.template || fallback.archetypeKey || "general"),
+    source_context: raw?.source_context && typeof raw.source_context === "object" ? raw.source_context : {},
+    design_rationale: raw?.design_rationale && typeof raw.design_rationale === "object" ? raw.design_rationale : {},
+    branches,
+  };
+}
+
+function normalizeWorkspaceStopPatterns(value, withFallback = true) {
+  const rawValues = Array.isArray(value)
+    ? value
+    : asText(value)
+        .split(/\r?\n/)
+        .map((item) => item.trim());
+  const patterns = rawValues
+    .map(asText)
+    .map(simplifyWorkspaceStopPattern)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item) => item.length <= 240)
+    .slice(0, 6);
+  return patterns.length || !withFallback ? patterns : ["(?i)https?://\\S+"];
+}
+
+function normalizeWorkspaceFailPatterns(value, withFallback = true) {
+  const patterns = normalizeWorkspaceStopPatterns(value, false);
+  return patterns.length || !withFallback
+    ? patterns
+    : ["(?i)(lỗi hệ thống|không thể xử lý|xin lỗi.*không thể|system error|technical error|failed|failure)"];
+}
+
+function simplifyWorkspaceStopPattern(value = "") {
+  return asText(value)
+    .replace(/\(\?:/g, "(")
+    .replace(/\\b/g, "")
+    .replace(/\[\^\\n\]\{0,(\d+)\}/g, ".{0,$1}")
+    .replace(/\[\^\\n\]/g, ".")
+    .replace(/booking\[_ \]\?code/gi, "booking[ _]?code")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeWorkspaceConditionList(value, maxItems = 4) {
+  const rawValues = Array.isArray(value)
+    ? value
+    : asText(value)
+        .split(/\r?\n/)
+        .map((item) => item.trim());
+  const seen = new Set();
+  const output = [];
+  for (const item of rawValues.map(asText).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean)) {
+    const normalized = item.toLowerCase();
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    output.push(item.slice(0, 260));
+    if (output.length >= maxItems) break;
+  }
+  return output;
+}
+
+function workspaceStopConditionSource(raw = {}) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const direct = source.stop_conditions || source.stopConditions || {};
+  return direct && typeof direct === "object" ? direct : {};
+}
+
+function humanizeWorkspaceStopPattern(pattern = "", kind = "pass") {
+  const text = asText(pattern).toLowerCase();
+  if (/(https\?|payment|thanh\s*to[aá]n|link)/i.test(text)) {
+    return kind === "fail"
+      ? "Bot không tạo được link thanh toán hoặc trả lời rằng không thể tiếp tục thanh toán."
+      : "Bot trả về link thanh toán hoặc link hoàn tất đúng với mục tiêu test case.";
+  }
+  if (/(booking|ticket|mã|ma|code|\[a-z0-9\])/.test(text)) {
+    return kind === "fail"
+      ? "Bot không trả về mã booking/mã vé hợp lệ hoặc báo không tạo được mã theo dữ liệu test."
+      : "Bot trả về mã booking/mã vé hợp lệ theo dữ liệu test.";
+  }
+  if (/(không|khong|hết|het|no\s*trip|not\s*available|unavailable|no-option|no option)/.test(text)) {
+    return kind === "fail"
+      ? "Bot đưa ra kết luận không có chuyến/lựa chọn sai với dữ liệu test hoặc không có hướng xử lý tiếp."
+      : "Bot xác nhận đúng trạng thái không có chuyến hoặc không còn lựa chọn phù hợp với điều kiện tìm kiếm.";
+  }
+  if (/(handoff|agent|nhân viên|nhan vien|tư vấn|tu van)/.test(text)) {
+    return kind === "fail"
+      ? "Bot chuyển agent ngoài mong đợi hoặc dừng hội thoại khi test case cần bot tự xử lý."
+      : "Bot chuyển hội thoại sang nhân viên tư vấn đúng lúc test case yêu cầu handoff.";
+  }
+  return kind === "fail"
+    ? "Bot phản hồi sai ngữ cảnh, báo lỗi hoặc không đạt expected result của test case."
+    : "Bot phản hồi đúng kết quả mong đợi và mục tiêu kiểm thử của test case đã đạt.";
+}
+
+function looksLikeWorkspaceRegex(value = "") {
+  return /(\(\?i\)|\\[bdsw]|\[[^\]]+\]|\.\*|\.\{|\{\d|https\?:|[|])/.test(asText(value));
+}
+
+function sanitizeWorkspaceConditionText(items = [], kind = "pass") {
+  return normalizeWorkspaceConditionList(items).map((item) =>
+    looksLikeWorkspaceRegex(item) ? humanizeWorkspaceStopPattern(item, kind) : item,
+  );
+}
+
+function fallbackStopConditionsForWorkspaceCase(testCase = {}) {
+  const source = [
+    testCase.title,
+    testCase.objective,
+    testCase.test_data,
+    testCase.expected_result,
+    ...(testCase.structured_steps || []).flatMap((step) => [step.description, step.test_data, step.expected_result]),
+  ]
+    .map(asText)
+    .join("\n")
+    .toLowerCase();
+  const pass = [];
+  if (/payment|thanh\s*to[aá]n|link|url|checkout/.test(source)) {
+    pass.push("Bot trả về link thanh toán hoặc link hoàn tất đúng với dữ liệu test.");
+  }
+  if (/booking|ticket|m[aã]\s*(v[eé]|đặt chỗ)|mã đặt|code/.test(source)) {
+    pass.push("Bot trả về mã booking/mã vé hợp lệ theo dữ liệu test.");
+  }
+  if (/kh[oô]ng\s+c[oó]\s+chuy[eế]n|hết chuyến|kh[oô]ng\s+tìm\s+thấy|no\s+trip|not\s+available|unavailable/.test(source)) {
+    pass.push("Bot xác nhận đúng trạng thái không có chuyến hoặc không còn lựa chọn phù hợp với điều kiện tìm kiếm.");
+  }
+  if (/handoff|chuy[eể]n\s+agent|nh[aâ]n\s+vi[eê]n|tư\s+vấn\s+viên/.test(source)) {
+    pass.push("Bot chuyển hội thoại sang nhân viên tư vấn đúng lúc test case yêu cầu handoff.");
+  }
+  return {
+    pass: normalizeWorkspaceConditionList(pass.length ? pass : ["Bot phản hồi đúng expected result và mục tiêu kiểm thử của test case đã đạt."]),
+    fail: normalizeWorkspaceConditionList([
+      "Bot báo lỗi hệ thống, không thể xử lý yêu cầu hoặc dừng luồng ngoài mong đợi.",
+      "Bot phản hồi sai ngữ cảnh, không bám theo dữ liệu test hoặc không đạt expected result của test case.",
+    ]),
+  };
+}
+
+function normalizeWorkspaceStopConditions(value = {}, testCase = {}) {
+  const direct = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const source = workspaceStopConditionSource({ ...testCase, stop_conditions: direct });
+  const passRaw =
+    source.pass ||
+    source.success ||
+    source.pass_conditions ||
+    source.passConditions ||
+    source.success_conditions ||
+    source.successConditions ||
+    testCase.pass_conditions ||
+    testCase.passConditions;
+  const failRaw =
+    source.fail ||
+    source.failure ||
+    source.fail_conditions ||
+    source.failConditions ||
+    source.failure_conditions ||
+    source.failureConditions ||
+    testCase.fail_conditions ||
+    testCase.failConditions;
+  const fallback = fallbackStopConditionsForWorkspaceCase(testCase);
+  let pass = sanitizeWorkspaceConditionText(passRaw, "pass");
+  let fail = sanitizeWorkspaceConditionText(failRaw, "fail");
+  if (!pass.length) {
+    const passPatterns = normalizeWorkspaceStopPatterns(
+      testCase.stop_patterns || testCase.stopPatterns || testCase.stop_regex_any || testCase.stopRegexAny,
+      false,
+    );
+    pass = sanitizeWorkspaceConditionText(passPatterns.map((pattern) => humanizeWorkspaceStopPattern(pattern, "pass")), "pass");
+  }
+  if (!fail.length) {
+    const failPatterns = normalizeWorkspaceFailPatterns(
+      testCase.fail_patterns || testCase.failPatterns || testCase.fail_regex_any || testCase.failRegexAny,
+      false,
+    );
+    fail = sanitizeWorkspaceConditionText(failPatterns.map((pattern) => humanizeWorkspaceStopPattern(pattern, "fail")), "fail");
+  }
+  return {
+    pass: pass.length ? pass : fallback.pass,
+    fail: fail.length ? fail : fallback.fail,
+  };
+}
+
+function isGenericWorkspaceStopPattern(pattern = "") {
+  const normalized = asText(pattern).replace(/\s+/g, "").toLowerCase();
+  return normalized === "(?i)https?://\\s+" || normalized === "https?://\\s+";
+}
+
+function workspaceCaseNeedsStopPatternRefresh(testCase = {}, options = {}) {
+  const passPatterns = normalizeWorkspaceStopPatterns(
+    testCase?.stop_patterns || testCase?.stopPatterns || testCase?.stop_regex_any || testCase?.stopRegexAny,
+    false,
+  );
+  const failPatterns = normalizeWorkspaceFailPatterns(
+    testCase?.fail_patterns || testCase?.failPatterns || testCase?.fail_regex_any || testCase?.failRegexAny,
+    false,
+  );
+  const rawConditions = workspaceStopConditionSource(testCase);
+  const passConditions = normalizeWorkspaceConditionList(rawConditions.pass || rawConditions.pass_conditions || rawConditions.passConditions || testCase.pass_conditions || testCase.passConditions);
+  const failConditions = normalizeWorkspaceConditionList(rawConditions.fail || rawConditions.fail_conditions || rawConditions.failConditions || testCase.fail_conditions || testCase.failConditions);
+  if (options.force) return true;
+  if (!passPatterns.length || !failPatterns.length || !passConditions.length || !failConditions.length) return true;
+  return Boolean(options.refreshGeneric && passPatterns.length && passPatterns.every(isGenericWorkspaceStopPattern) && !failPatterns.length);
+}
+
+function normalizeWorkspaceTestCases(raw = []) {
+  const cases = Array.isArray(raw) ? raw : [];
+  return cases
+    .map((testCase, index) => {
+      const steps = Array.isArray(testCase?.steps) ? testCase.steps.map(asText).filter(Boolean) : [];
+      const testData = asText(testCase?.test_data || testCase?.testData);
+      const expectedResult = asText(testCase?.expected_result || testCase?.expectedResult);
+      const stopPatterns = normalizeWorkspaceStopPatterns(testCase?.stop_patterns || testCase?.stopPatterns || testCase?.stop_regex_any || testCase?.stopRegexAny, false);
+      const failPatterns = normalizeWorkspaceFailPatterns(testCase?.fail_patterns || testCase?.failPatterns || testCase?.fail_regex_any || testCase?.failRegexAny, false);
+      const structuredSteps = Array.isArray(testCase?.structured_steps)
+        ? testCase.structured_steps
+            .map((step) => ({
+              description: asText(step?.description),
+              test_data: asText(step?.test_data || step?.testData),
+              expected_result: asText(step?.expected_result || step?.expectedResult),
+            }))
+            .filter((step) => step.description || step.test_data || step.expected_result)
+        : [];
+      return {
+        title: asText(testCase?.title) || `[TC_${String(index + 1).padStart(4, "0")}] Chatwoot UAT case`,
+        objective: asText(testCase?.objective),
+        priority: asText(testCase?.priority) || "High",
+        technique: asText(testCase?.technique) || "Conversation UAT",
+        risk: asText(testCase?.risk),
+        requirement_ref: asText(testCase?.requirement_ref || testCase?.requirementRef),
+        coverage_tags: Array.isArray(testCase?.coverage_tags)
+          ? testCase.coverage_tags.map(asText).filter(Boolean)
+          : asText(testCase?.coverage_tags || testCase?.coverageTags)
+              .split(/[,\n]/)
+              .map((item) => item.trim())
+              .filter(Boolean),
+        scenario_type: asText(testCase?.scenario_type || testCase?.scenarioType) || "chatbot_uat",
+        precondition: asText(testCase?.precondition),
+        test_data: testData,
+        expected_result: expectedResult,
+        stop_conditions: normalizeWorkspaceStopConditions(testCase?.stop_conditions || testCase?.stopConditions, {
+          ...testCase,
+          test_data: testData,
+          expected_result: expectedResult,
+          stop_patterns: stopPatterns,
+          fail_patterns: failPatterns,
+          structured_steps: structuredSteps.length ? structuredSteps : structuredStepsFromDescriptions(steps, testData, expectedResult),
+        }),
+        stop_patterns: stopPatterns,
+        fail_patterns: failPatterns,
+        steps,
+        structured_steps: structuredSteps.length ? structuredSteps : structuredStepsFromDescriptions(steps, testData, expectedResult),
+      };
+    })
+    .filter((testCase) => testCase.title || testCase.test_data || testCase.structured_steps.length)
+    .slice(0, 300);
+}
+
+function cleanImportedQaText(value = "") {
+  return asText(value)
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/&nbsp;/gi, " ")
+    .trim();
+}
+
+async function readImportedTestCases(files = []) {
+  const output = [];
+  for (const filePath of files) {
+    const payload = await readJsonFileIfExists(filePath);
+    const testCases = Array.isArray(payload?.test_cases) ? payload.test_cases : [];
+    for (const testCase of testCases) {
+      output.push({
+        ...testCase,
+        title: cleanImportedQaText(testCase.title),
+        precondition: cleanImportedQaText(testCase.precondition),
+        objective: cleanImportedQaText(testCase.objective),
+        risk: cleanImportedQaText(testCase.risk),
+        requirement_ref: cleanImportedQaText(testCase.requirement_ref || testCase.requirementRef),
+        test_data: cleanImportedQaText(testCase.test_data || testCase.testData),
+        expected_result: cleanImportedQaText(testCase.expected_result || testCase.expectedResult),
+        stop_conditions: normalizeWorkspaceStopConditions(testCase.stop_conditions || testCase.stopConditions, testCase),
+        stop_patterns: normalizeWorkspaceStopPatterns(testCase.stop_patterns || testCase.stopPatterns || testCase.stop_regex_any, false),
+        fail_patterns: normalizeWorkspaceFailPatterns(testCase.fail_patterns || testCase.failPatterns || testCase.fail_regex_any, false),
+        steps: Array.isArray(testCase.steps) ? testCase.steps.map(cleanImportedQaText).filter(Boolean) : [],
+        structured_steps: Array.isArray(testCase.structured_steps)
+          ? testCase.structured_steps.map((step) => ({
+              ...step,
+              description: cleanImportedQaText(step.description),
+              test_data: cleanImportedQaText(step.test_data || step.testData),
+              expected_result: cleanImportedQaText(step.expected_result || step.expectedResult),
+            }))
+          : [],
+      });
+    }
+  }
+  return output;
+}
+
+function normalizeQaWorkspaceItem(raw = {}) {
+  const now = new Date().toISOString();
+  const issueKey = asText(raw.issueKey || raw.issue_key || raw.issue?.key).toUpperCase();
+  const title = asText(raw.title || raw.issue?.summary || raw.outline?.title) || (issueKey ? `${issueKey} QA workspace` : "QA workspace item");
+  const archetypeKey = asText(raw.archetypeKey || raw.archetype_key || raw.outline?.template || "general");
+  const testCases = normalizeWorkspaceTestCases(raw.testCases || raw.test_cases);
+  const outline = normalizeWorkspaceOutline(raw.outline || raw.testDesign || raw.test_design, {
+    issueKey,
+    title,
+    archetypeKey,
+  });
+  return {
+    id: asText(raw.id) || crypto.randomUUID(),
+    issueKey,
+    title,
+    source: asText(raw.source) || "manual",
+    sourceKey: asText(raw.sourceKey || raw.source_key || issueKey),
+    createdAt: asText(raw.createdAt || raw.created_at) || now,
+    updatedAt: asText(raw.updatedAt || raw.updated_at) || now,
+    archetypeKey,
+    testCases,
+    outline,
+    qaPlan: raw.qaPlan && typeof raw.qaPlan === "object" ? raw.qaPlan : null,
+    chatwootSuiteFile: asText(raw.chatwootSuiteFile || raw.chatwoot_suite_file),
+    chatwootSuiteName: asText(raw.chatwootSuiteName || raw.chatwoot_suite_name),
+    files: raw.files && typeof raw.files === "object" ? raw.files : {},
+  };
+}
+
+function normalizeQaWorkspaceItems(raw = []) {
+  const items = Array.isArray(raw) ? raw : [];
+  return items
+    .map(normalizeQaWorkspaceItem)
+    .filter((item) => item.title || item.issueKey || item.testCases.length || item.outline.branches.length)
+    .slice(0, 100);
+}
+
+async function saveQaWorkspaceItems(email, items = []) {
+  const userEmail = normalizeEmail(email);
+  const normalized = normalizeQaWorkspaceItems(items);
+  if (!db || !userEmail) {
+    QA_WORKSPACE_MEMORY.set(userEmail || "default", normalized);
+    return normalized;
+  }
+  await db.query(
+    `
+      INSERT INTO user_settings (user_email, qa_workspace_items)
+      VALUES ($1, $2::jsonb)
+      ON CONFLICT (user_email)
+      DO UPDATE SET qa_workspace_items = EXCLUDED.qa_workspace_items, updated_at = NOW()
+    `,
+    [userEmail, JSON.stringify(normalized)],
+  );
+  return normalized;
+}
+
+async function upsertQaWorkspaceItem(email, item) {
+  const stored = await readUserSettings(email);
+  const normalizedItem = normalizeQaWorkspaceItem({ ...item, updatedAt: new Date().toISOString() });
+  const existing = normalizeQaWorkspaceItems(stored.qaWorkspaceItems);
+  const next = [
+    normalizedItem,
+    ...existing.filter((entry) => entry.id !== normalizedItem.id && !(normalizedItem.sourceKey && entry.sourceKey === normalizedItem.sourceKey)),
+  ];
+  return {
+    item: normalizedItem,
+    items: await saveQaWorkspaceItems(email, next),
+  };
+}
+
+function fallbackStopPatternsForWorkspaceCase(testCase = {}) {
+  const source = [
+    testCase.title,
+    testCase.objective,
+    testCase.test_data,
+    testCase.expected_result,
+    ...(testCase.structured_steps || []).flatMap((step) => [step.description, step.test_data, step.expected_result]),
+  ]
+    .map(asText)
+    .join("\n")
+    .toLowerCase();
+  const patterns = [];
+  if (/payment|thanh\s*to[aá]n|link|url|checkout/.test(source)) {
+    patterns.push("(?i)https?://\\S+");
+  }
+  if (/booking|ticket|m[aã]\s*(v[eé]|đặt chỗ)|mã đặt|code/.test(source)) {
+    patterns.push("(?i)(mã vé|mã đặt chỗ|booking code|ticket code|booking_code|ticket_code).{0,80}[A-Z0-9]{6,10}");
+  }
+  if (/kh[oô]ng\s+c[oó]\s+chuy[eế]n|hết chuyến|kh[oô]ng\s+tìm\s+thấy|no\s+trip|not\s+available|unavailable/.test(source)) {
+    patterns.push("(?i)(không có chuyến|không tìm thấy chuyến|hết chuyến|không còn chuyến|no trips?|not available|unavailable)");
+  }
+  if (/handoff|chuy[eể]n\s+agent|nh[aâ]n\s+vi[eê]n|tư\s+vấn\s+viên/.test(source)) {
+    patterns.push("(?i)(chuyển agent|chuyển cho nhân viên|nhân viên tư vấn|handoff|human agent)");
+  }
+  return normalizeWorkspaceStopPatterns(patterns.length ? patterns : ["(?i)https?://\\S+"]);
+}
+
+function fallbackFailPatternsForWorkspaceCase(testCase = {}) {
+  const source = [
+    testCase.title,
+    testCase.objective,
+    testCase.test_data,
+    testCase.expected_result,
+    ...(testCase.structured_steps || []).flatMap((step) => [step.description, step.test_data, step.expected_result]),
+  ]
+    .map(asText)
+    .join("\n")
+    .toLowerCase();
+  const patterns = [
+    "(?i)(lỗi hệ thống|không thể xử lý|xin lỗi.*không thể|system error|technical error)",
+    "(?i)(không hiểu|chưa hiểu|không rõ yêu cầu|vui lòng cung cấp lại|I do not understand|I don't understand)",
+  ];
+  if (/payment|thanh\s*to[aá]n|link|url|checkout/.test(source)) {
+    patterns.push("(?i)(không tạo được link|không thể thanh toán|payment failed|cannot create payment)");
+  }
+  if (/booking|ticket|m[aã]\s*(v[eé]|đặt chỗ)|mã đặt|code/.test(source)) {
+    patterns.push("(?i)(không tạo được mã|không thể đặt chỗ|booking failed|cannot create booking)");
+  }
+  if (/kh[oô]ng\s+c[oó]\s+chuy[eế]n|hết chuyến|no\s+trip|not\s+available|unavailable/.test(source)) {
+    patterns.push("(?i)(có chuyến|còn chuyến|available trips?)");
+  }
+  return normalizeWorkspaceFailPatterns(patterns);
+}
+
+function buildWorkspaceStopPatternMessages(item = {}, aiSettings = {}) {
+  const settings = normalizeAiSettings(aiSettings);
+  const userStopGuidelines = asText(settings.stopConditionGuidelines).trim();
+  const cases = (item.testCases || []).slice(0, 80).map((testCase, index) => ({
+    case_index: index + 1,
+    title: testCase.title,
+    objective: testCase.objective,
+    test_data: truncateForPrompt(testCase.test_data, 1800),
+    expected_result: truncateForPrompt(testCase.expected_result, 2200),
+    steps: (testCase.structured_steps || []).slice(0, 8).map((step) => ({
+      description: step.description,
+      test_data: step.test_data,
+      expected_result: step.expected_result,
+    })),
+  }));
+  const system = [
+    "You are EasyForQC's QA automation stop-condition designer.",
+    "For each chatbot/automation test case, create human-readable pass/fail stop conditions and internal regex matchers.",
+    "Return only one valid JSON object. Do not wrap it in markdown.",
+  ].join("\n");
+  const user = [
+    "Generate two stop-condition groups for each test case.",
+    "",
+    "Meaning:",
+    "- `pass_conditions` are short business-language sentences for QA users. When a real bot reply satisfies one, automation stops and marks the case passed.",
+    "- `fail_conditions` are short business-language sentences for QA users. When a real bot reply satisfies one, automation stops and marks the case failed.",
+    "- `pass_regex_any` and `fail_regex_any` are internal Python regex matchers for the runner. They are not shown to QA users.",
+    "- Use title/objective as the test purpose. Use expected_result, test_data, and step expected results to decide both pass and fail signals.",
+    "",
+    "Rules:",
+    "- Return 1-3 human sentences in `pass_conditions` and 1-3 human sentences in `fail_conditions`.",
+    "- Return 1-4 regex strings in `pass_regex_any` and 1-4 regex strings in `fail_regex_any`.",
+    "- Human sentences in `pass_conditions` and `fail_conditions` must be natural Vietnamese with full diacritics. Keep product names, Jira keys, tool names, API fields, and codes unchanged.",
+    "- Do not write generic English phrases such as `Bot returns`, `The bot displays`, `system error`, or `expected result` in human condition text. Translate them into Vietnamese.",
+    "- Human sentences must not be raw regex, not code, and not contain syntax like `(?i)`, `\\b`, `.*`, `[A-Z]`, or parentheses-heavy patterns.",
+    "- Prefer precise pass signals: payment URL, booking code, ticket code, clear no-trip/no-option message, handoff message, or explicit final confirmation.",
+    "- Prefer precise fail signals: bot reports system/tool failure, cannot process, answers out of context, uses wrong route/date/passenger data, or reaches a business outcome opposite to expected_result.",
+    "- Keep regex readable for QA review. Prefer simple phrases, `|`, `.*`, `.{0,80}`, and character classes like `[A-Z0-9]{6,10}`.",
+    "- Avoid noisy expert-only syntax unless truly needed: do not use `\\b`, non-capturing groups `(?:...)`, lookahead/lookbehind, nested groups, or `[^\\n]` spans.",
+    "- Keep regex portable for Python `re` and safe for YAML/JSON.",
+    "- Do not return broad patterns such as `.*`, `ok`, `success` alone, or patterns that match almost every bot reply.",
+    "- If expected result mentions payment link, pass regex may include `(?i)https?://\\S+`, and fail regex should catch no-payment/cannot-pay messages.",
+    "- If expected result mentions booking/ticket code, pass regex should require booking/ticket wording and a 6-10 char code.",
+    "- If the case is a negative no-trip/no-option flow, pass condition should say the bot correctly confirms no availability; fail condition should catch the bot presenting an available trip or asking for payment incorrectly.",
+    userStopGuidelines
+      ? [
+          "",
+          "Additional user stop-condition guidance from AI Settings:",
+          truncateForPrompt(userStopGuidelines, 5000),
+          "",
+          "Apply the additional guidance only when it is specific and does not conflict with the safety rules above.",
+        ].join("\n")
+      : "",
+    "",
+    "Required JSON schema:",
+    JSON.stringify(
+      {
+        cases: [
+          {
+            case_index: 1,
+            pass_conditions: ["Bot trả về link thanh toán đúng với dữ liệu test."],
+            fail_conditions: ["Bot báo lỗi hệ thống hoặc không thể tạo link thanh toán."],
+            pass_regex_any: ["(?i)https?://\\S+"],
+            fail_regex_any: ["(?i)(lỗi hệ thống|không thể thanh toán|không tạo được link)"],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+    "",
+    "Workspace test cases:",
+    jsonForPrompt(cases, 28000),
+  ].join("\n");
+  return [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ];
+}
+
+function normalizeWorkspaceStopPatternAiPayload(payload = {}) {
+  const rawCases = Array.isArray(payload?.cases) ? payload.cases : [];
+  const byIndex = new Map();
+  for (const rawCase of rawCases) {
+    const index = Number(rawCase?.case_index || rawCase?.caseIndex || rawCase?.index);
+    const passPatterns = normalizeWorkspaceStopPatterns(
+      rawCase?.pass_regex_any || rawCase?.passRegexAny || rawCase?.stop_patterns || rawCase?.stopPatterns || rawCase?.stop_regex_any,
+      false,
+    );
+    const failPatterns = normalizeWorkspaceFailPatterns(rawCase?.fail_regex_any || rawCase?.failRegexAny || rawCase?.fail_patterns || rawCase?.failPatterns, false);
+    const stopConditions = normalizeWorkspaceStopConditions(
+      rawCase?.stop_conditions || rawCase?.stopConditions || {
+        pass: rawCase?.pass_conditions || rawCase?.passConditions || rawCase?.success_conditions || rawCase?.successConditions,
+        fail: rawCase?.fail_conditions || rawCase?.failConditions || rawCase?.failure_conditions || rawCase?.failureConditions,
+      },
+      {
+        title: rawCase?.title,
+        objective: rawCase?.objective,
+        expected_result: rawCase?.expected_result || rawCase?.expectedResult,
+        stop_patterns: passPatterns,
+        fail_patterns: failPatterns,
+      },
+    );
+    if (Number.isFinite(index) && index > 0 && (passPatterns.length || failPatterns.length || stopConditions.pass.length || stopConditions.fail.length)) {
+      byIndex.set(index, {
+        stopConditions,
+        passPatterns,
+        failPatterns,
+      });
+    }
+  }
+  return byIndex;
+}
+
+async function enrichQaWorkspaceStopPatterns(item = {}, aiSettings = {}, options = {}) {
+  const normalized = normalizeQaWorkspaceItem(item);
+  if (!normalized.testCases.length) return normalized;
+  const missingIndexes = normalized.testCases
+    .map((testCase, index) => (workspaceCaseNeedsStopPatternRefresh(testCase, options) ? index + 1 : 0))
+    .filter(Boolean);
+  if (!missingIndexes.length) return normalized;
+  let aiPatterns = new Map();
+  const settings = normalizeAiSettings(aiSettings);
+  if (aiProviderReady(settings)) {
+    try {
+      const result = await callOpenAiCompatible(settings, buildWorkspaceStopPatternMessages(normalized, settings));
+      aiPatterns = normalizeWorkspaceStopPatternAiPayload(result.payload || parseMaybeJson(result.content));
+    } catch (error) {
+      console.warn("Could not generate QA Workspace stop conditions with AI", error.message);
+    }
+  }
+  return normalizeQaWorkspaceItem({
+    ...normalized,
+    testCases: normalized.testCases.map((testCase, index) => {
+      if (!workspaceCaseNeedsStopPatternRefresh(testCase, options)) return testCase;
+      const aiCase = aiPatterns.get(index + 1);
+      const fallbackConditions = fallbackStopConditionsForWorkspaceCase(testCase);
+      return {
+        ...testCase,
+        stop_conditions: normalizeWorkspaceStopConditions(aiCase?.stopConditions || fallbackConditions, testCase),
+        stop_patterns: normalizeWorkspaceStopPatterns(aiCase?.passPatterns || fallbackStopPatternsForWorkspaceCase(testCase)),
+        fail_patterns: normalizeWorkspaceFailPatterns(aiCase?.failPatterns || fallbackFailPatternsForWorkspaceCase(testCase)),
+      };
+    }),
+  });
 }
 
 function normalizeRepoContext(raw = {}) {
@@ -3877,6 +4684,9 @@ function runPython(script, args, options = {}) {
       env: { ...process.env, ...(options.env || {}) },
       stdio: ["ignore", "pipe", "pipe"],
     });
+    if (typeof options.onChild === "function") {
+      options.onChild(child);
+    }
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => {
@@ -3918,6 +4728,1808 @@ function runPython(script, args, options = {}) {
       });
     });
   });
+}
+
+function commandAvailable(command, args = ["--version"], timeoutMs = 2500) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      cwd: ROOT_DIR,
+      env: process.env,
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      resolve(false);
+    }, timeoutMs);
+    child.on("error", () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve(code === 0);
+    });
+  });
+}
+
+function chatwootUatSkillRootCandidates() {
+  return dedupeStrings([
+    process.env.CHATWOOT_UAT_SKILL_ROOT,
+    DOCKER_CHATWOOT_UAT_SKILL_ROOT,
+    LOCAL_CHATWOOT_UAT_SKILL_ROOT,
+    VENDOR_CHATWOOT_UAT_SKILL_ROOT,
+  ]);
+}
+
+function resolveChatwootUatSkillRoot() {
+  const candidates = chatwootUatSkillRootCandidates();
+  const selected = candidates.find((candidate) => fsSync.existsSync(path.join(candidate, "SKILL.md")));
+  return selected ? path.resolve(selected) : path.resolve(candidates[0] || VENDOR_CHATWOOT_UAT_SKILL_ROOT);
+}
+
+function chatwootUatConfigHasApiKey() {
+  if (CHATWOOT_UAT_API_KEY) return true;
+  return Boolean(chatwootUatConfigValue(["CHATWOOT_API_KEY", "chatwoot_api_key"]));
+}
+
+function chatwootUatConfigValue(keys = []) {
+  const configPath = path.join(HOME_DIR, ".skills", "config.yml");
+  try {
+    const text = fsSync.readFileSync(configPath, "utf8");
+    if (!/chatwoot-test-uat\s*:/i.test(text)) return "";
+    for (const key of keys) {
+      const match = text.match(new RegExp(`^\\s*${escapeRegExp(key)}\\s*:\\s*['"]?([^'"\\n#]+)`, "im"));
+      if (match?.[1]) return match[1].trim();
+    }
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+function cleanYamlScalar(value = "") {
+  return asText(value)
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .trim();
+}
+
+function summarizeChatwootExpectation(expectation = {}) {
+  if (!expectation || typeof expectation !== "object") return asText(expectation);
+  const chunks = [];
+  const containsAny = Array.isArray(expectation.contains_any) ? expectation.contains_any.map(asText).filter(Boolean) : [];
+  const regexAny = Array.isArray(expectation.regex_any) ? expectation.regex_any.map(asText).filter(Boolean) : [];
+  if (containsAny.length) chunks.push(`Contains any: ${containsAny.join(", ")}`);
+  if (regexAny.length) chunks.push(`Regex any: ${regexAny.join(", ")}`);
+  if (chunks.length) return chunks.join("\n");
+  const entries = Object.entries(expectation).filter(([, value]) =>
+    Array.isArray(value) ? value.length : Boolean(asText(value)),
+  );
+  if (!entries.length) return "";
+  try {
+    return JSON.stringify(Object.fromEntries(entries), null, 2);
+  } catch {
+    return "";
+  }
+}
+
+function normalizeChatwootSuiteStep(rawStep = {}, index = 1) {
+  const step = rawStep && typeof rawStep === "object" ? rawStep : {};
+  const prompt = typeof rawStep === "string"
+    ? asText(rawStep)
+    : asText(step.prompt || step.user_message || step.userMessage || step.message || step.content || step.text || step.description);
+  const expected = typeof rawStep === "string"
+    ? ""
+    : asText(step.expected_result || step.expectedResult) || summarizeChatwootExpectation(step.expectation);
+  const testData = typeof rawStep === "string" ? "" : asText(step.test_data || step.testData);
+  return {
+    index,
+    prompt,
+    expected,
+    testData,
+  };
+}
+
+function chatwootCasePlannedTurns(rawCase = {}, steps = []) {
+  const sourceCase = rawCase && typeof rawCase === "object" ? rawCase : {};
+  const metadata = sourceCase.metadata && typeof sourceCase.metadata === "object" ? sourceCase.metadata : {};
+  const direct = metadata.planned_user_turns || metadata.plannedUserTurns || sourceCase.user_turns || sourceCase.userTurns || sourceCase.planned_user_turns || sourceCase.plannedUserTurns;
+  const fromDirect = Array.isArray(direct)
+    ? direct.map(asText).filter(Boolean)
+    : parseChatwootUserTurns(direct);
+  if (fromDirect.length) return uniqueChatwootTurns(fromDirect);
+  const fromSteps = steps.map((step) => asText(step.prompt || step.testData)).filter(Boolean);
+  if (fromSteps.length) return uniqueChatwootTurns(fromSteps);
+  return uniqueChatwootTurns([sourceCase.opening_prompt || sourceCase.openingPrompt].map(asText).filter(Boolean));
+}
+
+function rawChatwootStopPatterns(rawCase = {}) {
+  const sourceCase = rawCase && typeof rawCase === "object" ? rawCase : {};
+  const raw = sourceCase.stop_regex_any || sourceCase.stopRegexAny || sourceCase.stop_patterns || sourceCase.stopPatterns;
+  if (Array.isArray(raw)) return raw.map(asText).filter(Boolean).slice(0, 12);
+  return asText(raw)
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+function rawChatwootFailPatterns(rawCase = {}) {
+  const sourceCase = rawCase && typeof rawCase === "object" ? rawCase : {};
+  const raw = sourceCase.fail_regex_any || sourceCase.failRegexAny || sourceCase.fail_patterns || sourceCase.failPatterns;
+  if (Array.isArray(raw)) return raw.map(asText).filter(Boolean).slice(0, 12);
+  return asText(raw)
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+function rawChatwootStopConditions(rawCase = {}) {
+  const sourceCase = rawCase && typeof rawCase === "object" ? rawCase : {};
+  const metadata = sourceCase.metadata && typeof sourceCase.metadata === "object" ? sourceCase.metadata : {};
+  return normalizeWorkspaceStopConditions(
+    sourceCase.stop_conditions || sourceCase.stopConditions || metadata.stop_conditions || metadata.stopConditions,
+    {
+      title: sourceCase.title,
+      objective: sourceCase.objective,
+      expected_result: sourceCase.expected_result || sourceCase.expectedResult || metadata.jira_expected_result,
+      stop_patterns: rawChatwootStopPatterns(sourceCase),
+      fail_patterns: rawChatwootFailPatterns(sourceCase),
+    },
+  );
+}
+
+function patternFromHumanStopCondition(value = "", kind = "pass") {
+  const text = asText(value).toLowerCase();
+  if (!text) return "";
+  if (/link|url|payment|thanh\s*to[aá]n/.test(text)) {
+    return kind === "fail"
+      ? "(?i)(không tạo được link|không thể thanh toán|payment failed|cannot create payment|no payment link)"
+      : "(?i)https?://\\S+";
+  }
+  if (/booking|ticket|mã|ma|code|vé|ve|đặt chỗ|dat cho/.test(text)) {
+    return kind === "fail"
+      ? "(?i)(không tạo được mã|không thể đặt chỗ|booking failed|cannot create booking|no booking code|no ticket code)"
+      : "(?i)(mã vé|mã đặt chỗ|mã booking|booking code|ticket code|booking_code|ticket_code).{0,80}[A-Z0-9]{6,12}";
+  }
+  if (/không có chuyến|khong co chuyen|hết chuyến|het chuyen|không còn|no trip|no available|not available|unavailable/.test(text)) {
+    return kind === "fail"
+      ? "(?i)(có chuyến|còn chuyến|available trips?|payment|thanh toán)"
+      : "(?i)(không có chuyến|không tìm thấy chuyến|hết chuyến|không còn chuyến|no trips?|not available|unavailable)";
+  }
+  if (/handoff|agent|nhân viên|nhan vien|tư vấn|tu van/.test(text)) {
+    return "(?i)(chuyển agent|chuyển cho nhân viên|nhân viên tư vấn|handoff|human agent)";
+  }
+  if (kind === "fail" && /lỗi|loi|không thể|khong the|sai|wrong|error|failed|failure|không hiểu|khong hieu/.test(text)) {
+    return "(?i)(lỗi hệ thống|không thể xử lý|xin lỗi.*không thể|system error|technical error|không hiểu|chưa hiểu|wrong|failed|failure)";
+  }
+  return "";
+}
+
+function patternsFromHumanStopConditions(conditions = [], kind = "pass", fallbackCase = {}) {
+  const patterns = normalizeWorkspaceConditionList(conditions, 6)
+    .map((condition) => patternFromHumanStopCondition(condition, kind))
+    .filter(Boolean);
+  return kind === "fail"
+    ? normalizeWorkspaceFailPatterns(patterns.length ? patterns : fallbackFailPatternsForWorkspaceCase(fallbackCase))
+    : normalizeWorkspaceStopPatterns(patterns.length ? patterns : fallbackStopPatternsForWorkspaceCase(fallbackCase));
+}
+
+function normalizeChatwootStopConditionOverrides(value = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return new Map();
+  const overrides = new Map();
+  for (const [caseId, rawConditions] of Object.entries(value)) {
+    const key = asText(caseId);
+    if (!key) continue;
+    const source = rawConditions && typeof rawConditions === "object" && !Array.isArray(rawConditions) ? rawConditions : { pass: rawConditions };
+    const pass = normalizeWorkspaceConditionList(source.pass || source.passConditions || source.pass_conditions);
+    const fail = normalizeWorkspaceConditionList(source.fail || source.failConditions || source.fail_conditions);
+    if (pass.length || fail.length) {
+      overrides.set(key, { pass, fail });
+    }
+  }
+  return overrides;
+}
+
+function applyChatwootStopConditionOverrides(cases = [], overrides = new Map()) {
+  if (!overrides.size) return cases;
+  return cases.map((testCase, index) => {
+    const caseId = asText(testCase?.case_id || testCase?.caseId || `case-${index + 1}`);
+    if (!overrides.has(caseId)) return testCase;
+    const override = overrides.get(caseId) || {};
+    const stopConditions = normalizeWorkspaceStopConditions(override, {
+      ...testCase,
+      stop_patterns: rawChatwootStopPatterns(testCase),
+      fail_patterns: rawChatwootFailPatterns(testCase),
+    });
+    return {
+      ...testCase,
+      stop_conditions: stopConditions,
+      metadata: {
+        ...(testCase?.metadata && typeof testCase.metadata === "object" ? testCase.metadata : {}),
+        stop_conditions: stopConditions,
+      },
+      stop_regex_any: override.pass?.length
+        ? patternsFromHumanStopConditions(override.pass, "pass", testCase)
+        : rawChatwootStopPatterns(testCase),
+      fail_regex_any: override.fail?.length
+        ? patternsFromHumanStopConditions(override.fail, "fail", testCase)
+        : rawChatwootFailPatterns(testCase),
+    };
+  });
+}
+
+function chatwootSuiteCaseMeta(testCase = {}, index = 0) {
+  const sourceCase = testCase && typeof testCase === "object" ? testCase : {};
+  const rawSteps = Array.isArray(sourceCase.steps) ? sourceCase.steps : [];
+  const normalizedSteps = rawSteps
+    .map((step, stepIndex) => normalizeChatwootSuiteStep(step, stepIndex + 1))
+    .filter((step) => step.prompt || step.testData || step.expected);
+  const plannedTurns = chatwootCasePlannedTurns(sourceCase, normalizedSteps);
+  const steps = normalizedSteps.length
+    ? normalizedSteps
+    : plannedTurns.map((turn, stepIndex) => ({
+        index: stepIndex + 1,
+        prompt: turn,
+        expected: "",
+        testData: turn,
+      }));
+  const metadata = sourceCase.metadata && typeof sourceCase.metadata === "object" ? sourceCase.metadata : {};
+  const openingPrompt = asText(sourceCase.opening_prompt || sourceCase.openingPrompt || steps[0]?.prompt || plannedTurns[0]);
+  const testData = plannedTurns.length
+    ? plannedTurns.map((turn, turnIndex) => `${turnIndex + 1}. "${turn}"`).join("\n")
+    : openingPrompt;
+  const expectedResult = asText(
+    sourceCase.expected_result ||
+      sourceCase.expectedResult ||
+      metadata.jira_expected_result ||
+      metadata.expected_result ||
+      metadata.expectedResult ||
+      sourceCase.objective,
+  );
+  const plannerInstruction = asText(
+    sourceCase.adaptive_instruction ||
+      sourceCase.adaptiveInstruction ||
+      metadata.adaptive_instruction ||
+      metadata.adaptiveInstruction,
+  );
+  return {
+    index: index + 1,
+    caseId: asText(sourceCase.case_id || sourceCase.caseId || `case-${index + 1}`),
+    title: asText(sourceCase.title || sourceCase.objective || sourceCase.case_id || `Case ${index + 1}`),
+    objective: asText(sourceCase.objective),
+    openingPrompt,
+    testData,
+    expectedResult,
+    plannerInstruction,
+    stopPatterns: rawChatwootStopPatterns(sourceCase),
+    failPatterns: rawChatwootFailPatterns(sourceCase),
+    stopConditions: rawChatwootStopConditions(sourceCase),
+    steps,
+  };
+}
+
+async function readChatwootSuiteMeta(filePath, skillRoot) {
+  const text = await fs.readFile(filePath, "utf8");
+  let payload = null;
+  try {
+    payload = await readYamlAsJson(filePath);
+  } catch {
+    payload = null;
+  }
+  const relativePath = path.relative(skillRoot, filePath);
+  const cases = Array.isArray(payload?.cases)
+    ? payload.cases.map((testCase, index) => chatwootSuiteCaseMeta(testCase, index))
+    : [];
+  const suiteName = asText(payload?.suite_name) || cleanYamlScalar(text.match(/^\s*suite_name\s*:\s*(.+?)\s*$/m)?.[1] || path.basename(filePath, path.extname(filePath)));
+  const goalSummary = asText(payload?.goal_summary) || cleanYamlScalar(text.match(/^\s*goal_summary\s*:\s*(.+?)\s*$/m)?.[1] || "");
+  const caseCount = cases.length || (text.match(/^\s*-\s+case_id\s*:/gm) || []).length || (text.match(/"case_id"\s*:/g) || []).length;
+  const stat = await fs.stat(filePath);
+  return {
+    suiteName,
+    goalSummary,
+    caseCount,
+    cases,
+    path: filePath,
+    relativePath,
+    visibleInEasyForQc: shouldShowChatwootSuiteInEasyForQc(relativePath, payload),
+    updatedAt: stat.mtime.toISOString(),
+  };
+}
+
+function normalizedRelativePath(value = "") {
+  return asText(value).split(path.sep).join("/");
+}
+
+function shouldShowChatwootSuiteInEasyForQc(relativePath, payload = {}) {
+  const normalized = normalizedRelativePath(relativePath);
+  if (normalized === normalizedRelativePath(AI_548_CHATWOOT_SUITE_RELATIVE)) return true;
+  if (normalized === normalizedRelativePath(AI_547_CHATWOOT_SUITE_RELATIVE)) return true;
+  if (normalized.startsWith(`${normalizedRelativePath(EASYFORQC_CHATWOOT_GENERATED_RELATIVE)}/`)) return true;
+  const source = payload?.source && typeof payload.source === "object" ? payload.source : {};
+  const sourceTrace = payload?.source_trace && typeof payload.source_trace === "object" ? payload.source_trace : {};
+  return Boolean(source.easyforqc_generated || source.created_by === "easyforqc" || sourceTrace.easyforqc_generated);
+}
+
+async function walkFiles(root) {
+  const files = [];
+  async function visit(dir) {
+    let entries = [];
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const itemPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await visit(itemPath);
+      } else if (entry.isFile()) {
+        files.push(itemPath);
+      }
+    }
+  }
+  await visit(root);
+  return files;
+}
+
+async function listChatwootUatSuites(skillRoot) {
+  const suitesRoot = path.join(skillRoot, "assets", "suites");
+  const suiteFiles = (await walkFiles(suitesRoot))
+    .filter((filePath) => /\.ya?ml$/i.test(filePath))
+    .sort((left, right) => {
+      const leftDefault = path.basename(left) === "default_suite.yml" ? 1 : 0;
+      const rightDefault = path.basename(right) === "default_suite.yml" ? 1 : 0;
+      if (leftDefault !== rightDefault) return leftDefault - rightDefault;
+      return right.localeCompare(left);
+    });
+  const suites = [];
+  for (const filePath of suiteFiles) {
+    try {
+      const suite = await readChatwootSuiteMeta(filePath, skillRoot);
+      if (suite.visibleInEasyForQc) suites.push(suite);
+    } catch {
+      const relativePath = path.relative(skillRoot, filePath);
+      if (shouldShowChatwootSuiteInEasyForQc(relativePath, {})) {
+        suites.push({
+          suiteName: path.basename(filePath, path.extname(filePath)),
+          goalSummary: "",
+          caseCount: 0,
+          cases: [],
+          path: filePath,
+          relativePath,
+          updatedAt: "",
+        });
+      }
+    }
+  }
+  return suites;
+}
+
+function runPythonJsonCommand(args, options = {}) {
+  const childSecrets = [
+    ...(options.secrets || []),
+    ...Object.entries(options.env || {})
+      .filter(([key]) => SECRET_KEY_PATTERN.test(key))
+      .map(([, value]) => value),
+  ];
+  return new Promise((resolve, reject) => {
+    const child = spawn("python3", args, {
+      cwd: options.cwd || ROOT_DIR,
+      env: { ...process.env, ...(options.env || {}) },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error(redactText(`Python command timed out: ${args.join(" ")}`, childSecrets)));
+    }, options.timeoutMs || 120000);
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code !== 0) {
+        const error = new Error(redactText(stderr || stdout || `Python command exited with ${code}`, childSecrets));
+        error.status = 500;
+        reject(error);
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch (error) {
+        reject(Object.assign(new Error(`Python command did not return JSON: ${redactText(stdout || stderr, childSecrets).slice(0, 500)}`), { status: 500 }));
+      }
+    });
+  });
+}
+
+async function readYamlAsJson(filePath) {
+  return runPythonJsonCommand(
+    [
+      "-c",
+      [
+        "import json, sys, yaml",
+        "from pathlib import Path",
+        "payload = yaml.safe_load(Path(sys.argv[1]).read_text(encoding='utf-8'))",
+        "print(json.dumps(payload or {}, ensure_ascii=False))",
+      ].join("; "),
+      filePath,
+    ],
+    { timeoutMs: 120000 },
+  );
+}
+
+function chatwootSuiteSlug(value) {
+  return safeFileStem(value).replace(/_/g, "-") || "chatwoot-suite";
+}
+
+function cleanChatwootUserTurn(value = "") {
+  return asText(value)
+    .trim()
+    .replace(/^\d+\s*[\.)]\s*/, "")
+    .replace(/^["“”']+|["“”']+$/g, "")
+    .trim();
+}
+
+function parseChatwootUserTurns(value = "") {
+  const text = asText(value).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  if (!text) return [];
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const numbered = lines
+    .filter((line) => /^\d+\s*[\.)]\s+/.test(line))
+    .map(cleanChatwootUserTurn)
+    .filter(Boolean);
+  if (numbered.length) return numbered;
+  const quoted = Array.from(text.matchAll(/["“]([^"”]+)["”]/g)).map((match) => cleanChatwootUserTurn(match[1])).filter(Boolean);
+  if (quoted.length) return quoted;
+  return lines.map(cleanChatwootUserTurn).filter(Boolean);
+}
+
+function chatwootContactForIndex(index) {
+  const names = ["Khánh Thị Thiện", "Thiện Thị Khánh", "Nguyễn Minh Khánh", "Lê Khánh An", "Võ Khánh Linh"];
+  return {
+    name: `${names[(index - 1) % names.length]} ${String(index).padStart(3, "0")}`,
+    phone: `090000${String(index).padStart(4, "0")}`,
+    email: null,
+  };
+}
+
+function buildChatwootStep(prompt) {
+  return {
+    prompt,
+    timeout_seconds: null,
+    expectation: {
+      contains_any: [],
+      regex_any: [],
+    },
+  };
+}
+
+function chatwootSuiteDefaults(body = {}) {
+  const labels = asText(body.labels)
+    .split(/[,\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return {
+    webhook_url: asText(body.webhookUrl) || DEFAULT_CHATWOOT_UAT_WEBHOOK_URL,
+    chat_ui_mode: body.chatUiMode === "webhook-only" ? "webhook-only" : "realistic",
+    ui_inbox_id: asOptionalNumber(body.uiInboxId || DEFAULT_CHATWOOT_UAT_UI_INBOX_ID),
+    labels: labels.length ? labels : ["ai"],
+    assignee_name: asText(body.assigneeName) || "Bot",
+    reply_timeout_seconds: 300,
+    reply_settle_seconds: 3,
+    poll_interval_seconds: 2,
+    inbox_id: asOptionalNumber(body.inboxId || DEFAULT_CHATWOOT_UAT_INBOX_ID),
+    captain_assistant_id: asOptionalNumber(body.captainAssistantId || DEFAULT_CHATWOOT_UAT_CAPTAIN_ASSISTANT_ID),
+  };
+}
+
+function workspaceTestCaseTurns(testCase = {}) {
+  const direct = parseChatwootUserTurns(testCase.test_data || testCase.testData);
+  if (direct.length) return direct;
+  const structured = Array.isArray(testCase.structured_steps) ? testCase.structured_steps : [];
+  const structuredTurns = structured
+    .flatMap((step) => parseChatwootUserTurns(step?.test_data || step?.testData || step?.description))
+    .filter(Boolean);
+  if (structuredTurns.length) return structuredTurns;
+  if (Array.isArray(testCase.steps)) {
+    return testCase.steps.map(cleanChatwootUserTurn).filter(Boolean);
+  }
+  return [];
+}
+
+function workspaceTestCaseToChatwootCase(testCase, index, body = {}) {
+  const turns = workspaceTestCaseTurns(testCase);
+  if (!turns.length) return null;
+  const title = asText(testCase.title) || `Chatwoot UAT case ${index}`;
+  const stopConditions = normalizeWorkspaceStopConditions(testCase.stop_conditions || testCase.stopConditions, testCase);
+  return {
+    case_id: chatwootSuiteSlug(`${index}-${title}`).slice(0, 100),
+    title,
+    objective: asText(testCase.objective) || title,
+    opening_prompt: turns[0],
+    metadata: {
+      source: "easyforqc_workspace",
+      planned_user_turns: turns,
+      jira_expected_result: asText(testCase.expected_result || testCase.expectedResult),
+      adaptive_instruction: "Treat planned_user_turns as ordered user intents. Adapt each next user message to the real bot reply.",
+      stop_conditions: stopConditions,
+    },
+    conversation_id: null,
+    contact_id: null,
+    inbox_id: asOptionalNumber(body.inboxId || DEFAULT_CHATWOOT_UAT_INBOX_ID),
+    captain_assistant_id: asOptionalNumber(body.captainAssistantId || DEFAULT_CHATWOOT_UAT_CAPTAIN_ASSISTANT_ID),
+    ui_inbox_id: asOptionalNumber(body.uiInboxId || DEFAULT_CHATWOOT_UAT_UI_INBOX_ID),
+    labels: chatwootSuiteDefaults(body).labels,
+    assignee_name: asText(body.assigneeName) || "Bot",
+    stop_conditions: stopConditions,
+    stop_regex_any: normalizeWorkspaceStopPatterns(testCase.stop_patterns || testCase.stopPatterns || testCase.stop_regex_any),
+    fail_regex_any: normalizeWorkspaceFailPatterns(testCase.fail_patterns || testCase.failPatterns || testCase.fail_regex_any),
+    contact: chatwootContactForIndex(index),
+    steps: turns.map(buildChatwootStep),
+  };
+}
+
+function buildChatwootSuiteFromWorkspaceItem(item, body = {}) {
+  const normalized = normalizeQaWorkspaceItem(item);
+  const cases = normalized.testCases
+    .map((testCase, index) => workspaceTestCaseToChatwootCase(testCase, index + 1, body))
+    .filter(Boolean);
+  if (!cases.length) {
+    throw Object.assign(new Error("Workspace item này chưa có Test Data dạng user message để tạo Chatwoot UAT suite."), { status: 400 });
+  }
+  const suiteName = chatwootSuiteSlug(body.suiteName || normalized.chatwootSuiteName || `${normalized.issueKey || "workspace"}-${normalized.title}`);
+  return {
+    suite_name: suiteName,
+    generated_at: new Date().toISOString(),
+    goal_summary: `Chatwoot UAT suite generated from EasyForQC workspace item ${normalized.issueKey || normalized.title}. Cases=${cases.length}.`,
+    defaults: chatwootSuiteDefaults(body),
+    source: {
+      type: "easyforqc_workspace",
+      created_by: "easyforqc",
+      easyforqc_generated: true,
+      workspace_item_id: normalized.id,
+      issue_key: normalized.issueKey,
+    },
+    cases,
+  };
+}
+
+function manualChatwootScenarioTitle(turns = []) {
+  const firstTurn = asText(turns[0]).replace(/\s+/g, " ").trim();
+  if (!firstTurn) return "Kịch bản Chatwoot UAT tự nhập";
+  return `Kịch bản user: ${firstTurn}`.slice(0, 120);
+}
+
+function extractRequestedChatwootCaseCount(value = "") {
+  const text = asText(value).toLowerCase();
+  const digitMatch =
+    text.match(/(?:tạo|generate|sinh|viết|viet|làm|lam|create|build)\s+(\d{1,2})\s*(?:test\s*case|case|kịch bản|kich ban|scenario)/i);
+  if (digitMatch) return Math.max(1, Math.min(Number(digitMatch[1]) || 1, 30));
+  for (const match of text.matchAll(/\b(\d{1,2})\s*(?:test\s*case|cases|case|kịch bản|kich ban|scenario)\b/gi)) {
+    const before = text.slice(Math.max(0, (match.index || 0) - 18), match.index || 0);
+    if (/(?:thành|thanh|là|la)\s*$/i.test(before)) continue;
+    return Math.max(1, Math.min(Number(match[1]) || 1, 30));
+  }
+  const wordNumbers = {
+    "một": 1,
+    mot: 1,
+    "hai": 2,
+    "ba": 3,
+    "bốn": 4,
+    bon: 4,
+    "năm": 5,
+    nam: 5,
+    "sáu": 6,
+    sau: 6,
+    "bảy": 7,
+    bay: 7,
+    "tám": 8,
+    tam: 8,
+    "chín": 9,
+    chin: 9,
+    "mười": 10,
+    muoi: 10,
+  };
+  for (const [word, count] of Object.entries(wordNumbers)) {
+    const pattern = new RegExp(`(?:tạo|generate|sinh|viết|viet|làm|lam|create|build)\\s+${word}\\s*(?:test\\s*case|case|kịch bản|kich ban|scenario)`, "i");
+    if (pattern.test(text)) return count;
+  }
+  return 0;
+}
+
+function stripManualChatwootCountInstruction(value = "") {
+  return asText(value)
+    .replace(/^\s*(?:hãy\s+|hay\s+)?(?:tạo|generate|sinh|viết|viet|làm|lam|create|build)\s+(?:\d{1,2}|một|mot|hai|ba|bốn|bon|năm|nam|sáu|sau|bảy|bay|tám|tam|chín|chin|mười|muoi)\s*(?:test\s*case|case|kịch bản|kich ban|scenario)\s*/i, "")
+    .replace(/^[\s:,\-.]+/, "")
+    .trim();
+}
+
+function extractManualChatwootCaseSegments(scenario = "") {
+  const cleaned = stripManualChatwootCountInstruction(scenario).replace(/\s+/g, " ").trim();
+  if (!cleaned) return [];
+  const markers = Array.from(cleaned.matchAll(/(?:thành|thanh|là|la)\s*(?:một|1)\s*test\s*case/gi));
+  if (!markers.length) return [];
+  const segments = [];
+  let start = 0;
+  for (const marker of markers) {
+    const end = marker.index ?? 0;
+    const segment = cleaned.slice(start, end).replace(/^[\s,;:.]+|[\s,;:.]+$/g, "").trim();
+    if (segment) segments.push(segment);
+    start = end + marker[0].length;
+  }
+  const tail = cleaned.slice(start).replace(/^[\s,;:.]+|[\s,;:.]+$/g, "").trim();
+  if (tail) segments.push(tail);
+  const baseContextMatch = cleaned.match(/^(.{12,180}?)(?=,\s*nếu\b|\s+nếu\b|,\s*if\b|\s+if\b)/i);
+  const baseContext = baseContextMatch ? baseContextMatch[1].replace(/^[\s,;:.]+|[\s,;:.]+$/g, "").trim() : "";
+  if (!baseContext) return segments;
+  const baseKey = baseContext.slice(0, 40).toLowerCase();
+  return segments.map((segment, index) => {
+    if (index === 0 || segment.toLowerCase().includes(baseKey)) return segment;
+    return `${baseContext}. ${segment}`;
+  });
+}
+
+function manualChatwootCaseTitleFromText(text = "", index = 1, total = 1) {
+  const cleaned = stripManualChatwootCountInstruction(text).replace(/\s+/g, " ").trim();
+  const core = cleaned || `Kịch bản Chatwoot UAT ${index}`;
+  const prefix = total > 1 ? `Case ${String(index).padStart(2, "0")}: ` : "";
+  return `${prefix}${core}`.slice(0, 140);
+}
+
+function uniqueChatwootTurns(turns = []) {
+  const seen = new Set();
+  const output = [];
+  for (const turn of turns.map(cleanChatwootUserTurn).filter(Boolean)) {
+    const key = turn.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(turn);
+  }
+  return output;
+}
+
+function normalizeChatwootTurnSource(value) {
+  if (typeof value === "string") return parseChatwootUserTurns(value);
+  if (value && typeof value === "object") {
+    return parseChatwootUserTurns(value.prompt || value.user_message || value.message || value.content || value.text || value.intent);
+  }
+  return [];
+}
+
+function normalizeChatwootCaseTurns(rawCase = {}, fallbackTurns = []) {
+  const candidates = [];
+  candidates.push(asText(rawCase.opening_prompt || rawCase.openingPrompt));
+  for (const key of ["user_turns", "userTurns", "planned_user_turns", "plannedUserTurns", "messages", "steps"]) {
+    const value = rawCase[key];
+    if (Array.isArray(value)) {
+      for (const item of value) candidates.push(...normalizeChatwootTurnSource(item));
+    } else if (value) {
+      candidates.push(...normalizeChatwootTurnSource(value));
+    }
+  }
+  const turns = uniqueChatwootTurns(candidates);
+  return turns.length ? turns : uniqueChatwootTurns(fallbackTurns);
+}
+
+function normalizeChatwootStopPatterns(rawCase = {}) {
+  const raw = rawCase.stop_regex_any || rawCase.stopRegexAny || rawCase.stop_patterns || rawCase.stopPatterns;
+  const values = Array.isArray(raw) ? raw : asText(raw).split(/\r?\n/);
+  const patterns = values.map(asText).map((item) => item.trim()).filter(Boolean);
+  return patterns.length ? patterns.slice(0, 8) : ["(?i)https?://\\S+"];
+}
+
+function normalizeChatwootFailPatterns(rawCase = {}) {
+  const raw = rawCase.fail_regex_any || rawCase.failRegexAny || rawCase.fail_patterns || rawCase.failPatterns;
+  const values = Array.isArray(raw) ? raw : asText(raw).split(/\r?\n/);
+  const patterns = values.map(asText).map((item) => item.trim()).filter(Boolean);
+  return patterns.length ? patterns.slice(0, 8) : normalizeWorkspaceFailPatterns([], true);
+}
+
+function buildManualChatwootFallbackCases(scenario = "", turns = [], requestedCount = 0) {
+  const segments = extractManualChatwootCaseSegments(scenario);
+  const count = Math.max(1, Math.min(Math.max(requestedCount || 0, segments.length || 0) || 1, 30));
+  const sources = segments.length ? segments : [scenario || turns.join("\n")];
+  return Array.from({ length: count }, (_, index) => {
+    const source = sources[index] || sources[sources.length - 1] || scenario || turns.join("\n");
+    const parsedTurns = parseChatwootUserTurns(source);
+    const caseTurns = uniqueChatwootTurns(parsedTurns.length ? parsedTurns : turns);
+    return {
+      title: manualChatwootCaseTitleFromText(source, index + 1, count),
+      objective: source || scenario,
+      user_turns: caseTurns,
+      expected_result: source || scenario,
+      stop_conditions: fallbackStopConditionsForWorkspaceCase({
+        title: source,
+        objective: source || scenario,
+        test_data: caseTurns.join("\n"),
+        expected_result: source || scenario,
+      }),
+      stop_regex_any: fallbackStopPatternsForWorkspaceCase({
+        title: source,
+        objective: source || scenario,
+        test_data: caseTurns.join("\n"),
+        expected_result: source || scenario,
+      }),
+      fail_regex_any: fallbackFailPatternsForWorkspaceCase({
+        title: source,
+        objective: source || scenario,
+        test_data: caseTurns.join("\n"),
+        expected_result: source || scenario,
+      }),
+      adaptive_instruction: "Treat planned_user_turns as ordered user intents. Adapt each next user message to the real bot reply.",
+      source: "manual_fallback",
+    };
+  });
+}
+
+function normalizeManualChatwootAiPlan(payload = {}, scenario = "", requestedCount = 0, fallbackTurns = []) {
+  const rawCases = Array.isArray(payload?.cases) ? payload.cases : [];
+  let cases = rawCases
+    .map((rawCase, index) => {
+      const turns = normalizeChatwootCaseTurns(rawCase, fallbackTurns);
+      if (!turns.length) return null;
+      const title = asText(rawCase.title || rawCase.name) || manualChatwootCaseTitleFromText(turns[0], index + 1, rawCases.length || requestedCount || 1);
+      return {
+        case_id: asText(rawCase.case_id || rawCase.caseId),
+        title,
+        objective: asText(rawCase.objective || rawCase.goal || rawCase.description) || title,
+        opening_prompt: asText(rawCase.opening_prompt || rawCase.openingPrompt) || turns[0],
+        user_turns: turns,
+        expected_result: asText(rawCase.expected_result || rawCase.expectedResult || rawCase.expected) || "",
+        stop_conditions: normalizeWorkspaceStopConditions(
+          rawCase.stop_conditions || rawCase.stopConditions || {
+            pass: rawCase.pass_conditions || rawCase.passConditions,
+            fail: rawCase.fail_conditions || rawCase.failConditions,
+          },
+          rawCase,
+        ),
+        adaptive_instruction: asText(rawCase.adaptive_instruction || rawCase.adaptiveInstruction),
+        stop_regex_any: normalizeChatwootStopPatterns(rawCase),
+        fail_regex_any: normalizeChatwootFailPatterns(rawCase),
+        source: "manual_ai",
+      };
+    })
+    .filter(Boolean);
+  if (requestedCount && cases.length > requestedCount) {
+    cases = cases.slice(0, requestedCount);
+  }
+  if (requestedCount && cases.length < requestedCount) {
+    const fallbackCases = buildManualChatwootFallbackCases(scenario, fallbackTurns, requestedCount);
+    cases = [
+      ...cases,
+      ...fallbackCases.slice(cases.length).map((fallbackCase) => ({ ...fallbackCase, source: "manual_ai_fallback_fill" })),
+    ];
+  }
+  return {
+    suiteName: asText(payload.suite_name || payload.suiteName),
+    goalSummary: asText(payload.goal_summary || payload.goalSummary),
+    cases,
+  };
+}
+
+function buildManualChatwootAiMessages({ scenario, requestedCount, settings }) {
+  const schema = {
+    suite_name: "short_slug_or_name",
+    goal_summary: "short summary of the generated UAT suite",
+    cases: [
+      {
+        case_id: "optional-stable-slug",
+        title: "clear purpose of this test case",
+        objective: "what this case validates",
+        opening_prompt: "the first real user message sent to the bot",
+        user_turns: ["ordered user messages or intents only"],
+        expected_result: "pass/fail condition in business terms",
+        pass_conditions: ["human-readable pass stop condition"],
+        fail_conditions: ["human-readable fail stop condition"],
+        adaptive_instruction: "how the runtime AI should adapt to bot replies while preserving the case goal",
+        stop_regex_any: ["(?i)https?://\\S+"],
+        fail_regex_any: ["(?i)(lỗi hệ thống|không thể xử lý)"],
+      },
+    ],
+  };
+  const system = [
+    "You are a senior QA automation planner for adaptive Chatwoot UAT.",
+    "Convert the user's request into executable chatbot test cases.",
+    "Return only one valid JSON object. Do not wrap it in markdown.",
+    "Do not answer the user scenario; design the automation cases.",
+  ].join("\n");
+  const user = [
+    `Manual request:\n${truncateForPrompt(scenario, 8000)}`,
+    "",
+    `Explicit requested case count: ${requestedCount || "not specified"}`,
+    settings?.promptGuidelines ? `EasyForQC prompt rules to preserve:\n${truncateForPrompt(settings.promptGuidelines, 4000)}` : "",
+    "",
+    "Rules:",
+    "- If an explicit case count is provided, return exactly that many cases.",
+    "- If no count is provided, choose the smallest number of cases that fully covers the requested scenario.",
+    "- Each case must be independent and runnable from a fresh Chatwoot conversation.",
+    "- Preserve concrete business details such as booking code, route, date, passenger count, fallback date, pickup/dropoff, and payment-link expectation.",
+    "- user_turns must contain only user messages/intents to send to the bot. Do not put bot replies or assertions as user messages.",
+    "- Put conditional logic in objective, expected_result, and adaptive_instruction. Example: if 20/5 has no trip, ask for 21/5; if both dates have no trip, stop without asking for payment.",
+    "- For booking success cases, include a stop regex that catches a payment URL.",
+    "- For every case, include pass_conditions and fail_conditions as natural language sentences for QA users, not regex.",
+    "- Write pass_conditions and fail_conditions in Vietnamese with full diacritics. Keep product names, route names, Jira keys, tool/API identifiers, and codes unchanged.",
+    "- For every case, include fail_regex_any to stop and mark failed when the bot hard-fails, answers out of context, or reaches the opposite business outcome.",
+    "- For negative/no-option cases, include stop regex patterns that can stop when the bot clearly confirms no available trip/option.",
+    "- Write concise Vietnamese titles when the input is Vietnamese.",
+    "",
+    "Required JSON schema:",
+    JSON.stringify(schema, null, 2),
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ];
+}
+
+async function generateManualChatwootAiPlan({ scenario, aiSettings }) {
+  const requestedCount = extractRequestedChatwootCaseCount(scenario);
+  const result = await callOpenAiCompatible(aiSettings, buildManualChatwootAiMessages({ scenario, requestedCount, settings: aiSettings }));
+  return normalizeManualChatwootAiPlan(result.payload, scenario, requestedCount, parseChatwootUserTurns(scenario));
+}
+
+function manualChatwootCaseToSuiteCase(rawCase = {}, index = 1, body = {}, fallbackTurns = [], scenario = "") {
+  const defaults = chatwootSuiteDefaults(body);
+  const turns = normalizeChatwootCaseTurns(rawCase, fallbackTurns);
+  if (!turns.length) return null;
+  const title = asText(rawCase.title) || manualChatwootScenarioTitle(turns);
+  const expectedResult = asText(rawCase.expected_result || rawCase.expectedResult);
+  const stopConditions = normalizeWorkspaceStopConditions(rawCase.stop_conditions || rawCase.stopConditions, rawCase);
+  return {
+    case_id: chatwootSuiteSlug(rawCase.case_id || rawCase.caseId || `${String(index).padStart(2, "0")}-${title}`).slice(0, 100),
+    title,
+    objective: asText(rawCase.objective) || expectedResult || scenario || title,
+    opening_prompt: asText(rawCase.opening_prompt || rawCase.openingPrompt) || turns[0],
+    metadata: {
+      source: asText(rawCase.source) || "manual_scenario",
+      planned_user_turns: turns,
+      original_scenario: scenario,
+      jira_expected_result: expectedResult,
+      stop_conditions: stopConditions,
+      adaptive_instruction:
+        asText(rawCase.adaptive_instruction || rawCase.adaptiveInstruction) ||
+        "Treat planned_user_turns as ordered user intents. Adapt each next user message to the real bot reply.",
+    },
+    conversation_id: null,
+    contact_id: null,
+    inbox_id: asOptionalNumber(body.inboxId || DEFAULT_CHATWOOT_UAT_INBOX_ID),
+    captain_assistant_id: asOptionalNumber(body.captainAssistantId || DEFAULT_CHATWOOT_UAT_CAPTAIN_ASSISTANT_ID),
+    ui_inbox_id: asOptionalNumber(body.uiInboxId || DEFAULT_CHATWOOT_UAT_UI_INBOX_ID),
+    labels: defaults.labels,
+    assignee_name: asText(body.assigneeName) || "Bot",
+    stop_conditions: stopConditions,
+    stop_regex_any: normalizeChatwootStopPatterns(rawCase),
+    fail_regex_any: normalizeChatwootFailPatterns(rawCase),
+    contact: chatwootContactForIndex(index),
+    steps: turns.map(buildChatwootStep),
+  };
+}
+
+function buildManualChatwootSuite(body = {}, aiPlan = null) {
+  const scenario = asText(body.scenario || body.goal || body.script);
+  const turns = parseChatwootUserTurns(body.userTurns || body.turns || scenario);
+  if (!turns.length) {
+    throw Object.assign(new Error("Cần nhập ít nhất một câu user hoặc kịch bản để tạo suite Chatwoot UAT."), { status: 400 });
+  }
+  const requestedCount = extractRequestedChatwootCaseCount(scenario);
+  const plannedCases = Array.isArray(aiPlan?.cases) && aiPlan.cases.length ? aiPlan.cases : buildManualChatwootFallbackCases(scenario, turns, requestedCount);
+  const cases = plannedCases
+    .map((testCase, index) => manualChatwootCaseToSuiteCase(testCase, index + 1, body, turns, scenario))
+    .filter(Boolean);
+  if (!cases.length) {
+    throw Object.assign(new Error("Không tạo được test case Chatwoot UAT từ kịch bản đã nhập."), { status: 400 });
+  }
+  const title = asText(body.title || body.suiteName || aiPlan?.suiteName) || manualChatwootScenarioTitle(turns);
+  const suiteName = chatwootSuiteSlug(body.suiteName || title);
+  return {
+    suite_name: suiteName,
+    generated_at: new Date().toISOString(),
+    goal_summary: asText(aiPlan?.goalSummary) || scenario || `Manual Chatwoot UAT suite. Turns=${turns.length}.`,
+    defaults: chatwootSuiteDefaults(body),
+    source: {
+      type: "easyforqc_manual_scenario",
+      created_by: "easyforqc",
+      easyforqc_generated: true,
+      planning_mode: Array.isArray(aiPlan?.cases) && aiPlan.cases.length ? "ai" : "fallback",
+    },
+    cases,
+  };
+}
+
+async function writeChatwootGeneratedSuite(skillRoot, suitePayload, preferredName = "") {
+  const suitesRoot = path.join(skillRoot, EASYFORQC_CHATWOOT_GENERATED_RELATIVE);
+  const suiteName = chatwootSuiteSlug(preferredName || suitePayload.suite_name || "easyforqc-chatwoot-suite");
+  const datedDir = `${new Date().toISOString().slice(0, 10)}-${suiteName}`;
+  const outputDir = path.join(suitesRoot, datedDir);
+  await fs.mkdir(outputDir, { recursive: true });
+  const outputFile = path.join(outputDir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${suiteName}.yml`);
+  const markedPayload = {
+    ...suitePayload,
+    source: {
+      ...(suitePayload.source && typeof suitePayload.source === "object" ? suitePayload.source : {}),
+      created_by: "easyforqc",
+      easyforqc_generated: true,
+    },
+  };
+  await fs.writeFile(outputFile, JSON.stringify(markedPayload, null, 2) + "\n", "utf8");
+  return {
+    outputFile,
+    suite: await readChatwootSuiteMeta(outputFile, skillRoot),
+  };
+}
+
+function chatwootSuiteCaseToWorkspaceTestCase(chatCase = {}, index = 1, issueKey = "") {
+  const metadata = chatCase.metadata && typeof chatCase.metadata === "object" ? chatCase.metadata : {};
+  const turns = Array.isArray(metadata.planned_user_turns)
+    ? metadata.planned_user_turns.map(asText).filter(Boolean)
+    : Array.isArray(chatCase.steps)
+      ? chatCase.steps.map((step) => asText(step?.prompt)).filter(Boolean)
+      : [];
+  const expected = asText(metadata.jira_expected_result || chatCase.expected_result);
+  const stopConditions = normalizeWorkspaceStopConditions(chatCase.stop_conditions || chatCase.stopConditions || metadata.stop_conditions || metadata.stopConditions, chatCase);
+  return {
+    title: asText(chatCase.title) || `[TC_${String(index).padStart(4, "0")}] Chatwoot UAT case`,
+    objective: asText(chatCase.objective || metadata.source_testcase_name),
+    priority: "High",
+    technique: "Adaptive Chatwoot UAT",
+    risk: expected || "Bot có thể gọi tool sai thứ tự, mất context hoặc phản hồi không đúng ngữ cảnh.",
+    requirement_ref: asText(metadata.source_testcase_key || issueKey),
+    coverage_tags: ["chatwoot-uat", "ai-planner", "booking-flow", asText(metadata.source_testcase_key)].filter(Boolean),
+    scenario_type: "chatbot_uat",
+    precondition: "Chatwoot UAT auth đã cấu hình; BaoApiInbox 3062 và captain_assistant_id 80 sẵn sàng; AI planner đọc phản hồi bot theo từng turn.",
+    test_data: turns.map((turn, turnIndex) => `${turnIndex + 1}. "${turn}"`).join("\n"),
+    expected_result: expected,
+    stop_conditions: stopConditions,
+    stop_patterns: normalizeWorkspaceStopPatterns(chatCase.stop_regex_any || chatCase.stopRegexAny || chatCase.stop_patterns || chatCase.stopPatterns),
+    fail_patterns: normalizeWorkspaceFailPatterns(chatCase.fail_regex_any || chatCase.failRegexAny || chatCase.fail_patterns || chatCase.failPatterns),
+    steps: turns,
+    structured_steps: turns.map((turn, turnIndex) => ({
+      description: turnIndex === 0 ? "Gửi opening prompt vào Chatwoot UAT" : "Gửi user message tiếp theo theo ngữ cảnh bot",
+      test_data: turn,
+      expected_result: turnIndex === turns.length - 1 ? expected : "Bot phản hồi đúng ngữ cảnh và AI planner chọn được lượt user kế tiếp phù hợp.",
+    })),
+  };
+}
+
+function chatwootSuiteToWorkspaceItem(suite = {}, options = {}) {
+  const issueKey = asText(options.issueKey || suite?.source?.key || "AI-548").toUpperCase();
+  const cases = Array.isArray(suite.cases) ? suite.cases : [];
+  const testCases = cases.map((chatCase, index) => chatwootSuiteCaseToWorkspaceTestCase(chatCase, index + 1, issueKey));
+  const sourceKey = asText(options.sourceKey || issueKey || suite.suite_name);
+  return normalizeQaWorkspaceItem({
+    id: asText(options.id) || `workspace-${chatwootSuiteSlug(sourceKey || suite.suite_name)}`,
+    issueKey,
+    title: asText(options.title) || `[${issueKey}] ${asText(suite.suite_name) || "Chatwoot UAT suite"}`,
+    source: "chatwoot_suite_import",
+    sourceKey,
+    archetypeKey: "chatwoot_uat",
+    chatwootSuiteFile: asText(options.suiteFile),
+    chatwootSuiteName: asText(suite.suite_name),
+    testCases,
+    outline: {
+      issue_key: issueKey,
+      title: `[${issueKey}] Chatwoot UAT coverage`,
+      template: "chatwoot_uat",
+      source_context: {
+        imported_suite: asText(options.suiteFile),
+        goal_summary: asText(suite.goal_summary),
+      },
+      design_rationale: {
+        primary_techniques: ["Conversation flow", "Tool contract regression", "Adaptive AI planner"],
+        supporting_techniques: ["Negative path", "State carry-forward", "Recovery/fallback"],
+      },
+      branches: [
+        {
+          title: "Booking pending và payment link",
+          items: testCases.slice(0, 5).map((testCase) => testCase.title),
+        },
+        {
+          title: "Tool contract và thứ tự gọi tool",
+          items: testCases.filter((testCase) => /tool|bms|seat|payment/i.test(testCase.title)).slice(0, 6).map((testCase) => testCase.title),
+        },
+        {
+          title: "Adaptive context và fallback",
+          items: testCases.filter((testCase) => /đổi|thiếu|không|fallback|context|duplicate/i.test(`${testCase.title} ${testCase.expected_result}`)).slice(0, 6).map((testCase) => testCase.title),
+        },
+        {
+          title: "Out of scope",
+          items: ["Không kiểm production Chatwoot.", "Không validate thanh toán thật ngoài payment link UAT.", "Không thay đổi dữ liệu booking ngoài phạm vi UAT suite."],
+        },
+      ].filter((branch) => branch.items.length),
+    },
+  });
+}
+
+async function ensureAi548WorkspaceItem(email) {
+  const stored = await readUserSettings(email);
+  const existing = normalizeQaWorkspaceItems(stored.qaWorkspaceItems);
+  const existingItem = existing.find((item) => item.sourceKey === "AI-548" || item.issueKey === "AI-548");
+  const skillRoot = resolveChatwootUatSkillRoot();
+  const suiteFile = resolveChatwootSuiteFile(skillRoot, AI_548_CHATWOOT_SUITE_RELATIVE);
+  if (!fsSync.existsSync(suiteFile)) return existing;
+  const suite = await readYamlAsJson(suiteFile);
+  const item = chatwootSuiteToWorkspaceItem(suite, {
+    ...(existingItem || {}),
+    id: "workspace-ai-548-chatwoot-uat",
+    issueKey: "AI-548",
+    sourceKey: "AI-548",
+    title: "[AI-548] Chatwoot UAT booking pending suite",
+    suiteFile: path.relative(skillRoot, suiteFile),
+  });
+  if (
+    existingItem &&
+    existingItem.chatwootSuiteFile === item.chatwootSuiteFile &&
+    existingItem.chatwootSuiteName === item.chatwootSuiteName &&
+    existingItem.testCases.length >= item.testCases.length
+  ) {
+    return existing;
+  }
+  return (await upsertQaWorkspaceItem(email, item)).items;
+}
+
+async function ensureStableChatwootSuiteFile(skillRoot, relativePath, suitePayload) {
+  const outputFile = path.join(skillRoot, relativePath);
+  await fs.mkdir(path.dirname(outputFile), { recursive: true });
+  const markedPayload = {
+    ...suitePayload,
+    source: {
+      ...(suitePayload.source && typeof suitePayload.source === "object" ? suitePayload.source : {}),
+      created_by: "easyforqc",
+      easyforqc_generated: true,
+    },
+  };
+  await fs.writeFile(outputFile, JSON.stringify(markedPayload, null, 2) + "\n", "utf8");
+  return outputFile;
+}
+
+async function ensureAi547WorkspaceItem(email) {
+  const stored = await readUserSettings(email);
+  const existing = normalizeQaWorkspaceItems(stored.qaWorkspaceItems);
+  const existingItem = existing.find((item) => item.sourceKey === "AI-547" || item.issueKey === "AI-547");
+  const skillRoot = resolveChatwootUatSkillRoot();
+  const suiteFilePath = path.join(skillRoot, AI_547_CHATWOOT_SUITE_RELATIVE);
+  const suiteRelativePath = path.relative(skillRoot, suiteFilePath);
+  const importedTestCases = await readImportedTestCases(AI_547_REFERENCE_FILES);
+  const testCases = normalizeWorkspaceTestCases(importedTestCases.length ? importedTestCases : existingItem?.testCases || []);
+  if (
+    existingItem &&
+    testCases.length <= existingItem.testCases.length &&
+    fsSync.existsSync(suiteFilePath) &&
+    existingItem.chatwootSuiteFile === suiteRelativePath
+  ) {
+    return existing;
+  }
+  if (!testCases.length) return existing;
+  const baseItem = normalizeQaWorkspaceItem({
+    ...(existingItem || {}),
+    id: "workspace-ai-547-bus-trip-tools",
+    issueKey: "AI-547",
+    sourceKey: "AI-547",
+    source: "omniagent_reference_import",
+    title: "[AI-547] Bus trip tool catalog/pricing regression suite",
+    archetypeKey: "chatbot",
+    testCases,
+    outline: {
+      issue_key: "AI-547",
+      title: "[AI-547] Bus trip tool catalog/pricing regression coverage",
+      template: "chatbot_uat",
+      branches: [
+        {
+          title: "Schedule catalog contract",
+          items: [
+            "Kiểm đúng thứ tự gọi `bus_trip_schedule_catalog_tool` trước các tool stop/price/seat map.",
+            "Catalog phải group đúng theo base trip và không lộ field nội bộ cho user.",
+            "Khi user đổi ngày/route/giờ, context discovery phải reset để không dùng lại trip cũ.",
+          ],
+        },
+        {
+          title: "Stop catalog selection key",
+          items: [
+            "Phân biệt endpoint/options/points khi bot cần báo giá mặc định hoặc xin khách chọn điểm.",
+            "Không dedupe sai các điểm trùng tên nhưng khác selection key.",
+            "Không tự xác nhận khi user nói gần đúng nhưng có nhiều candidate.",
+          ],
+        },
+        {
+          title: "Pricing and seat-map handoff",
+          items: [
+            "`bus_trip_price_options_tool` phải dùng selection key nguyên văn từ stop options.",
+            "Mỗi price option chỉ đại diện đúng một ticket unit.",
+            "Luồng happy path phải đi tiếp được đến seat map sau khi có price/stop context hợp lệ.",
+          ],
+        },
+        {
+          title: "Regression and out of scope",
+          items: [
+            "Cover regression cho đổi giờ trong cùng ngày, nearest match và thiếu/nhầm context.",
+            "Không kiểm production Chatwoot.",
+            "Không validate thanh toán thật ngoài payment link UAT.",
+          ],
+        },
+      ],
+    },
+  });
+  const suitePayload = buildChatwootSuiteFromWorkspaceItem(baseItem, {
+    suiteName: "ai-547-bus-trip-tools-chatwoot-uat",
+    inboxId: DEFAULT_CHATWOOT_UAT_INBOX_ID,
+    uiInboxId: DEFAULT_CHATWOOT_UAT_UI_INBOX_ID,
+    captainAssistantId: DEFAULT_CHATWOOT_UAT_CAPTAIN_ASSISTANT_ID,
+    labels: "ai,ai-547",
+    assigneeName: "Bot",
+    chatUiMode: "realistic",
+  });
+  suitePayload.suite_name = "ai-547-bus-trip-tools-chatwoot-uat";
+  suitePayload.goal_summary = `Chatwoot UAT suite imported from OmniAgent AI-547 test cases. Cases=${baseItem.testCases.length}.`;
+  const suiteFile = await ensureStableChatwootSuiteFile(skillRoot, AI_547_CHATWOOT_SUITE_RELATIVE, suitePayload);
+  const item = {
+    ...baseItem,
+    chatwootSuiteFile: path.relative(skillRoot, suiteFile),
+    chatwootSuiteName: suitePayload.suite_name,
+  };
+  return (await upsertQaWorkspaceItem(email, item)).items;
+}
+
+function seededQaWorkspaceItems() {
+  const seed = readEasyForQcUatStateSeed();
+  return normalizeQaWorkspaceItems(Array.isArray(seed?.qaWorkspaceItems) ? seed.qaWorkspaceItems : []);
+}
+
+function qaWorkspaceItemPassFailReadyCount(item = {}) {
+  return (item.testCases || []).filter((testCase) => {
+    const conditions = normalizeWorkspaceStopConditions(testCase.stop_conditions || testCase.stopConditions, testCase);
+    const passPatterns = normalizeWorkspaceStopPatterns(testCase.stop_patterns || testCase.stopPatterns || testCase.stop_regex_any, false);
+    const failPatterns = normalizeWorkspaceFailPatterns(testCase.fail_patterns || testCase.failPatterns || testCase.fail_regex_any, false);
+    return conditions.pass.length && conditions.fail.length && passPatterns.length && failPatterns.length;
+  }).length;
+}
+
+function shouldApplySeededQaWorkspaceItem(seedItem = {}, existingItem = null) {
+  if (!existingItem) return true;
+  if ((seedItem.testCases || []).length > (existingItem.testCases || []).length) return true;
+  const seedReady = qaWorkspaceItemPassFailReadyCount(seedItem);
+  const existingReady = qaWorkspaceItemPassFailReadyCount(existingItem);
+  return seedReady > existingReady;
+}
+
+async function ensureSeededQaWorkspaceItems(email) {
+  const seedItems = seededQaWorkspaceItems();
+  if (!seedItems.length) {
+    const stored = await readUserSettings(email);
+    return normalizeQaWorkspaceItems(stored.qaWorkspaceItems);
+  }
+  const stored = await readUserSettings(email);
+  let next = normalizeQaWorkspaceItems(stored.qaWorkspaceItems);
+  let changed = false;
+  for (const seedItem of seedItems) {
+    const existingItem = next.find(
+      (item) =>
+        item.id === seedItem.id ||
+        (seedItem.sourceKey && item.sourceKey === seedItem.sourceKey) ||
+        (seedItem.issueKey && item.issueKey === seedItem.issueKey),
+    );
+    if (!shouldApplySeededQaWorkspaceItem(seedItem, existingItem)) continue;
+    const createdAt = existingItem?.createdAt || seedItem.createdAt;
+    next = [
+      normalizeQaWorkspaceItem({ ...seedItem, createdAt, updatedAt: seedItem.updatedAt || new Date().toISOString() }),
+      ...next.filter(
+        (item) =>
+          item.id !== seedItem.id &&
+          !(seedItem.sourceKey && item.sourceKey === seedItem.sourceKey) &&
+          !(seedItem.issueKey && item.issueKey === seedItem.issueKey),
+      ),
+    ];
+    changed = true;
+  }
+  return changed ? saveQaWorkspaceItems(email, next) : next;
+}
+
+async function ensureStandardQaWorkspaceItems(email) {
+  await ensureAi547WorkspaceItem(email);
+  await ensureAi548WorkspaceItem(email);
+  return ensureSeededQaWorkspaceItems(email);
+}
+
+function resolveChatwootSuiteFile(skillRoot, suiteFile) {
+  const suitesRoot = path.resolve(skillRoot, "assets", "suites");
+  const requested = asText(suiteFile) || path.join("assets", "suites", "generated", "2026-05-07-ai-548-chatwoot-uat", "ai-548-create-booking-pending-chatwoot-uat.yml");
+  const resolved = path.isAbsolute(requested) ? path.resolve(requested) : path.resolve(skillRoot, requested);
+  if (!resolved.startsWith(`${suitesRoot}${path.sep}`) && resolved !== suitesRoot) {
+    throw Object.assign(new Error("Suite file phải nằm trong assets/suites của skill chatwoot-test-uat."), { status: 400 });
+  }
+  if (!/\.ya?ml$/i.test(resolved)) {
+    throw Object.assign(new Error("Suite file phải là YAML .yml hoặc .yaml."), { status: 400 });
+  }
+  return resolved;
+}
+
+function asOptionalNumber(value) {
+  const text = asText(value);
+  if (!text) return null;
+  const number = Number(text);
+  return Number.isFinite(number) ? number : null;
+}
+
+function chatwootConversationUrl(baseUrl, accountId, conversationId) {
+  const base = asText(baseUrl)
+    .replace(/\/api\/v\d+\/?$/i, "")
+    .replace(/\/api\/?$/i, "")
+    .replace(/\/+$/g, "");
+  const account = asText(accountId);
+  const conversation = asText(conversationId);
+  if (!base || !account || !conversation) return "";
+  return `${base}/app/accounts/${encodeURIComponent(account)}/conversations/${encodeURIComponent(conversation)}`;
+}
+
+async function readJsonFileIfExists(filePath) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function chatwootHtmlPathFromRaw(rawPath) {
+  const stem = path.basename(rawPath, path.extname(rawPath)).replace(/-raw$/, "");
+  return path.join(path.dirname(rawPath), `${stem}.html`);
+}
+
+function summarizeChatwootReport(rawPayload = {}) {
+  const runtime = rawPayload?.runtime || {};
+  const accountId = runtime.account_id;
+  const results = Array.isArray(rawPayload?.results) ? rawPayload.results : [];
+  return {
+    suiteName: asText(rawPayload?.suite_name),
+    mode: asText(rawPayload?.run_mode || rawPayload?.runtime?.chat_ui_mode || ""),
+    total: Number(rawPayload?.total_case_count || rawPayload?.selected_case_count || results.length || 0),
+    success: Number(rawPayload?.success_count || 0),
+    handoff: Number(rawPayload?.handoff_count || 0),
+    failure: Number(rawPayload?.failure_count || 0),
+    runtime: {
+      webhookUrl: asText(runtime.webhook_url),
+      chatwootApiBase: asText(runtime.chatwoot_api_base),
+      accountId: asText(accountId),
+      chatUiMode: asText(runtime.chat_ui_mode),
+      maxUserTurns: runtime.max_user_turns ?? null,
+    },
+    results: results.map((item) => ({
+      caseId: asText(item.case_id),
+      title: asText(item.title || item.case_id),
+      succeeded: Boolean(item.succeeded),
+      completedReason: asText(item.completed_reason),
+      failureReason: asText(item.failure_reason),
+      conversationId: asText(item.conversation_id),
+      conversationUrl: chatwootConversationUrl(runtime.chatwoot_api_base, accountId, item.conversation_id),
+      userTurnCount: Number(item.user_turn_count || 0),
+      bookingCode: asText(item.booking_code),
+      ticketCode: asText(item.ticket_code),
+      paymentLink: asText(item.payment_link),
+      handoffDetected: Boolean(item.handoff_detected || asText(item.completed_reason).includes("handoff")),
+    })),
+  };
+}
+
+function chatwootRunFiles(outputFile) {
+  const rawFile = outputFile.replace(/\.ya?ml$/i, "-raw.json");
+  const htmlFile = chatwootHtmlPathFromRaw(rawFile);
+  return {
+    report: fsSync.existsSync(htmlFile) ? fileViewMeta(htmlFile) : null,
+    raw: fsSync.existsSync(rawFile) ? fileViewMeta(rawFile) : null,
+    yaml: fsSync.existsSync(outputFile) ? fileViewMeta(outputFile) : null,
+  };
+}
+
+function publicChatwootJob(raw = {}) {
+  const request = raw.request || raw.request_payload || {};
+  const result = raw.result || raw.result_payload || null;
+  const caseStates = Array.isArray(raw.caseStates)
+    ? raw.caseStates
+    : Array.isArray(request.caseStates)
+      ? request.caseStates
+      : [];
+  return {
+    id: asText(raw.id),
+    status: asText(raw.status || "queued"),
+    suiteName: asText(raw.suiteName || raw.suite_name || result?.report?.suiteName || ""),
+    suiteFile: asText(raw.suiteFile || raw.suite_file || request.suiteFile || ""),
+    runDir: asText(raw.runDir || raw.run_dir || result?.runDir || ""),
+    request,
+    result,
+    error: asText(raw.error),
+    activeCaseId: asText(raw.activeCaseId || request.activeCaseId),
+    caseStates,
+    createdAt: (raw.createdAt || raw.created_at || new Date().toISOString()).toString(),
+    startedAt: raw.startedAt || raw.started_at || null,
+    finishedAt: raw.finishedAt || raw.finished_at || null,
+    updatedAt: (raw.updatedAt || raw.updated_at || raw.createdAt || raw.created_at || new Date().toISOString()).toString(),
+  };
+}
+
+async function persistChatwootJob(job) {
+  CHATWOOT_UAT_JOBS.set(job.id, job);
+  if (!db) return;
+  await db.query(
+    `
+      INSERT INTO chatwoot_uat_runs (
+        id, user_email, status, suite_name, suite_file, run_dir, request_payload,
+        result_payload, error, created_at, started_at, finished_at, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10, $11, $12, $13)
+      ON CONFLICT (id)
+      DO UPDATE SET
+        status = EXCLUDED.status,
+        suite_name = EXCLUDED.suite_name,
+        suite_file = EXCLUDED.suite_file,
+        run_dir = EXCLUDED.run_dir,
+        request_payload = EXCLUDED.request_payload,
+        result_payload = EXCLUDED.result_payload,
+        error = EXCLUDED.error,
+        started_at = EXCLUDED.started_at,
+        finished_at = EXCLUDED.finished_at,
+        updated_at = EXCLUDED.updated_at
+    `,
+    [
+      job.id,
+      normalizeEmail(job.userEmail),
+      job.status,
+      job.suiteName || "",
+      job.suiteFile || "",
+      job.runDir || "",
+      JSON.stringify({
+        ...(job.request || {}),
+        caseStates: Array.isArray(job.caseStates) ? job.caseStates : [],
+        activeCaseId: asText(job.activeCaseId),
+      }),
+      job.result ? JSON.stringify(job.result) : null,
+      job.error || "",
+      job.createdAt,
+      job.startedAt,
+      job.finishedAt,
+      job.updatedAt,
+    ],
+  );
+}
+
+async function listChatwootJobs(email, limit = 20) {
+  const userEmail = normalizeEmail(email);
+  const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
+  if (db) {
+    const result = await db.query(
+      `
+        SELECT id, status, suite_name, suite_file, run_dir, request_payload, result_payload, error,
+               created_at, started_at, finished_at, updated_at
+        FROM chatwoot_uat_runs
+        WHERE user_email = $1
+        ORDER BY created_at DESC
+        LIMIT $2
+      `,
+      [userEmail, safeLimit],
+    );
+    return result.rows.map(publicChatwootJob);
+  }
+  return [...CHATWOOT_UAT_JOBS.values()]
+    .filter((job) => job.userEmail === userEmail)
+    .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)))
+    .slice(0, safeLimit)
+    .map(publicChatwootJob);
+}
+
+async function findChatwootJob(email, id) {
+  const userEmail = normalizeEmail(email);
+  const jobId = asText(id);
+  if (!jobId) return null;
+  if (db) {
+    const result = await db.query(
+      `
+        SELECT id, status, suite_name, suite_file, run_dir, request_payload, result_payload, error,
+               created_at, started_at, finished_at, updated_at
+        FROM chatwoot_uat_runs
+        WHERE user_email = $1 AND id = $2
+      `,
+      [userEmail, jobId],
+    );
+    return result.rows[0] ? publicChatwootJob(result.rows[0]) : null;
+  }
+  const job = CHATWOOT_UAT_JOBS.get(jobId);
+  return job?.userEmail === userEmail ? publicChatwootJob(job) : null;
+}
+
+async function prepareChatwootUatRun(body = {}, options = {}) {
+  const skillRoot = resolveChatwootUatSkillRoot();
+  if (!fsSync.existsSync(path.join(skillRoot, "SKILL.md"))) {
+    throw Object.assign(new Error("Không tìm thấy skill chatwoot-test-uat. Hãy cấu hình CHATWOOT_UAT_SKILL_ROOT hoặc mount OmniAgent repo vào app."), { status: 400 });
+  }
+  const mode = body.mode === "suite" ? "suite" : "adaptive";
+  const script = path.join(skillRoot, "scripts", mode === "suite" ? "run_chatwoot_suite.py" : "interactive_chatwoot_loop.py");
+  if (!fsSync.existsSync(script)) {
+    throw Object.assign(new Error(`Không tìm thấy script runner của skill: ${path.basename(script)}`), { status: 400 });
+  }
+  const suiteFile = resolveChatwootSuiteFile(skillRoot, body.suiteFile);
+  await fs.access(suiteFile);
+  let suiteMeta = await readChatwootSuiteMeta(suiteFile, skillRoot).catch(() => ({
+    suiteName: path.basename(suiteFile, path.extname(suiteFile)),
+    goalSummary: "",
+    caseCount: 0,
+    relativePath: path.relative(skillRoot, suiteFile),
+    cases: [],
+  }));
+  const runDir = await makeRunDir("CHATWOOT-UAT");
+  let effectiveSuiteFile = suiteFile;
+  const selectedCaseIds = Array.isArray(body.selectedCaseIds)
+    ? Array.from(new Set(body.selectedCaseIds.map(asText).filter(Boolean)))
+    : [];
+  const stopConditionOverrides = normalizeChatwootStopConditionOverrides(body.caseStopConditions || body.caseStopPatterns);
+  if (selectedCaseIds.length || stopConditionOverrides.size) {
+    const suitePayload = await readYamlAsJson(suiteFile);
+    const rawCases = applyChatwootStopConditionOverrides(Array.isArray(suitePayload?.cases) ? suitePayload.cases : [], stopConditionOverrides);
+    const selectedSet = new Set(selectedCaseIds);
+    const effectiveCases = selectedCaseIds.length
+      ? rawCases.filter((testCase, index) => {
+          const caseId = asText(testCase?.case_id || testCase?.caseId || `case-${index + 1}`);
+          return selectedSet.has(caseId);
+        })
+      : rawCases;
+    if (!effectiveCases.length) {
+      throw Object.assign(new Error("Không tìm thấy case nào khớp với danh sách case đã chọn."), { status: 400 });
+    }
+    const filteredSuitePayload = {
+      ...suitePayload,
+      cases: effectiveCases,
+      source_trace: {
+        ...(suitePayload?.source_trace && typeof suitePayload.source_trace === "object" ? suitePayload.source_trace : {}),
+        easyforqc_source_suite_file: path.relative(skillRoot, suiteFile),
+        easyforqc_selected_case_ids: selectedCaseIds,
+        easyforqc_stop_condition_overrides: Array.from(stopConditionOverrides.keys()),
+      },
+    };
+    effectiveSuiteFile = path.join(runDir, selectedCaseIds.length ? "selected-suite.yml" : "configured-suite.yml");
+    await fs.writeFile(effectiveSuiteFile, JSON.stringify(filteredSuitePayload, null, 2), "utf8");
+    suiteMeta = {
+      ...suiteMeta,
+      caseCount: effectiveCases.length,
+      cases: effectiveCases.map((testCase, index) => chatwootSuiteCaseMeta(testCase, index)),
+    };
+  }
+  const outputFile = path.join(runDir, "chatwoot-uat.yml");
+  const args = [
+    "--suite-file",
+    effectiveSuiteFile,
+    "--output-file",
+    outputFile,
+    "--chat-ui-mode",
+    body.chatUiMode === "webhook-only" ? "webhook-only" : "realistic",
+    "--webhook-url",
+    asText(body.webhookUrl) || DEFAULT_CHATWOOT_UAT_WEBHOOK_URL,
+    "--healthcheck-url",
+    asText(body.healthcheckUrl) || DEFAULT_CHATWOOT_UAT_HEALTHCHECK_URL,
+  ];
+  if (body.skipHealthcheck !== false) {
+    args.push("--skip-healthcheck");
+  }
+  const effectiveInboxId = asText(body.inboxId) || DEFAULT_CHATWOOT_UAT_INBOX_ID;
+  const effectiveUiInboxId = asText(body.uiInboxId) || effectiveInboxId || DEFAULT_CHATWOOT_UAT_UI_INBOX_ID;
+  const effectiveCaptainAssistantId = asText(body.captainAssistantId) || DEFAULT_CHATWOOT_UAT_CAPTAIN_ASSISTANT_ID;
+  const numericArgs = [
+    ["--ui-inbox-id", effectiveUiInboxId],
+    ["--inbox-id", effectiveInboxId],
+    ["--captain-assistant-id", effectiveCaptainAssistantId],
+    ["--account-id", body.accountId],
+    ["--case-index", body.caseIndex],
+    ["--limit-cases", body.limitCases],
+    ["--reply-timeout-seconds", body.replyTimeoutSeconds],
+    ["--reply-settle-seconds", body.replySettleSeconds],
+    ["--poll-interval-seconds", body.pollIntervalSeconds],
+  ];
+  for (const [flag, value] of numericArgs) {
+    const number = asOptionalNumber(value);
+    if (number !== null) args.push(flag, String(number));
+  }
+  const stringArgs = [
+    ["--case-id", body.caseId],
+    ["--pinned-conversation-id", body.pinnedConversationId],
+    ["--labels", body.labels],
+    ["--assignee-name", body.assigneeName],
+  ];
+  for (const [flag, value] of stringArgs) {
+    const text = asText(value);
+    if (text) args.push(flag, text);
+  }
+  let plannerBackend = "";
+  const plannerAiSettings = normalizeAiSettings(options.plannerAiSettings || {});
+  if (mode === "adaptive") {
+    args.push("--mode", body.adaptiveMode === "manual" ? "manual" : "autonomous");
+    const maxUserTurns = asOptionalNumber(body.maxUserTurns);
+    if (maxUserTurns !== null) args.push("--max-user-turns", String(maxUserTurns));
+    const requestedPlannerBackend = body.plannerBackend === "heuristic"
+      ? "heuristic"
+      : body.plannerBackend === "codex-cli"
+        ? "codex-cli"
+        : "openai-compatible";
+    if (requestedPlannerBackend === "openai-compatible" && !aiProviderReady(plannerAiSettings)) {
+      throw Object.assign(
+        new Error("Cần cấu hình AI Settings đầy đủ để dùng AI planner cho Chatwoot UAT."),
+        { status: 400 },
+      );
+    }
+    plannerBackend = requestedPlannerBackend;
+    args.push("--planner-backend", plannerBackend);
+    if (plannerBackend === "codex-cli" || plannerBackend === "openai-compatible") {
+      args.push("--planner-model", asText(body.plannerModel) || plannerAiSettings.model || "gpt-5.4-mini");
+      const plannerTimeout = asOptionalNumber(body.plannerTimeoutSeconds);
+      if (plannerTimeout !== null) args.push("--planner-timeout-seconds", String(plannerTimeout));
+    }
+    const guidanceFile = asText(body.plannerGuidanceFile);
+    if (guidanceFile) args.push("--planner-guidance-file", guidanceFile);
+  }
+  const chatwootApiBase = asText(body.chatwootApiBase) || DEFAULT_CHATWOOT_UAT_API_BASE;
+  if (chatwootApiBase) args.push("--chatwoot-api-base", chatwootApiBase);
+  if (CHATWOOT_UAT_API_KEY) args.push("--chatwoot-api-key", CHATWOOT_UAT_API_KEY);
+  if (CHATWOOT_UAT_USER_API_KEY) args.push("--user-chatwoot-api-key", CHATWOOT_UAT_USER_API_KEY);
+  if (!args.includes("--account-id")) {
+    const defaultAccountId = asOptionalNumber(DEFAULT_CHATWOOT_UAT_ACCOUNT_ID || chatwootUatConfigValue(["CHATWOOT_ACCOUNT_ID", "CHATWOOT_DEFAULT_ACCOUNT_ID", "account_id", "default_account_id"]));
+    if (defaultAccountId !== null) args.push("--account-id", String(defaultAccountId));
+  }
+  const skipLocalWebhookPost = body.skipLocalWebhookPost !== false;
+  return {
+    mode,
+    skillRoot,
+    suiteFile: effectiveSuiteFile,
+    sourceSuiteFile: suiteFile,
+    suiteMeta,
+    requestBody: { ...body },
+    plannerAiSettings: options.plannerAiSettings || {},
+    runDir,
+    outputFile,
+    script,
+    args,
+    env: {
+      CHATWOOT_TEST_SKIP_LOCAL_WEBHOOK_POST: skipLocalWebhookPost ? "1" : "0",
+      ...(mode === "adaptive" && plannerBackend === "openai-compatible"
+        ? {
+            CHATWOOT_PLANNER_OPENAI_BASE_URL: normalizedAiBaseUrl(plannerAiSettings),
+            CHATWOOT_PLANNER_OPENAI_API_KEY: plannerAiSettings.apiKey,
+            CHATWOOT_PLANNER_OPENAI_MODEL: asText(body.plannerModel) || plannerAiSettings.model,
+          }
+        : {}),
+    },
+    secrets: [CHATWOOT_UAT_API_KEY, CHATWOOT_UAT_USER_API_KEY, plannerAiSettings.apiKey],
+    timeoutMs: mode === "adaptive" ? 1800000 : 1200000,
+  };
+}
+
+async function executeChatwootUatRun(prepared) {
+  let registeredJobId = "";
+  try {
+    const result = await runPython(prepared.script, prepared.args, {
+      timeoutMs: prepared.timeoutMs,
+      env: prepared.env,
+      secrets: prepared.secrets,
+      onChild: prepared.jobId
+        ? (child) => {
+            registeredJobId = prepared.jobId;
+            CHATWOOT_UAT_JOB_PROCESSES.set(prepared.jobId, child);
+          }
+        : undefined,
+    });
+    const rawFile = prepared.outputFile.replace(/\.ya?ml$/i, "-raw.json");
+    const rawPayload = await readJsonFileIfExists(rawFile);
+    const report = rawPayload ? summarizeChatwootReport(rawPayload) : summarizeChatwootReport({});
+    return {
+      mode: prepared.mode,
+      skillRoot: prepared.skillRoot,
+      suiteFile: prepared.suiteFile,
+      runDir: prepared.runDir,
+      files: chatwootRunFiles(prepared.outputFile),
+      report,
+      ...commandOutputForClient(result),
+    };
+  } finally {
+    if (registeredJobId) {
+      CHATWOOT_UAT_JOB_PROCESSES.delete(registeredJobId);
+    }
+  }
+}
+
+function chatwootCaseStatesFromPrepared(prepared) {
+  const cases = Array.isArray(prepared?.suiteMeta?.cases) ? prepared.suiteMeta.cases : [];
+  return cases.map((testCase, index) => ({
+    index: Number(testCase.index) || index + 1,
+    caseId: asText(testCase.caseId || `case-${index + 1}`),
+    title: asText(testCase.title || testCase.caseId || `Case ${index + 1}`),
+    openingPrompt: asText(testCase.openingPrompt),
+    testData: asText(testCase.testData),
+    expectedResult: asText(testCase.expectedResult),
+    plannerInstruction: asText(testCase.plannerInstruction),
+    stopPatterns: Array.isArray(testCase.stopPatterns) ? testCase.stopPatterns.map(asText).filter(Boolean) : [],
+    failPatterns: Array.isArray(testCase.failPatterns) ? testCase.failPatterns.map(asText).filter(Boolean) : [],
+    stopConditions: testCase.stopConditions || { pass: [], fail: [] },
+    steps: Array.isArray(testCase.steps) ? testCase.steps : [],
+    status: "pending",
+    startedAt: null,
+    finishedAt: null,
+    result: null,
+    error: "",
+  }));
+}
+
+function summarizeCaseRunResult(result, fallbackCase = {}) {
+  const reportResult = Array.isArray(result?.report?.results) ? result.report.results[0] : null;
+  return {
+    caseId: asText(reportResult?.caseId || fallbackCase.caseId),
+    title: asText(reportResult?.title || fallbackCase.title),
+    succeeded: Boolean(reportResult?.succeeded),
+    handoffDetected: Boolean(reportResult?.handoffDetected),
+    conversationId: asText(reportResult?.conversationId),
+    conversationUrl: asText(reportResult?.conversationUrl),
+    paymentLink: asText(reportResult?.paymentLink),
+    completedReason: asText(reportResult?.completedReason),
+    failureReason: asText(reportResult?.failureReason),
+    reportUrl: result?.files?.report?.url || "",
+    rawUrl: result?.files?.raw?.url || "",
+    yamlUrl: result?.files?.yaml?.url || "",
+  };
+}
+
+function aggregateChatwootQueueResult(job, prepared, caseResults = []) {
+  const results = caseResults.map((item) => item.result).filter(Boolean);
+  const success = results.filter((item) => item.succeeded).length;
+  const handoff = results.filter((item) => item.handoffDetected).length;
+  const failure = results.filter((item) => !item.succeeded && !item.handoffDetected).length;
+  return {
+    mode: prepared.mode,
+    skillRoot: prepared.skillRoot,
+    suiteFile: prepared.sourceSuiteFile || prepared.suiteFile,
+    runDir: prepared.runDir,
+    files: {
+      report: null,
+      raw: null,
+      yaml: null,
+    },
+    report: {
+      suiteName: prepared.suiteMeta?.suiteName || job.suiteName || "Chatwoot UAT",
+      mode: prepared.mode,
+      total: results.length,
+      success,
+      handoff,
+      failure,
+      results,
+    },
+    stdout: caseResults.map((item) => item.stdout).filter(Boolean).join("\n\n"),
+    stderr: caseResults.map((item) => item.stderr).filter(Boolean).join("\n\n"),
+  };
+}
+
+async function executeChatwootCaseQueue(job, prepared) {
+  const caseResults = [];
+  for (const state of job.caseStates || []) {
+    if (job.cancelRequested || job.status === "interrupted") break;
+    if (state.status === "skipped") continue;
+    const startedAt = new Date().toISOString();
+    Object.assign(state, {
+      status: "running",
+      startedAt,
+      finishedAt: null,
+      error: "",
+    });
+    Object.assign(job, {
+      activeCaseId: state.caseId,
+      updatedAt: startedAt,
+    });
+    await persistChatwootJob(job);
+    try {
+      const casePrepared = await prepareChatwootUatRun(
+        {
+          ...(prepared.requestBody || {}),
+          suiteFile: prepared.sourceSuiteFile || prepared.suiteFile,
+          selectedCaseIds: [state.caseId],
+          caseStopConditions: prepared.requestBody?.caseStopConditions || {},
+        },
+        { plannerAiSettings: prepared.plannerAiSettings || {} },
+      );
+      casePrepared.jobId = job.id;
+      const result = await executeChatwootUatRun(casePrepared);
+      const summary = summarizeCaseRunResult(result, state);
+      const finishedAt = new Date().toISOString();
+      Object.assign(state, {
+        status: summary.succeeded ? "completed" : summary.handoffDetected ? "handoff" : "failed",
+        finishedAt,
+        result: summary,
+        error: summary.failureReason || "",
+      });
+      caseResults.push({ result: summary, stdout: result.stdout, stderr: result.stderr });
+    } catch (error) {
+      const finishedAt = new Date().toISOString();
+      const stoppedCurrentCase = job.cancelCurrentCaseId === state.caseId;
+      Object.assign(state, {
+        status: stoppedCurrentCase || job.cancelRequested ? "interrupted" : "failed",
+        finishedAt,
+        error: stoppedCurrentCase
+          ? "Đã dừng test case theo yêu cầu."
+          : error instanceof Error ? error.message : "Không chạy được test case.",
+      });
+      if (!job.cancelRequested && !stoppedCurrentCase) {
+        caseResults.push({
+          result: {
+            caseId: state.caseId,
+            title: state.title,
+            succeeded: false,
+            handoffDetected: false,
+            failureReason: state.error,
+          },
+          stdout: "",
+          stderr: state.error,
+        });
+      }
+    } finally {
+      if (job.cancelCurrentCaseId === state.caseId) {
+        job.cancelCurrentCaseId = "";
+      }
+      job.activeCaseId = "";
+      job.updatedAt = new Date().toISOString();
+      await persistChatwootJob(job);
+    }
+  }
+  return aggregateChatwootQueueResult(job, prepared, caseResults);
+}
+
+async function runChatwootJob(job, prepared) {
+  prepared.jobId = job.id;
+  const startedAt = new Date().toISOString();
+  Object.assign(job, {
+    status: "running",
+    startedAt,
+    updatedAt: startedAt,
+  });
+  await persistChatwootJob(job);
+  try {
+    const result = Array.isArray(job.caseStates) && job.caseStates.length
+      ? await executeChatwootCaseQueue(job, prepared)
+      : await executeChatwootUatRun(prepared);
+    const finishedAt = new Date().toISOString();
+    if (job.cancelRequested || job.status === "interrupted") {
+      Object.assign(job, {
+        status: "interrupted",
+        error: job.error || "Đã dừng run Chatwoot UAT theo yêu cầu.",
+        finishedAt,
+        updatedAt: finishedAt,
+      });
+    } else {
+      Object.assign(job, {
+        status: "completed",
+        result,
+        error: "",
+        finishedAt,
+        updatedAt: finishedAt,
+      });
+    }
+  } catch (error) {
+    const finishedAt = new Date().toISOString();
+    const wasInterrupted = Boolean(job.cancelRequested || job.status === "interrupted");
+    Object.assign(job, {
+      status: wasInterrupted ? "interrupted" : "failed",
+      error: wasInterrupted
+        ? job.error || "Đã dừng run Chatwoot UAT theo yêu cầu."
+        : error instanceof Error ? error.message : "Không chạy được Chatwoot UAT.",
+      finishedAt,
+      updatedAt: finishedAt,
+    });
+  }
+  await persistChatwootJob(job);
 }
 
 function chooseArchetype(issue, forced) {
@@ -5347,6 +7959,11 @@ function buildAiImproveDraftMessages({
     "5. AI Settings guidance applies to style and coverage quality, but must not override explicit Jira scope.",
     "",
     "## Improve rules",
+    "- Treat the instruction as a request to edit the current draft artifacts, not as a request to write prompt guidance.",
+    "- First inspect all current test cases and outline branches, decide which artifacts are affected, then update every affected field consistently.",
+    "- If the instruction targets `test_data` or sample values, update `test_data` in every relevant testcase and also update steps/expected_result when they mention the old data shape.",
+    "- For value-format rules such as code length, prefix, suffix, enum, route, channel, product, status, or date/time format, produce concrete valid examples that match the requested rule.",
+    "- Preserve testcase count when the instruction only asks to fix content inside existing cases. Add/remove cases only when the instruction clearly changes coverage scope.",
     "- Output language: Vietnamese with full diacritics for all human-readable testcase/test-design content.",
     "- Return the complete revised `test_cases` and `outline`, not a diff.",
     "- Do not simply append generic cases. Add cases only when they cover a distinct risk, edge case, fallback, validation, regression, mapping, or state transition.",
@@ -5515,10 +8132,17 @@ function buildAiImprovePromptMessages({
     "## Current draft examples for de-specificating only",
     jsonForPrompt(
       {
-        test_case_titles: Array.isArray(currentCases) ? currentCases.slice(0, 12).map((item) => stripTestCasePrefix(item?.title)) : [],
+        test_cases: Array.isArray(currentCases)
+          ? currentCases.slice(0, 12).map((item) => ({
+              title: stripTestCasePrefix(item?.title),
+              test_data: asText(item?.test_data || item?.testData),
+              steps: Array.isArray(item?.steps) ? item.steps.slice(0, 4) : [],
+              expected_result: asText(item?.expected_result || item?.expectedResult),
+            }))
+          : [],
         outline_branches: Array.isArray(currentOutline?.branches) ? currentOutline.branches.slice(0, 8).map((branch) => branch?.title) : [],
       },
-      6000,
+      12000,
     ),
   ].join("\n");
 
@@ -5912,6 +8536,393 @@ app.get("/api/defaults", async (_req, res) => {
       sourceRootExists: await exists(DEFAULTS.sourceRoot),
     },
   });
+});
+
+app.get("/api/chatwoot-uat", async (req, res) => {
+  try {
+    const skillRoot = resolveChatwootUatSkillRoot();
+    const skillExists = fsSync.existsSync(path.join(skillRoot, "SKILL.md"));
+    if (skillExists) {
+      await ensureStandardQaWorkspaceItems(req.session.email);
+    }
+    const suites = skillExists ? await listChatwootUatSuites(skillRoot) : [];
+    const stored = await requestUserSettings(req);
+    const plannerAiSettings = normalizeAiSettings(stored.aiSettings);
+    res.json({
+      skillRoot,
+      skillExists,
+      candidates: chatwootUatSkillRootCandidates(),
+      defaultWebhookUrl: DEFAULT_CHATWOOT_UAT_WEBHOOK_URL,
+      defaultHealthcheckUrl: DEFAULT_CHATWOOT_UAT_HEALTHCHECK_URL,
+      defaultChatwootApiBase: DEFAULT_CHATWOOT_UAT_API_BASE || chatwootUatConfigValue(["CHATWOOT_API_BASE", "chatwoot_api_base", "api_base"]),
+      defaultAccountId: DEFAULT_CHATWOOT_UAT_ACCOUNT_ID || chatwootUatConfigValue(["CHATWOOT_ACCOUNT_ID", "CHATWOOT_DEFAULT_ACCOUNT_ID", "account_id", "default_account_id"]),
+      defaultInboxId: DEFAULT_CHATWOOT_UAT_INBOX_ID,
+      defaultUiInboxId: DEFAULT_CHATWOOT_UAT_UI_INBOX_ID,
+      defaultCaptainAssistantId: DEFAULT_CHATWOOT_UAT_CAPTAIN_ASSISTANT_ID,
+      serverChatwootAuthReady: chatwootUatConfigHasApiKey(),
+      plannerAiReady: aiProviderReady(plannerAiSettings),
+      defaultPlannerModel: plannerAiSettings.model,
+      codexCliAvailable: await commandAvailable("codex"),
+      suites,
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.get("/api/chatwoot-uat/jobs", async (req, res) => {
+  try {
+    const jobs = await listChatwootJobs(req.session.email, req.query.limit);
+    res.json({ jobs });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.get("/api/chatwoot-uat/jobs/:id", async (req, res) => {
+  try {
+    const job = await findChatwootJob(req.session.email, req.params.id);
+    if (!job) {
+      res.status(404).json({ error: "Không tìm thấy run Chatwoot UAT." });
+      return;
+    }
+    res.json({ job });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post("/api/chatwoot-uat/jobs", async (req, res) => {
+  try {
+    const stored = await requestUserSettings(req);
+    const prepared = await prepareChatwootUatRun(req.body || {}, {
+      plannerAiSettings: stored.aiSettings,
+    });
+    const now = new Date().toISOString();
+    const job = {
+      id: crypto.randomUUID(),
+      userEmail: normalizeEmail(req.session.email),
+      status: "queued",
+      suiteName: prepared.suiteMeta.suiteName,
+      suiteFile: prepared.suiteMeta.relativePath || path.relative(prepared.skillRoot, prepared.suiteFile),
+      runDir: prepared.runDir,
+      request: req.body || {},
+      activeCaseId: "",
+      caseStates: chatwootCaseStatesFromPrepared(prepared),
+      result: null,
+      error: "",
+      createdAt: now,
+      startedAt: null,
+      finishedAt: null,
+      updatedAt: now,
+    };
+    await persistChatwootJob(job);
+    void runChatwootJob(job, prepared).catch((error) => {
+      console.error("Chatwoot UAT background job failed", error);
+    });
+    res.status(202).json({ job: publicChatwootJob(job) });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post("/api/chatwoot-uat/jobs/:id/cancel", async (req, res) => {
+  try {
+    const jobId = asText(req.params.id);
+    const job = CHATWOOT_UAT_JOBS.get(jobId);
+    if (!job || job.userEmail !== normalizeEmail(req.session.email)) {
+      res.status(404).json({ error: "Không tìm thấy run Chatwoot UAT đang chạy." });
+      return;
+    }
+    if (!["queued", "running"].includes(job.status)) {
+      res.json({ job: publicChatwootJob(job) });
+      return;
+    }
+    const now = new Date().toISOString();
+    Object.assign(job, {
+      cancelRequested: true,
+      status: "interrupted",
+      error: "Đã dừng run Chatwoot UAT theo yêu cầu.",
+      finishedAt: now,
+      updatedAt: now,
+    });
+    const child = CHATWOOT_UAT_JOB_PROCESSES.get(job.id);
+    if (child && !child.killed) {
+      child.kill("SIGTERM");
+      setTimeout(() => {
+        if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+      }, 2500).unref();
+    }
+    await persistChatwootJob(job);
+    res.json({ job: publicChatwootJob(job) });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post("/api/chatwoot-uat/jobs/:id/cases/:caseId/cancel", async (req, res) => {
+  try {
+    const jobId = asText(req.params.id);
+    const caseId = asText(req.params.caseId);
+    const job = CHATWOOT_UAT_JOBS.get(jobId);
+    if (!job || job.userEmail !== normalizeEmail(req.session.email)) {
+      res.status(404).json({ error: "Không tìm thấy run Chatwoot UAT đang chạy." });
+      return;
+    }
+    if (!["queued", "running"].includes(job.status)) {
+      res.json({ job: publicChatwootJob(job) });
+      return;
+    }
+    const state = Array.isArray(job.caseStates) ? job.caseStates.find((item) => item.caseId === caseId) : null;
+    if (!state) {
+      res.status(404).json({ error: "Không tìm thấy test case trong run hiện tại." });
+      return;
+    }
+    const now = new Date().toISOString();
+    if (state.status === "pending") {
+      Object.assign(state, {
+        status: "skipped",
+        finishedAt: now,
+        error: "Đã bỏ test case khỏi hàng đợi chạy.",
+      });
+    } else if (state.status === "running" && job.activeCaseId === caseId) {
+      job.cancelCurrentCaseId = caseId;
+      Object.assign(state, {
+        error: "Đang dừng test case theo yêu cầu.",
+      });
+      const child = CHATWOOT_UAT_JOB_PROCESSES.get(job.id);
+      if (child && !child.killed) {
+        child.kill("SIGTERM");
+        setTimeout(() => {
+          if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+        }, 2500).unref();
+      }
+    }
+    job.updatedAt = now;
+    await persistChatwootJob(job);
+    res.json({ job: publicChatwootJob(job) });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post("/api/chatwoot-uat/run", async (req, res) => {
+  try {
+    const stored = await requestUserSettings(req);
+    const prepared = await prepareChatwootUatRun(req.body || {}, {
+      plannerAiSettings: stored.aiSettings,
+    });
+    const result = await executeChatwootUatRun(prepared);
+    res.json(result);
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.get("/api/qa-workspace", async (req, res) => {
+  try {
+    const items = await ensureStandardQaWorkspaceItems(req.session.email);
+    res.json({ items });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post("/api/qa-workspace", async (req, res) => {
+  try {
+    const stored = await requestUserSettings(req);
+    const item = await enrichQaWorkspaceStopPatterns(req.body?.item || req.body || {}, stored.aiSettings, {
+      refreshGeneric: req.body?.refreshStopPatterns !== false,
+      force: req.body?.forceStopPatterns === true,
+    });
+    if (!item.testCases.length && !item.outline.branches.length) {
+      throw Object.assign(new Error("Cần test case hoặc test design để lưu vào QA Workspace."), { status: 400 });
+    }
+    const saved = await upsertQaWorkspaceItem(req.session.email, item);
+    res.json(saved);
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post("/api/qa-workspace/:id/stop-patterns", async (req, res) => {
+  try {
+    const stored = await requestUserSettings(req);
+    const id = asText(req.params.id);
+    const items = normalizeQaWorkspaceItems(stored.qaWorkspaceItems);
+    const item = items.find((entry) => entry.id === id);
+    if (!item) {
+      throw Object.assign(new Error("Không tìm thấy card QA Workspace cần cập nhật điều kiện dừng."), { status: 404 });
+    }
+    const refreshed = await enrichQaWorkspaceStopPatterns(item, stored.aiSettings, {
+      refreshGeneric: true,
+      force: req.body?.force === true,
+    });
+    const saved = await upsertQaWorkspaceItem(req.session.email, refreshed);
+    res.json(saved);
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.delete("/api/qa-workspace/:id", async (req, res) => {
+  try {
+    const stored = await requestUserSettings(req);
+    const id = asText(req.params.id);
+    const items = normalizeQaWorkspaceItems(stored.qaWorkspaceItems).filter((item) => item.id !== id);
+    res.json({ items: await saveQaWorkspaceItems(req.session.email, items) });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post("/api/chatwoot-uat/suites/manual", async (req, res) => {
+  try {
+    const skillRoot = resolveChatwootUatSkillRoot();
+    if (!fsSync.existsSync(path.join(skillRoot, "SKILL.md"))) {
+      throw Object.assign(new Error("Chưa tìm thấy skill chatwoot-test-uat để tạo suite."), { status: 400 });
+    }
+    const stored = await requestUserSettings(req);
+    const aiSettings = normalizeAiSettings(stored.aiSettings);
+    const scenario = asText(req.body?.scenario || req.body?.goal || req.body?.script);
+    let aiPlan = null;
+    let planningMode = "fallback";
+    if (scenario && aiProviderReady(aiSettings)) {
+      try {
+        aiPlan = await generateManualChatwootAiPlan({ scenario, aiSettings });
+        if (Array.isArray(aiPlan?.cases) && aiPlan.cases.length) {
+          planningMode = "ai";
+        }
+      } catch (error) {
+        console.warn("Manual Chatwoot AI planning failed; using fallback parser:", error?.message || error);
+      }
+    }
+    const suitePayload = buildManualChatwootSuite(req.body || {}, aiPlan);
+    const written = await writeChatwootGeneratedSuite(skillRoot, suitePayload, suitePayload.suite_name);
+    res.json({
+      suite: written.suite,
+      outputFile: written.outputFile,
+      suites: await listChatwootUatSuites(skillRoot),
+      planningMode,
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post("/api/chatwoot-uat/suites/workspace", async (req, res) => {
+  try {
+    const skillRoot = resolveChatwootUatSkillRoot();
+    if (!fsSync.existsSync(path.join(skillRoot, "SKILL.md"))) {
+      throw Object.assign(new Error("Chưa tìm thấy skill chatwoot-test-uat để tạo suite."), { status: 400 });
+    }
+    const storedItems = await ensureStandardQaWorkspaceItems(req.session.email);
+    const workspaceItemId = asText(req.body?.workspaceItemId || req.body?.id);
+    const item = storedItems.find((entry) => entry.id === workspaceItemId || entry.sourceKey === workspaceItemId);
+    if (!item) {
+      throw Object.assign(new Error("Không tìm thấy item QA Workspace để tạo Chatwoot UAT suite."), { status: 404 });
+    }
+    const suitePayload = buildChatwootSuiteFromWorkspaceItem(item, req.body || {});
+    const written = await writeChatwootGeneratedSuite(skillRoot, suitePayload, suitePayload.suite_name);
+    const updatedItem = {
+      ...item,
+      chatwootSuiteFile: written.suite.relativePath,
+      chatwootSuiteName: written.suite.suiteName,
+      updatedAt: new Date().toISOString(),
+    };
+    const saved = await upsertQaWorkspaceItem(req.session.email, updatedItem);
+    res.json({
+      suite: written.suite,
+      outputFile: written.outputFile,
+      workspaceItem: saved.item,
+      workspaceItems: saved.items,
+      suites: await listChatwootUatSuites(skillRoot),
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post("/api/chatwoot-uat/suites/jira-test-data", async (req, res) => {
+  try {
+    const skillRoot = resolveChatwootUatSkillRoot();
+    const script = path.join(skillRoot, "scripts", "build_suite_from_jira_cases.py");
+    if (!fsSync.existsSync(script)) {
+      throw Object.assign(new Error("Chưa tìm thấy script build_suite_from_jira_cases.py trong skill chatwoot-test-uat."), { status: 400 });
+    }
+    const testRunKey = asText(req.body?.testRunKey || req.body?.test_run_key).toUpperCase();
+    const testcaseKeys = asText(req.body?.testcaseKeys || req.body?.testcase_keys)
+      .split(/[,\s]+/)
+      .map((item) => item.trim().toUpperCase())
+      .filter(Boolean);
+    if (!testRunKey && !testcaseKeys.length) {
+      throw Object.assign(new Error("Cần nhập Test run key hoặc danh sách testcase key để tạo suite từ Jira Test Data."), { status: 400 });
+    }
+    const stored = await requestUserSettings(req);
+    const project = normalizeProject(req.body?.project || stored.project);
+    const credentials = mergeCredentialsWithStored(req.body?.credentials, stored.credentials);
+    const sourceKey = testRunKey || testcaseKeys.join("-");
+    const suiteName = chatwootSuiteSlug(req.body?.suiteName || `jira-${sourceKey}-chatwoot-uat`);
+    const outputDir = path.join(skillRoot, EASYFORQC_CHATWOOT_GENERATED_RELATIVE, `${new Date().toISOString().slice(0, 10)}-${suiteName}`);
+    await fs.mkdir(outputDir, { recursive: true });
+    const outputFile = path.join(outputDir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${suiteName}.yml`);
+    const args = [script];
+    if (testRunKey) {
+      args.push("--test-run-key", testRunKey);
+    } else {
+      for (const key of testcaseKeys) args.push("--testcase-key", key);
+    }
+    args.push("--mode", req.body?.jiraMode === "fixed" ? "fixed" : "adaptive");
+    args.push("--suite-name", suiteName);
+    args.push("--output-file", outputFile);
+    const inboxId = asOptionalNumber(req.body?.inboxId || DEFAULT_CHATWOOT_UAT_INBOX_ID);
+    const uiInboxId = asOptionalNumber(req.body?.uiInboxId || DEFAULT_CHATWOOT_UAT_UI_INBOX_ID);
+    const captainAssistantId = asOptionalNumber(req.body?.captainAssistantId || DEFAULT_CHATWOOT_UAT_CAPTAIN_ASSISTANT_ID);
+    if (inboxId !== null) args.push("--inbox-id", String(inboxId));
+    if (uiInboxId !== null) args.push("--ui-inbox-id", String(uiInboxId));
+    if (captainAssistantId !== null) args.push("--captain-assistant-id", String(captainAssistantId));
+    for (const label of csvList(req.body?.labels || "ai")) args.push("--label", label);
+    args.push("--assignee-name", asText(req.body?.assigneeName) || "Bot");
+    if (project.jiraBaseUrl) args.push("--jira-base-url", project.jiraBaseUrl);
+    const result = await runPythonJsonCommand(args, {
+      cwd: skillRoot,
+      env: credentialEnv(project, credentials),
+      secrets: secretValuesFromAuth(credentials),
+      timeoutMs: 420000,
+    });
+    const generatedFile = path.resolve(asText(result.output_file || outputFile));
+    const suitePayload = await readYamlAsJson(generatedFile);
+    suitePayload.defaults = {
+      ...(suitePayload.defaults || {}),
+      ...chatwootSuiteDefaults(req.body || {}),
+    };
+    suitePayload.source = {
+      ...(suitePayload.source && typeof suitePayload.source === "object" ? suitePayload.source : {}),
+      created_by: "easyforqc",
+      easyforqc_generated: true,
+    };
+    suitePayload.generated_at = suitePayload.generated_at || new Date().toISOString();
+    await fs.writeFile(generatedFile, JSON.stringify(suitePayload, null, 2) + "\n", "utf8");
+    const suite = await readChatwootSuiteMeta(generatedFile, skillRoot);
+    const workspaceItem = chatwootSuiteToWorkspaceItem(suitePayload, {
+      id: `workspace-${chatwootSuiteSlug(sourceKey)}`,
+      issueKey: asText(req.body?.issueKey || sourceKey).split(/[-,]/)[0] || "AI",
+      sourceKey,
+      title: `[${sourceKey}] Chatwoot UAT từ Jira Test Data`,
+      suiteFile: suite.relativePath,
+    });
+    const saved = await upsertQaWorkspaceItem(req.session.email, workspaceItem);
+    res.json({
+      result,
+      suite,
+      outputFile: generatedFile,
+      workspaceItem: saved.item,
+      workspaceItems: saved.items,
+      suites: await listChatwootUatSuites(skillRoot),
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
 });
 
 app.post("/api/parse-jira", (req, res) => {

@@ -1,0 +1,576 @@
+suite_name: lien-hung-apiinbox-30-case-suite
+generated_at: '2026-04-24T09:00:00Z'
+goal_summary: Expanded local Chatwoot regression coverage for the Liên Hưng Nha Trang
+  to Trà Vinh route on pinned Api inbox conversation 28171, emphasizing trip discovery,
+  pickup and dropoff validation, fare checks, seat selection, contact capture, booking
+  confirmation, and payment-link delivery across varied user phrasings.
+source_trace:
+  channel: api-inbox-pinned-local-webhook-to-chatwoot-uat
+  chatwoot_base_url: https://uat-omniagent.vexere.net
+  account_id: 3
+  inbox_id: 3052
+  captain_assistant_id: 80
+  conversation_id: 28171
+  conversation_url: https://uat-omniagent.vexere.net/app/accounts/3/conversations/28171
+defaults:
+  webhook_url: http://localhost:3000/webhook/chatwoot
+  chat_ui_mode: realistic
+  pinned_conversation_id: "28171"
+  labels:
+  - ai
+  assignee_name: Bot
+  reply_timeout_seconds: 180
+  reply_settle_seconds: 3
+  poll_interval_seconds: 2
+  inbox_id: 3052
+  captain_assistant_id: 80
+cases:
+- case_id: 01-direct-booking-cam-lam-tomorrow
+  title: 01. Đặt nhanh ngày mai từ Bưu điện Cam Lâm
+  objective: Validate a direct booking opener for the 25/04/2026 trip with Bưu điện Cam Lâm,
+    then adapt through any pickup correction and still reach payment.
+  opening_prompt: Anh cần 1 vé Nha Trang đi Trà Vinh ngày 25/04/2026, đón ở Bưu điện Cam
+    Lâm và trả ở Bến xe Trà Vinh. Em hỗ trợ đặt nhanh giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Nguyen Hoang Anh
+    phone: "0901000001"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    preferred_pickup: Bưu điện Cam Lâm
+    preferred_dropoff: Bến xe Trà Vinh
+    seat_pref: tầng dưới
+- case_id: 02-direct-booking-upper-today
+  title: 02. Đặt nhanh hôm nay ghế tầng trên
+  objective: Confirm the bot can handle a compact booking opener for the 24/04/2026 trip
+    with an upper-deck preference and finish with payment.
+  opening_prompt: Em cần đi Nha Trang đến Trà Vinh lúc 17:00 ngày 24/04/2026, ưu tiên
+    giường tầng trên, đón ở Bến xe phía nam Nha Trang và trả Bến xe Trà Vinh.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Tran Minh Huy
+    phone: "0901000002"
+  metadata:
+    departure_date: "2026-04-24"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    preferred_pickup: Bến xe phía nam Nha Trang
+    preferred_dropoff: Bến xe Trà Vinh
+    seat_pref: tầng trên
+- case_id: 03-price-check-cam-lam
+  title: 03. Hỏi giá từ BĐ Cam Lâm rồi đặt
+  objective: Start with a price and availability question from Bưu điện Cam Lâm, then
+    move toward booking and payment.
+  opening_prompt: Cho anh hỏi ngày 25/04/2026 từ Nha Trang đi Trà Vinh còn chuyến nào,
+    nếu đón ở BĐ Cam Lâm thì giá khoảng bao nhiêu em?
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Le Quoc Viet
+    phone: "0901000003"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    preferred_pickup: Bưu điện Cam Lâm
+    preferred_dropoff: Bến xe Trà Vinh
+    fare_pref: hỏi giá trước
+- case_id: 04-cheapest-seat-today
+  title: 04. Săn ghế rẻ nhất hôm nay
+  objective: Validate a cheapest-seat shopping flow for the 24/04/2026 trip.
+  opening_prompt: Hôm nay 24/04/2026 từ Nha Trang đi Trà Vinh còn ghế rẻ nhất nào không
+    em, anh đi 1 người thôi.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Pham Gia Bao
+    phone: "0901000004"
+  metadata:
+    departure_date: "2026-04-24"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    fare_pref: rẻ nhất
+- case_id: 05-vvip-seat-tomorrow
+  title: 05. Yêu cầu ghế VVIP ngày mai
+  objective: Validate a premium-seat request that still closes to payment when the preferred
+    seat class is unavailable or costly.
+  opening_prompt: Ngày mai 25/04/2026 anh muốn đi chuyến Nha Trang - Trà Vinh, nếu còn
+    ghế VVIP thì giữ cho anh 1 vé nhé.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Doan Thanh Phong
+    phone: "0901000005"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    seat_pref: VVIP
+- case_id: 06-seat-map-first
+  title: 06. Xin sơ đồ ghế trước khi chốt
+  objective: Begin with a seat-map request, then ensure the planner converts that into
+    a completed booking.
+  opening_prompt: Cho em xem sơ đồ ghế chuyến 17:00 ngày 25/04/2026 từ Nha Trang đi Trà
+    Vinh với, em chọn ghế xong sẽ chốt luôn.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Nguyen Thi Mai
+    phone: "0901000006"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+- case_id: 07-urgent-booking-today
+  title: 07. Cần đi gấp hôm nay
+  objective: Validate a rushed booking intent for same-day travel.
+  opening_prompt: Em đang cần đi gấp Nha Trang đến Trà Vinh trong hôm nay 24/04/2026,
+    chuyến gần nhất là chuyến nào và chốt nhanh giúp em luôn được không?
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Huynh Quoc Tuan
+    phone: "0901000007"
+  metadata:
+    departure_date: "2026-04-24"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    notes: khách cần đi gấp
+- case_id: 08-office-dropoff-travin
+  title: 08. Trả tại VP Trà Vinh
+  objective: Exercise an alternate dropoff target before payment-link completion.
+  opening_prompt: Em muốn đi chuyến 17:00 ngày 25/04/2026 từ Nha Trang xuống VP Trà Vinh,
+    anh/chị xem giúp còn ghế nào ổn không.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Vu Thi Lan
+    phone: "0901000008"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    preferred_dropoff: VP Trà Vinh
+- case_id: 09-pickup-switch-path
+  title: 09. Mở đầu tại BĐ Cam Lâm rồi đổi điểm đón
+  objective: Validate that the planner can recover if the first pickup choice is rejected.
+  opening_prompt: Anh định đón ở Bưu điện Cam Lâm cho chuyến đi Trà Vinh ngày 24/04/2026,
+    nếu điểm đó không hợp lệ thì em gợi ý điểm đón thay thế gần nhất giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Dang Gia Huy
+    phone: "0901000009"
+  metadata:
+    departure_date: "2026-04-24"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    preferred_pickup: Bưu điện Cam Lâm
+- case_id: 10-lower-deck-cheap
+  title: 10. Ưu tiên tầng dưới giá mềm
+  objective: Check that a lower-deck budget-oriented opener still gets to booking.
+  opening_prompt: Em muốn đi ngày 25/04/2026 từ Nha Trang vào Trà Vinh, ưu tiên giường
+    tầng dưới giá mềm một chút nha.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Bui Khanh Linh
+    phone: "0901000010"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    seat_pref: tầng dưới
+    fare_pref: tiết kiệm
+- case_id: 11-upper-deck-window-style
+  title: 11. Ưu tiên tầng trên thoáng hơn
+  objective: Exercise another upper-deck preference flow.
+  opening_prompt: Ngày 25/04/2026 em đi một mình từ Nha Trang xuống Trà Vinh, ưu tiên
+    giường tầng trên cho đỡ ồn, còn chỗ nào đẹp không anh/chị?
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Nguyen Duc Thinh
+    phone: "0901000011"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    seat_pref: tầng trên
+- case_id: 12-two-step-confirmation
+  title: 12. Hỏi chuyến rồi chốt nhanh
+  objective: Start from a generic availability question that should convert quickly.
+  opening_prompt: Cho em hỏi 24/04/2026 từ Nha Trang đi Trà Vinh còn chuyến nào không,
+    nếu còn thì em chốt luôn 1 vé.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Truong Thanh Dat
+    phone: "0901000012"
+  metadata:
+    departure_date: "2026-04-24"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+- case_id: 13-family-booking-single-seat
+  title: 13. Khách hỏi hộ người nhà
+  objective: Validate that a booking asked on behalf of a family member still captures
+    the rider contact and reaches payment.
+  opening_prompt: Anh đặt giúp em gái anh 1 vé Nha Trang đi Trà Vinh ngày 25/04/2026,
+    em tư vấn giúp điểm đón dễ đi với nha.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Hoang Thi Ngan
+    phone: "0901000013"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    notes: đặt hộ người thân
+- case_id: 14-bus-station-pickup-direct
+  title: 14. Đón trực tiếp tại bến xe phía nam
+  objective: Confirm the straightforward station-pickup path remains healthy.
+  opening_prompt: Cho em đặt 1 vé ngày 24/04/2026 chuyến 17:00, đón ở Bến xe phía nam
+    Nha Trang và trả ở Bến xe Trà Vinh luôn nhé.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Vo Minh Khang
+    phone: "0901000014"
+  metadata:
+    departure_date: "2026-04-24"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    preferred_pickup: Bến xe phía nam Nha Trang
+    preferred_dropoff: Bến xe Trà Vinh
+- case_id: 15-route-discovery-then-book
+  title: 15. Khám phá hành trình trước rồi đặt
+  objective: Start exploratory, then ensure the planner closes the booking.
+  opening_prompt: Tuyến Nha Trang đi Trà Vinh ngày 25/04/2026 có mấy điểm đón và còn
+    ghế nào dễ chọn không em?
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Phan Quynh Chi
+    phone: "0901000015"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+- case_id: 16-fare-comparison
+  title: 16. So sánh giá tầng trên và tầng dưới
+  objective: Validate a fare-comparison opener that should still converge to a seat choice.
+  opening_prompt: Em cần đi Trà Vinh ngày 24/04/2026, anh/chị so sánh giúp giá tầng trên
+    với tầng dưới chuyến 17:00 để em chọn luôn.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Mai Tuan Anh
+    phone: "0901000016"
+  metadata:
+    departure_date: "2026-04-24"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+- case_id: 17-last-minute-cheap-seat
+  title: 17. Cần ghế rẻ vào phút cuối
+  objective: Exercise a low-fare same-day booking with urgency.
+  opening_prompt: Còn ghế rẻ nào cho chuyến Nha Trang đi Trà Vinh chiều nay 24/04/2026
+    không em, nếu ổn anh lấy luôn.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Ngo Tuan Kiet
+    phone: "0901000017"
+  metadata:
+    departure_date: "2026-04-24"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    fare_pref: rẻ nhất
+- case_id: 18-seat-212-preference
+  title: 18. Chủ động xin ghế 212
+  objective: Validate a concrete seat request on the pinned Api inbox path.
+  opening_prompt: Nếu ghế 212 của chuyến 25/04/2026 còn trống thì giữ giúp em 1 vé Nha
+    Trang đi Trà Vinh nhé.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Lam Bao Tran
+    phone: "0901000018"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    seat_pref: "212"
+- case_id: 19-seat-131-preference
+  title: 19. Chủ động xin ghế 131
+  objective: Confirm that a lower-deck exact-seat ask can still reach payment.
+  opening_prompt: Em cần 1 vé đi Trà Vinh ngày 25/04/2026, nếu còn giường 131 thì chốt
+    luôn giúp em với.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Nguyen Anh Thu
+    phone: "0901000019"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    seat_pref: "131"
+- case_id: 20-office-to-station
+  title: 20. Hỏi tuyến với điểm trả thay thế
+  objective: Validate alternate dropoff handling on the same route and date.
+  opening_prompt: Chuyến 17:00 ngày 24/04/2026 từ Nha Trang đi Trà Vinh nếu trả ở VP
+    Trà Vinh thì giá sao em, anh đang cân nhắc chốt luôn.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Tran Gia Linh
+    phone: "0901000020"
+  metadata:
+    departure_date: "2026-04-24"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    preferred_dropoff: VP Trà Vinh
+- case_id: 21-contact-sent-in-opener
+  title: 21. Gửi sẵn thông tin liên hệ từ đầu
+  objective: Validate an opener that already includes contact information.
+  opening_prompt: Em là Le Minh Quan, số 0901000021. Em cần 1 vé Nha Trang đi Trà Vinh
+    ngày 25/04/2026, em đi một mình, anh/chị hỗ trợ chốt giúp em nha.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Le Minh Quan
+    phone: "0901000021"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    notes: contact included in opener
+- case_id: 22-suggest-nearby-pickup
+  title: 22. Nhờ gợi ý điểm đón gần BĐ Cam Lâm
+  objective: Start with a nearby-pickup help request and ensure recovery to booking.
+  opening_prompt: Anh muốn đi Trà Vinh ngày 25/04/2026 nhưng chưa chắc đón ở BĐ Cam Lâm
+    có được không, em gợi ý giúp điểm đón gần đó để anh chốt luôn nhé.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Dinh Thi Ha
+    phone: "0901000022"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    preferred_pickup: gần Bưu điện Cam Lâm
+- case_id: 23-explicit-payment-link-request
+  title: 23. Chủ động nhắc gửi link thanh toán
+  objective: Encourage a shorter close by asking for booking and payment in one go.
+  opening_prompt: Anh cần đặt 1 vé Nha Trang đi Trà Vinh ngày 24/04/2026, em hỗ trợ chốt
+    nhanh và gửi luôn link thanh toán cho anh khi xong nhé.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Chau Nhat Minh
+    phone: "0901000023"
+  metadata:
+    departure_date: "2026-04-24"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    notes: asks for payment link early
+- case_id: 24-ask-available-seats-upper
+  title: 24. Hỏi ghế trống tầng trên trước
+  objective: Validate an upper-deck seat-search flow with later conversion.
+  opening_prompt: Ngày 25/04/2026 chuyến Nha Trang đi Trà Vinh còn ghế tầng trên nào
+    dễ nằm không em, nếu ổn em lấy luôn 1 vé.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Pham Y Nhi
+    phone: "0901000024"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    seat_pref: tầng trên
+- case_id: 25-station-pickup-price-check
+  title: 25. Hỏi giá từ bến xe phía nam rồi mua
+  objective: Check a station pickup fare inquiry path.
+  opening_prompt: Nếu đón ở Bến xe phía nam Nha Trang đi Trà Vinh ngày 25/04/2026 thì
+    giá tầm nào em, anh mua 1 vé thôi.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Hoang Gia Bao
+    phone: "0901000025"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    preferred_pickup: Bến xe phía nam Nha Trang
+- case_id: 26-budget-end-row
+  title: 26. Ưu tiên dãy cuối giá thấp
+  objective: Validate a dãy cuối budget preference.
+  opening_prompt: Anh ưu tiên ghế dãy cuối cho rẻ, chuyến ngày 24/04/2026 từ Nha Trang
+    đi Trà Vinh còn chỗ nào phù hợp không em?
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Le Thi My Duyen
+    phone: "0901000026"
+  metadata:
+    departure_date: "2026-04-24"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    fare_pref: dãy cuối giá thấp
+- case_id: 27-premium-middle-row
+  title: 27. Ưu tiên dãy giữa giá cao hơn
+  objective: Validate a dãy giữa preference that should still complete fast.
+  opening_prompt: Em muốn dãy giữa cho đỡ xóc, chuyến 25/04/2026 từ Nha Trang đi Trà
+    Vinh còn ghế nào ổn thì chốt giúp em luôn nha.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Cao Thanh Nhan
+    phone: "0901000027"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    seat_pref: dãy giữa
+- case_id: 28-dropoff-university
+  title: 28. Trả tại Đại học Trà Vinh
+  objective: Exercise another alternate dropoff on the same route.
+  opening_prompt: Chuyến Nha Trang đi Trà Vinh ngày 24/04/2026 nếu em xuống gần Đại học
+    Trà Vinh thì bot hỗ trợ đặt được không?
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Nguyen Thi Bich Ngoc
+    phone: "0901000028"
+  metadata:
+    departure_date: "2026-04-24"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    preferred_dropoff: Trường Đại Học Trà Vinh
+- case_id: 29-direct-booking-with-seat-class
+  title: 29. Chốt theo class VIP
+  objective: Validate a VIP-class ask without specifying an exact seat.
+  opening_prompt: Em cần 1 vé VIP cho chuyến Nha Trang đi Trà Vinh ngày 25/04/2026, anh/chị
+    giữ giúp em ghế phù hợp nhất nhé.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Do Van Nam
+    phone: "0901000029"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"
+    seat_pref: VIP
+- case_id: 30-generic-booking-close
+  title: 30. Hỏi chung rồi ép chốt gọn
+  objective: End the suite with a generic but high-intent booking opener.
+  opening_prompt: Em muốn đi từ Nha Trang đến Trà Vinh vào chiều mai 25/04/2026, anh/chị
+    tư vấn chuyến phù hợp và chốt cho em 1 vé luôn nhé.
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Kieu Anh Thu
+    phone: "0901000030"
+  metadata:
+    departure_date: "2026-04-25"
+    origin: Nha Trang
+    destination: Trà Vinh
+    route_name: Nha Trang - Trà Vinh
+    preferred_times:
+    - "17:00"

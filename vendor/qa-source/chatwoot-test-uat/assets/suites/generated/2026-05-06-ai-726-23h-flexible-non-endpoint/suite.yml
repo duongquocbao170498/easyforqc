@@ -1,0 +1,68 @@
+suite_name: "ai_726_tien_oanh_23h_flexible_non_endpoint"
+generated_at: "2026-05-06T15:45:00+07:00"
+goal_summary: "AI-726 realistic regression fixed at 23:00: flexible seat selection must preserve one double room plus two single large rooms, three distinct passengers, and non-endpoint pickup/dropoff."
+defaults:
+  webhook_url: "http://localhost:3000/webhook/chatwoot"
+  chat_ui_mode: "realistic"
+  ui_inbox_id: null
+  inbox_id: null
+  captain_assistant_id: null
+  labels:
+    - "ai"
+    - "bus"
+    - "booking"
+  assignee_name: "Bot"
+  reply_timeout_seconds: 300
+  reply_settle_seconds: 3
+  poll_interval_seconds: 2
+cases:
+  - case_id: "ai-726-23h-flexible-non-endpoint-mapping"
+    title: "23:00 flexible booking keeps seat type, passenger mapping, and non-endpoint stops"
+    objective: "Book the 23:00 Tiến Oanh trip with one double room and two single large rooms using flexible currently available room codes, three distinct passenger contacts, and pickup/dropoff that are not route endpoints."
+    opening_prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày mai chuyến 23:00, 3 khách. Mình cần giữ đúng 1 phòng đôi và 2 phòng đơn lớn, mã phòng nào còn trống cũng được."
+    metadata:
+      jira_key: "AI-726"
+      operator_name: "Tiến Oanh"
+      route_name: "Sài Gòn -> Đà Lạt"
+      fixed_time: "23:00"
+      shape: "1 phòng đôi + 2 phòng đơn lớn"
+      seat_selection_mode: "flexible_live_available"
+      avoid_exact_seats:
+        - "B2"
+        - "A1"
+        - "B3"
+        - "B4"
+        - "A2"
+        - "A4"
+      non_endpoint_pickup_preference: "Văn Phòng Thủ Đức"
+      non_endpoint_dropoff_preference: "Ngã ba Liên Khương"
+      passenger_mapping:
+        double_room: "Thiện Thần Thánh - 0908375751"
+        single_large_1: "Khánh Sky - 0908765432"
+        single_large_2: "Thiện Thị Khánh - 0901234567"
+    conversation_id: null
+    contact_id: null
+    inbox_id: null
+    captain_assistant_id: null
+    labels:
+      - "ai"
+      - "bus"
+      - "booking"
+    assignee_name: "Bot"
+    contact:
+      name: "AI 726 Flexible Non Endpoint"
+      phone: "0908375751"
+      email: null
+    stop_regex_any:
+      - "(?i)(mã vé|mã đặt chỗ|link thanh toán|đã tạo|đã giữ chỗ|đặt vé thành công)"
+    steps:
+      - prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày mai chuyến 23:00, 3 khách. Mình cần giữ đúng 1 phòng đôi và 2 phòng đơn lớn, mã phòng nào còn trống cũng được."
+        timeout_seconds: null
+        expectation:
+          contains_any:
+            - "23:00"
+            - "Đà Lạt"
+            - "Sài Gòn"
+            - "phòng đôi"
+            - "phòng đơn"
+          regex_any: []

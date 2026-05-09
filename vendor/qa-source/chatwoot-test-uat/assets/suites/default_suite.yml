@@ -1,0 +1,48 @@
+suite_name: "default_chatwoot_booking_suite"
+generated_at: "2026-04-24T00:00:00Z"
+goal_summary: "Starter booking regression suite for Liên Hưng 808 via Chatwoot webhook flow."
+defaults:
+  webhook_url: "http://localhost:3000/webhook/chatwoot"
+  labels:
+    - "ai"
+  assignee_name: "Bot"
+  reply_timeout_seconds: 180
+  reply_settle_seconds: 3
+  poll_interval_seconds: 2
+cases:
+  - case_id: "lien-hung-booking-cam-lam-vvip"
+    title: "Nha Trang -> Tra Vinh booking with Cam Lâm pickup and VVIP ask"
+    objective: "Verify the bot can drive the traced booking flow through booking confirmation."
+    contact:
+      name: "Khánh Thị Thiện"
+      phone: "0967142713"
+    stop_regex_any:
+      - "(?i)(mã vé|ticket code|booking code|mã đặt chỗ).*[A-Z0-9]{6,8}"
+    steps:
+      - prompt: "đi Nha Trang đi Trà Vinh ngày mai có chuyến nào ko em"
+        expectation:
+          contains_any:
+            - "Nha Trang"
+            - "Trà Vinh"
+      - prompt: "đúng chuyến anh cần rồi, tìm xem chuyến đó có chặng nào đón anh được ở Bưu Điện Cam Lâm ko em"
+        expectation:
+          contains_any:
+            - "Cam Lâm"
+      - prompt: "liệt kê danh sách các điểm đón tại BĐ Cam Lâm"
+        expectation:
+          contains_any:
+            - "Agribank"
+      - prompt: "đón anh ở Agribank CN Cam Lâm nhé"
+        expectation:
+          contains_any:
+            - "Agribank CN Cam Lâm"
+            - "VVIP"
+      - prompt: "anh 1 vé vvip nhé"
+        expectation:
+          contains_any:
+            - "VVIP"
+      - prompt: "Khánh Thị Thiện, 0967142713"
+        expectation:
+          regex_any:
+            - "(?i)(mã vé|ticket code|booking code|mã đặt chỗ)"
+            - "[A-Z0-9]{6,8}"

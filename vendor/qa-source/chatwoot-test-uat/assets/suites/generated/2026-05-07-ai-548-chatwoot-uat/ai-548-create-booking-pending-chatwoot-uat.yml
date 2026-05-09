@@ -1,0 +1,1532 @@
+suite_name: ai-548-create-booking-pending-chatwoot-uat
+generated_at: '2026-05-07T15:22:53'
+goal_summary: Chatwoot UAT suite generated from Jira AI-C340. Mode=adaptive. Cases=19.
+defaults:
+  webhook_url: http://localhost:3000/webhook/chatwoot
+  chat_ui_mode: realistic
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  reply_timeout_seconds: 300
+  reply_settle_seconds: 3
+  poll_interval_seconds: 2
+  inbox_id: 3062
+  captain_assistant_id: 80
+source:
+  type: jira_zephyr
+  key: AI-C340
+  mode: adaptive
+  skipped: []
+cases:
+- case_id: ai-t2185-tc-0001-lu-ng-trace-th-c-t-t-o-booking-pending-th-nh-c-ng-v-i-gh-b4-v-l-y-link-th
+  title: '[TC_0001] Luồng trace thực tế tạo booking pending thành công với ghế B4
+    và lấy link thanh toán'
+  objective: Xác nhận luồng đã test thực tế trên Langfuse vẫn tạo được booking pending
+    từ selected trip, ghế đã chọn, điểm đón/trả và thông tin khách.
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2185
+    source_testcase_name: '[TC_0001] Luồng trace thực tế tạo booking pending thành
+      công với ghế B4 và lấy link thanh toán'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    - Anh chọn chuyến 23:30
+    - Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    - B4 nha
+    - Văn Phòng Tân Bình và Ngã ba Liên Khương
+    - Dương Quốc Thiện - 0908375751
+    - oke nhé đặt đi
+    jira_expected_result: '- Bot gọi `bus_trip_seat_map_tool` trước khi tạo booking
+      để xác nhận ghế B4 còn hợp lệ
+
+      - `bms_create_booking_tool` được gọi với `trip`, `trip_date`, `selected_trip`,
+      `from`, `to`, `seats`, `origin_selection`, `destination_selection`, `selected_price_option`
+      và thông tin khách đủ dùng
+
+      - Output `bms_create_booking_tool` có `booking_code`, `ticket_code`, `status
+      = NEW`, `amount`, `tickets[]` và ghế B4
+
+      - Bot gọi `get_bms_payment_link_tool` bằng `booking_code` vừa tạo
+
+      - Câu trả lời cuối gửi khách có mã vé và link thanh toán, không lộ raw payload'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Khánh Thị Thiện 001
+    phone: 0900000001
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn chuyến 23:30
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: B4 nha
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Văn Phòng Tân Bình và Ngã ba Liên Khương
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Dương Quốc Thiện - 0908375751
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: oke nhé đặt đi
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2186-tc-0002-bms-create-booking-tool-ch-c-g-i-sau-khi-c-selected-trip-i-m-n-tr-gi-gh-v
+  title: '[TC_0002] `bms_create_booking_tool` chỉ được gọi sau khi đã có selected_trip,
+    điểm đón/trả, giá, ghế và contact'
+  objective: Khóa điều kiện tối thiểu trước khi create booking, tránh gọi tool quá
+    sớm.
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2186
+    source_testcase_name: '[TC_0002] `bms_create_booking_tool` chỉ được gọi sau khi
+      đã có selected_trip, điểm đón/trả, giá, ghế và contact'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    - Anh lấy chuyến 23:30 nhé
+    - Đặt luôn cho anh
+    jira_expected_result: '- Bot chưa gọi `bms_create_booking_tool` khi còn thiếu
+      điểm đón/trả hoặc thông tin khách bắt buộc
+
+      - Bot hỏi gọn đúng các thông tin còn thiếu, không hỏi lại dữ kiện đã rõ
+
+      - Trace không có booking pending được tạo ở lượt thiếu dữ liệu
+
+      - Bot không nói đã giữ chỗ hoặc đã tạo vé'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Thiện Thị Khánh 002
+    phone: 0900000002
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy chuyến 23:30 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đặt luôn cho anh
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2187-tc-0003-bus-trip-seat-map-tool-ph-i-x-c-nh-n-gh-c-n-tr-ng-ngay-tr-c-khi-g-i-bms-c
+  title: '[TC_0003] `bus_trip_seat_map_tool` phải xác nhận ghế còn trống ngay trước
+    khi gọi `bms_create_booking_tool`'
+  objective: Đảm bảo bước tạo booking không dùng seat state cũ khi user xác nhận đặt
+    vé.
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2187
+    source_testcase_name: '[TC_0003] `bus_trip_seat_map_tool` phải xác nhận ghế còn
+      trống ngay trước khi gọi `bms_create_booking_tool`'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    - Anh chọn chuyến 23:30
+    - Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    - Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    - Dương Quốc Thiện - 0908375751
+    - Anh chọn ghế B4
+    - Đặt vé luôn nhé
+    jira_expected_result: '- Bot gọi `bus_trip_seat_map_tool` với đúng `company_id`,
+      `departure_date`, `trip_id`, `base_trip_id` và `selected_trip` hiện tại
+
+      - Ghế user chọn phải nằm trong `seat_code_map` hoặc selection payload hợp lệ
+      của output mới nhất
+
+      - Nếu ghế không còn trống, bot không gọi `bms_create_booking_tool` và phải xin
+      chọn ghế khác
+
+      - Nếu ghế còn trống, payload `seats` gửi vào `bms_create_booking_tool` dùng
+      đúng selection payload của ghế đó'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Nguyễn Minh Khánh 003
+    phone: 0900000003
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn chuyến 23:30
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Dương Quốc Thiện - 0908375751
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn ghế B4
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đặt vé luôn nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2188-tc-0004-user-i-gh-tr-c-khi-x-c-nh-n-th-bms-create-booking-tool-d-ng-gh-m-i-kh-ng-
+  title: '[TC_0004] User đổi ghế trước khi xác nhận thì `bms_create_booking_tool`
+    dùng ghế mới, không dùng ghế cũ'
+  objective: Kiểm tra state transition khi user đổi seat code trước bước create.
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2188
+    source_testcase_name: '[TC_0004] User đổi ghế trước khi xác nhận thì `bms_create_booking_tool`
+      dùng ghế mới, không dùng ghế cũ'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    - Anh chọn chuyến 23:30
+    - Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    - Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    - Dương Quốc Thiện - 0908375751
+    - Anh chọn B9
+    - Nếu B9 hết thì lấy B4 nha
+    - Đúng rồi đặt B4 giúp anh
+    jira_expected_result: '- Bot dùng `bus_trip_seat_map_tool` để kiểm tra ghế mới
+      B4
+
+      - `bms_create_booking_tool.seats` chứa payload của B4, không còn payload của
+      B9
+
+      - Output booking có `tickets[].seatCode = B4`
+
+      - Bot không xác nhận nhầm ghế cũ trong câu trả lời cuối'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Trần Gia Thiện 004
+    phone: 0900000004
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn chuyến 23:30
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Dương Quốc Thiện - 0908375751
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn B9
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Nếu B9 hết thì lấy B4 nha
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đúng rồi đặt B4 giúp anh
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2189-tc-0005-auto-allocate-m-t-kh-ch-t-o-booking-pending-b-ng-gh-c-bus-trip-seat-map-t
+  title: '[TC_0005] Auto-allocate một khách tạo booking pending bằng ghế được `bus_trip_seat_map_tool`
+    cấp'
+  objective: Bao phủ nhánh create booking khi không có manual seat nhưng seat map
+    có thể allocate an toàn.
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2189
+    source_testcase_name: '[TC_0005] Auto-allocate một khách tạo booking pending bằng
+      ghế được `bus_trip_seat_map_tool` cấp'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    - Anh chọn chuyến 23:30
+    - Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    - Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    - Anh đi 1 người, em chọn giúp anh ghế còn trống nhé
+    - Nguyễn Văn An - 0901111222
+    - Đặt giúp anh
+    jira_expected_result: '- `bus_trip_seat_map_tool` được gọi và trả ghế có thể dùng
+      cho 1 khách
+
+      - `bms_create_booking_tool.seats` dùng đúng payload ghế được allocate, không
+      để rỗng
+
+      - Output booking có đúng 1 ticket, đúng passenger/contact
+
+      - Bot trả mã vé và tiếp tục lấy link thanh toán nếu booking tạo thành công'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Lê Khánh An 005
+    phone: 0900000005
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn chuyến 23:30
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh đi 1 người, em chọn giúp anh ghế còn trống nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Nguyễn Văn An - 0901111222
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đặt giúp anh
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2190-tc-0006-auto-allocate-nhi-u-kh-ch-t-o-ng-s-v-t-ng-ti-n-v-link-thanh-to-n
+  title: '[TC_0006] Auto-allocate nhiều khách tạo đúng số vé, tổng tiền và link thanh
+    toán'
+  objective: Kiểm tra nhánh nhiều hành khách khi bot chọn ghế tự động.
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 3 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2190
+    source_testcase_name: '[TC_0006] Auto-allocate nhiều khách tạo đúng số vé, tổng
+      tiền và link thanh toán'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 3 người
+    - Anh chọn chuyến 23:30
+    - Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    - Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    - Anh đặt 3 vé, em chọn ghế giúp anh
+    - Người liên hệ Nguyễn Văn An 0901111222; hành khách là Nguyễn Văn An 0901111222,
+      Trần Văn Bình 0903333444, Lê Thị Chi 0905555666
+    - Đặt luôn nhé
+    jira_expected_result: '- `bus_trip_seat_map_tool` trả đủ 3 ghế hợp lệ hoặc bot
+      hỏi lại nếu không đủ ghế
+
+      - `bms_create_booking_tool` nhận `passenger_count = 3` và đủ 3 seat payload
+
+      - Output booking có `tickets.length = 3` và không trùng seat code
+
+      - `amount` tương ứng tổng tiền 3 vé theo selected price option
+
+      - `get_bms_payment_link_tool` trả link chứa đủ ticket id của booking'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Phạm Thiện Tâm 006
+    phone: 0900000006
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 3 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn chuyến 23:30
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh đặt 3 vé, em chọn ghế giúp anh
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Người liên hệ Nguyễn Văn An 0901111222; hành khách là Nguyễn Văn An 0901111222,
+      Trần Văn Bình 0903333444, Lê Thị Chi 0905555666
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đặt luôn nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2191-tc-0007-hai-h-nh-kh-ch-c-th-ng-tin-kh-c-nhau-th-bms-create-booking-tool-kh-ng-ghi
+  title: '[TC_0007] Hai hành khách có thông tin khác nhau thì `bms_create_booking_tool`
+    không ghi đè bằng contact chung'
+  objective: Đưa regression AI-687 vào suite AI-548 vì create booking phụ thuộc trực
+    tiếp passenger mapping.
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 2 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2191
+    source_testcase_name: '[TC_0007] Hai hành khách có thông tin khác nhau thì `bms_create_booking_tool`
+      không ghi đè bằng contact chung'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 2 người
+    - Anh chọn chuyến 23:30
+    - Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    - Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    - Đặt giúp anh 2 vé, ghế B4 và A4
+    - B4 là Nguyễn Văn An 0901111222, A4 là Trần Thị Bình 0903333444. Người liên hệ
+      là An 0901111222
+    - Đặt luôn
+    jira_expected_result: '- `bms_create_booking_tool` nhận 2 passenger entry riêng
+      biệt đúng theo từng ghế
+
+      - Booking đọc lại có B4 = Nguyễn Văn An 0901111222 và A4 = Trần Thị Bình 0903333444
+
+      - `customer_name/customer_phone` không ghi đè passenger-level info của vé còn
+      lại
+
+      - Bot không nói chung chung khiến QA không xác minh được từng hành khách'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Đỗ Minh Thiện 007
+    phone: 0900000007
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 2 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn chuyến 23:30
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đặt giúp anh 2 vé, ghế B4 và A4
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: B4 là Nguyễn Văn An 0901111222, A4 là Trần Thị Bình 0903333444. Người
+      liên hệ là An 0901111222
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đặt luôn
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2192-tc-0008-i-m-n-tr-c-th-ph-i-c-truy-n-v-o-bms-create-booking-tool-ng-from-to-origin
+  title: '[TC_0008] Điểm đón/trả cụ thể phải được truyền vào `bms_create_booking_tool`
+    đúng `from`, `to`, `origin_selection`, `destination_selection`'
+  objective: Kiểm tra mapping pickup/dropoff từ stop catalog sang create booking.
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2192
+    source_testcase_name: '[TC_0008] Điểm đón/trả cụ thể phải được truyền vào `bms_create_booking_tool`
+      đúng `from`, `to`, `origin_selection`, `destination_selection`'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    - Anh chọn chuyến 23:30
+    - Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    - Anh chọn ghế B4
+    - Dương Quốc Thiện - 0908375751
+    - Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    - Đặt vé giúp anh
+    jira_expected_result: '- `bms_create_booking_tool.from` và `bms_create_booking_tool.to`
+      khớp điểm khách đã chọn, không tự đổi về endpoint nếu đã có điểm cụ thể
+
+      - Payload có `origin_selection` và `destination_selection` hoặc thông tin tương
+      đương đủ để trace nguồn mapping
+
+      - Output booking có `pickupPoint.name = Văn Phòng Tân Bình` và `dropoffPoint.name
+      = Ngã ba Liên Khương` hoặc điểm đã chọn tương ứng
+
+      - Câu trả lời cuối không hiển thị sai điểm đón/trả'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Võ Khánh Linh 008
+    phone: 0900000008
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn chuyến 23:30
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn ghế B4
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Dương Quốc Thiện - 0908375751
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đặt vé giúp anh
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2193-tc-0009-selected-price-option-ph-i-i-theo-bms-create-booking-tool-amount-fare-kh-
+  title: '[TC_0009] `selected_price_option` phải đi theo `bms_create_booking_tool`
+    để amount/fare không bị tính sai'
+  objective: Kiểm tra create booking dùng giá đã chốt từ price options, không tự tính
+    lại bằng fare mặc định.
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2193
+    source_testcase_name: '[TC_0009] `selected_price_option` phải đi theo `bms_create_booking_tool`
+      để amount/fare không bị tính sai'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    - Anh chọn chuyến 23:30
+    - Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    - Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    - Anh chọn ghế B4
+    - Dương Quốc Thiện - 0908375751
+    - Đặt luôn cho anh
+    jira_expected_result: '- `bms_create_booking_tool` nhận `selected_price_option`
+      hoặc field tương đương với option user đã chọn
+
+      - `seats`/seat payload tương thích với nhóm giá đã chốt
+
+      - Output `amount` và `fare` không mâu thuẫn với giá bot đã xác nhận cho khách
+
+      - Payment link được tạo cho đúng booking vừa có amount/fare đó'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Khánh Thị Thiện 009
+    phone: 0900000009
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn chuyến 23:30
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn ghế B4
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Dương Quốc Thiện - 0908375751
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đặt luôn cho anh
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2194-tc-0010-c-ng-m-t-m-gh-thu-c-nhi-u-lo-i-gh-th-bms-create-booking-tool-ph-i-nh-n-ng
+  title: '[TC_0010] Cùng một mã ghế thuộc nhiều loại ghế thì `bms_create_booking_tool`
+    phải nhận đúng loại ghế user đã chọn để không tính sai giá'
+  objective: 'Cover lỗi hiện tại: input create booking chưa có field đủ rõ để biết
+    ghế user chọn thuộc loại ghế/price option nào, dẫn đến tính giá sai so với giá
+    đã báo ban đầu và không tạo được booking.'
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2194
+    source_testcase_name: '[TC_0010] Cùng một mã ghế thuộc nhiều loại ghế thì `bms_create_booking_tool`
+      phải nhận đúng loại ghế user đã chọn để không tính sai giá'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    - Anh chọn chuyến 23:30
+    - Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    - Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    - Chọn ghế B4
+    - Dương Quốc Thiện - 0908375751
+    - Oke đặt đi
+    jira_expected_result: '- `bus_trip_price_options_tool` và `bus_trip_seat_map_tool`
+      cho thấy seat code B4 phải được bind với đúng loại ghế/price option user đã
+      chọn
+
+      - Input `bms_create_booking_tool` phải có đủ dữ liệu để phân biệt loại ghế/seat
+      group/selected price option của B4, không chỉ dựa vào `seat_code`
+
+      - `bms_create_booking_tool` không được tính giá theo loại ghế khác với giá bot
+      đã báo ban đầu
+
+      - Nếu input create booking hiện chưa có field cần thiết để phân biệt loại ghế,
+      testcase phải FAIL và ghi rõ thiếu contract field để bind `seat_code` với selected
+      price option
+
+      - Khi fix đúng, output booking tạo thành công, `amount/fare` khớp selected price
+      option và payment link tạo được cho booking đó'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Thiện Thị Khánh 010
+    phone: 0900000010
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn chuyến 23:30
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Chọn ghế B4
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Dương Quốc Thiện - 0908375751
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Oke đặt đi
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2195-tc-0011-thi-u-t-n-ho-c-s-i-n-tho-i-th-bot-kh-ng-g-i-bms-create-booking-tool
+  title: '[TC_0011] Thiếu tên hoặc số điện thoại thì bot không gọi `bms_create_booking_tool`'
+  objective: Kiểm tra validation passenger/contact trước create booking.
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2195
+    source_testcase_name: '[TC_0011] Thiếu tên hoặc số điện thoại thì bot không gọi
+      `bms_create_booking_tool`'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    - Anh chọn chuyến 23:30
+    - Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    - Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    - Anh chọn ghế B4
+    - Tên anh Dương Quốc Thiện
+    - Đặt luôn đi
+    jira_expected_result: '- Bot chưa gọi `bms_create_booking_tool` khi thiếu số điện
+      thoại hoặc field bắt buộc khác
+
+      - Bot hỏi đúng field còn thiếu, không hỏi lại chuyến/ghế/điểm đã chốt
+
+      - Không có booking pending được tạo trong trace
+
+      - Bot không nói đã giữ chỗ'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Nguyễn Minh Khánh 011
+    phone: 0900000011
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn chuyến 23:30
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn ghế B4
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Tên anh Dương Quốc Thiện
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đặt luôn đi
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2196-tc-0012-user-i-ng-y-ho-c-gi-sau-khi-c-selected-trip-th-bot-ph-i-reset-state-tr-c-
+  title: '[TC_0012] User đổi ngày hoặc giờ sau khi đã có selected trip thì bot phải
+    reset state trước khi tạo booking'
+  objective: Kiểm tra stale context khi user thay đổi trip trước create.
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2196
+    source_testcase_name: '[TC_0012] User đổi ngày hoặc giờ sau khi đã có selected
+      trip thì bot phải reset state trước khi tạo booking'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    - Anh chọn chuyến 23:30
+    - Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    - Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    - Anh chọn ghế B4
+    - Dương Quốc Thiện - 0908375751
+    - Thôi đổi sang chuyến 21:30 ngày 07/05 nhé
+    - Đặt luôn giúp anh
+    jira_expected_result: '- Bot coi `selected_trip`, stop catalog, price option và
+      seat state cũ là stale
+
+      - Bot gọi lại `bus_trip_schedule_catalog_tool` hoặc các tool cần thiết để lock
+      trip mới trước create
+
+      - `bms_create_booking_tool` nếu được gọi phải dùng `trip_id/base_trip_id/departure_date`
+      của chuyến mới
+
+      - Bot không tạo booking theo ngày/giờ cũ'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Trần Gia Thiện 012
+    phone: 0900000012
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn chuyến 23:30
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn ghế B4
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Dương Quốc Thiện - 0908375751
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Thôi đổi sang chuyến 21:30 ngày 07/05 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đặt luôn giúp anh
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2197-tc-0013-bms-create-booking-tool-tr-l-i-ho-c-output-r-ng-th-bot-kh-ng-c-b-o-gi-ch-
+  title: '[TC_0013] `bms_create_booking_tool` trả lỗi hoặc output rỗng thì bot không
+    được báo giữ chỗ thành công'
+  objective: Kiểm tra fail-safe khi create booking thất bại hoặc outcome không rõ.
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2197
+    source_testcase_name: '[TC_0013] `bms_create_booking_tool` trả lỗi hoặc output
+      rỗng thì bot không được báo giữ chỗ thành công'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    - Anh chọn chuyến 23:30
+    - Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    - Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    - Anh chọn ghế B4
+    - Dương Quốc Thiện - 0908375751
+    - Đặt vé giúp anh
+    jira_expected_result: '- Bot không nói đã giữ chỗ thành công khi output thiếu
+      bằng chứng tạo booking
+
+      - Bot không gọi `get_bms_payment_link_tool` nếu chưa có `booking_code` hợp lệ
+
+      - Bot xin lỗi ngắn gọn và hướng retry/handoff theo flow an toàn
+
+      - Không tạo thêm booking mù bằng payload khác nếu chưa xác định outcome'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Lê Khánh An 013
+    phone: 0900000013
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn chuyến 23:30
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn ghế B4
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Dương Quốc Thiện - 0908375751
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đặt vé giúp anh
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2198-tc-0014-get-bms-payment-link-tool-l-i-sau-khi-create-th-nh-c-ng-th-bot-kh-ng-g-i-
+  title: '[TC_0014] `get_bms_payment_link_tool` lỗi sau khi create thành công thì
+    bot không gọi lại `bms_create_booking_tool`'
+  objective: Kiểm tra recovery sau create success nhưng payment link fail.
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2198
+    source_testcase_name: '[TC_0014] `get_bms_payment_link_tool` lỗi sau khi create
+      thành công thì bot không gọi lại `bms_create_booking_tool`'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    - Anh chọn chuyến 23:30
+    - Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    - Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    - Anh chọn ghế B4
+    - Dương Quốc Thiện - 0908375751
+    - Đặt vé giúp anh và gửi link thanh toán
+    jira_expected_result: '- Bot không gọi lại `bms_create_booking_tool` để tạo booking
+      mới
+
+      - Bot giữ `booking_code/ticket_code` vừa tạo làm nguồn sự thật
+
+      - Bot báo khách booking đã được ghi nhận nhưng link thanh toán đang chưa lấy
+      được, hoặc handoff theo policy
+
+      - Trace không có duplicate booking cho cùng yêu cầu'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Phạm Thiện Tâm 014
+    phone: 0900000014
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn chuyến 23:30
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn ghế B4
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Dương Quốc Thiện - 0908375751
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đặt vé giúp anh và gửi link thanh toán
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2199-tc-0015-x-c-nh-n-t-v-l-p-l-i-kh-ng-c-t-o-duplicate-booking
+  title: '[TC_0015] Xác nhận đặt vé lặp lại không được tạo duplicate booking'
+  objective: Kiểm tra idempotency ở lớp hội thoại và tool-call.
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2199
+    source_testcase_name: '[TC_0015] Xác nhận đặt vé lặp lại không được tạo duplicate
+      booking'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    - Anh chọn chuyến 23:30
+    - Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    - Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    - Anh chọn ghế B4
+    - Dương Quốc Thiện - 0908375751
+    - Oke đặt đi
+    - Ừ đặt luôn giúp anh nha
+    jira_expected_result: '- Hệ thống không tạo 2 booking pending cho cùng selected
+      trip/seat/contact
+
+      - Nếu booking đã tạo ở lượt trước, bot reuse `booking_code/ticket_code` hiện
+      có hoặc đọc lại order thay vì gọi create mù
+
+      - Bot không trả hai mã vé khác nhau cho cùng yêu cầu
+
+      - Nếu cần xác minh, bot dùng `get_bms_order_details_tool` hoặc trạng thái hội
+      thoại thay vì tạo mới'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Đỗ Minh Thiện 015
+    phone: 0900000015
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn chuyến 23:30
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn ghế B4
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Dương Quốc Thiện - 0908375751
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Oke đặt đi
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Ừ đặt luôn giúp anh nha
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2200-tc-0016-booking-v-a-t-o-ph-i-c-l-i-c-b-ng-get-bms-order-details-tool-v-kh-p-ticke
+  title: '[TC_0016] Booking vừa tạo phải đọc lại được bằng `get_bms_order_details_tool`
+    và khớp ticket vừa trả khách'
+  objective: Xác nhận compatibility giữa create booking và order details như acceptance
+    criteria.
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2200
+    source_testcase_name: '[TC_0016] Booking vừa tạo phải đọc lại được bằng `get_bms_order_details_tool`
+      và khớp ticket vừa trả khách'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    - Anh chọn chuyến 23:30
+    - Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    - Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    - Anh chọn ghế B4
+    - Dương Quốc Thiện - 0908375751
+    - Oke đặt đi
+    - Tra lại mã vé vừa tạo giúp anh
+    jira_expected_result: '- `get_bms_order_details_tool` đọc được booking vừa tạo
+      bằng mã vừa trả khách
+
+      - Route, ngày giờ, điểm đón/trả, seat code, fare/amount và trạng thái vé khớp
+      output `bms_create_booking_tool`
+
+      - Nếu không đọc được, bot không được tự tạo booking mới để thay thế
+
+      - Bot trả thông tin user-facing, không lộ raw JSON'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Võ Khánh Linh 016
+    phone: 0900000016
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn chuyến 23:30
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn ghế B4
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Dương Quốc Thiện - 0908375751
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Oke đặt đi
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Tra lại mã vé vừa tạo giúp anh
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2201-tc-0017-scope-guard-y-u-c-u-ch-a-i-u-ki-n-self-service-ph-i-i-lead-handoff-kh-ng-
+  title: '[TC_0017] Scope guard: yêu cầu chưa đủ điều kiện self-service phải đi lead/handoff,
+    không gọi `bms_create_booking_tool`'
+  objective: Đảm bảo ranh giới scope AI-548 với lead capture/handoff và hold-seat
+    nâng cao.
+  opening_prompt: Mai có xe nào tiện thì giữ giúp anh 2 chỗ gần nhau, lát anh chốt
+    sau
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2201
+    source_testcase_name: '[TC_0017] Scope guard: yêu cầu chưa đủ điều kiện self-service
+      phải đi lead/handoff, không gọi `bms_create_booking_tool`'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Mai có xe nào tiện thì giữ giúp anh 2 chỗ gần nhau, lát anh chốt sau
+    jira_expected_result: '- Bot không gọi `bms_create_booking_tool` khi chưa có selected
+      trip/seat/điểm/contact đủ rõ
+
+      - Bot hỏi thêm thông tin hoặc chuyển lead/handoff theo policy
+
+      - Bot không tự nhận đã lock inventory nếu backend chưa xác nhận
+
+      - Câu trả lời phân biệt rõ tư vấn/chờ chốt với booking pending đã tạo'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Khánh Thị Thiện 017
+    phone: 0900000017
+    email: null
+  steps:
+  - prompt: Mai có xe nào tiện thì giữ giúp anh 2 chỗ gần nhau, lát anh chốt sau
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2202-tc-0018-availability-guarantee-template-only-th-bot-kh-ng-c-cam-k-t-gi-gh-c-th
+  title: '[TC_0018] `availability_guarantee = template_only` thì bot không được cam
+    kết đã giữ ghế cụ thể'
+  objective: Kiểm tra nhánh availability không đủ chắc trước khi create hoặc trước
+    khi trả lời giữ chỗ.
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2202
+    source_testcase_name: '[TC_0018] `availability_guarantee = template_only` thì
+      bot không được cam kết đã giữ ghế cụ thể'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    - Anh chọn chuyến 23:30
+    - Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    - Giữ giúp anh ghế B4 luôn nhé
+    jira_expected_result: '- Nếu `availability_guarantee = template_only`, bot không
+      được nói chắc ghế còn trống hoặc đã giữ ghế cụ thể
+
+      - Bot không gọi `bms_create_booking_tool` nếu dữ liệu chưa đủ an toàn để tạo
+      booking theo policy hiện hành
+
+      - Bot hỏi lại/chuyển nhân viên hoặc báo giới hạn rõ ràng
+
+      - Không có booking pending sai dựa trên seat template'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Thiện Thị Khánh 018
+    phone: 0900000018
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn chuyến 23:30
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Giữ giúp anh ghế B4 luôn nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+- case_id: ai-t2203-tc-0019-c-u-tr-l-i-sau-create-booking-ch-hi-n-th-th-ng-tin-c-n-cho-kh-ch-kh-ng-l-
+  title: '[TC_0019] Câu trả lời sau create booking chỉ hiển thị thông tin cần cho
+    khách, không lộ field nội bộ'
+  objective: Kiểm tra output user-facing sau create success.
+  opening_prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+  metadata:
+    source: jira_zephyr_testcase
+    source_testcase_key: AI-T2203
+    source_testcase_name: '[TC_0019] Câu trả lời sau create booking chỉ hiển thị thông
+      tin cần cho khách, không lộ field nội bộ'
+    execution_mode: adaptive
+    planned_user_turns:
+    - Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    - Anh chọn chuyến 23:30
+    - Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    - Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    - Anh chọn ghế B4
+    - Dương Quốc Thiện - 0908375751
+    - Oke đặt đi
+    jira_expected_result: '- Bot hiển thị mã vé/mã đặt chỗ và link thanh toán nếu
+      có
+
+      - Bot có thể nhắc tuyến, giờ, điểm đón/trả, ghế và tổng tiền ở dạng dễ hiểu
+
+      - Bot không lộ raw JSON, `trip_id`, `base_trip_id`, `selection_key`, payload
+      `seats` hoặc field debug
+
+      - Nội dung không mâu thuẫn với `bms_create_booking_tool` và `get_bms_payment_link_tool`'
+    adaptive_instruction: Treat planned_user_turns as ordered user intents. Adapt
+      each next user message to the real bot reply and choose only options that the
+      bot actually offers.
+  conversation_id: null
+  contact_id: null
+  inbox_id: 3062
+  captain_assistant_id: 80
+  ui_inbox_id: 3062
+  labels:
+  - ai
+  assignee_name: Bot
+  stop_regex_any:
+  - (?i)https?://\S+
+  contact:
+    name: Nguyễn Minh Khánh 019
+    phone: 0900000019
+    email: null
+  steps:
+  - prompt: Anh muốn đi Sài Gòn đi Đà Lạt ngày 06/05, 1 người
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn chuyến 23:30
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Đón ở Văn Phòng Tân Bình, trả ở Ngã ba Liên Khương
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh lấy loại Phòng Đôi Nằm 2 Khách Dưới 140kg giá 650.000 nhé
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Anh chọn ghế B4
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Dương Quốc Thiện - 0908375751
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []
+  - prompt: Oke đặt đi
+    timeout_seconds: null
+    expectation:
+      contains_any: []
+      regex_any: []

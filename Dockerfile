@@ -6,6 +6,10 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 python3-requests librsvg2-bin ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3-yaml \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 

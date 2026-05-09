@@ -1,0 +1,34 @@
+suite_name: sg-bmt-seat-d3-tool-check
+generated_at: "2026-04-28T00:00:00+07:00"
+goal_summary: "Check SG -> Buon Ma Thuot booking flow calls seat map before create booking and inspect seat-map output for D3."
+defaults:
+  webhook_url: "http://localhost:3000/webhook/chatwoot"
+  labels: ["ai", "skip"]
+  assignee_name: "Bot"
+  reply_timeout_seconds: 180
+  reply_settle_seconds: 3
+  poll_interval_seconds: 2
+  inbox_id: 3049
+  captain_assistant_id: 80
+  pinned_conversation_id: 28221
+cases:
+  - case_id: sg-bmt-seat-d3
+    title: "SG Buon Ma Thuot choose D3"
+    objective: "Run one local Chatwoot conversation through a Tiến Oanh SG -> Buôn Ma Thuột seat selection path."
+    inbox_id: 3049
+    captain_assistant_id: 80
+    labels: ["ai", "skip"]
+    assignee_name: "Bot"
+    contact:
+      name: "Khánh Thị Thiện"
+      phone: "0967142713"
+    steps:
+      - prompt: "Anh muốn đặt 1 vé Sài Gòn đi Buôn Ma Thuột ngày 29-04-2026, chuyến 08:00. Anh đi từ Cây xăng Trường Chinh - Cộng Hòa và xuống Bến xe Buôn Hồ. Tên Khánh Thị Thiện, số điện thoại 0967142713."
+        expectation:
+          regex_any: [".+"]
+      - prompt: "Em gửi cho anh xem sơ đồ ghế với."
+        expectation:
+          regex_any: [".+"]
+      - prompt: "Lấy anh ghế D3 nhé."
+        expectation:
+          regex_any: [".+"]

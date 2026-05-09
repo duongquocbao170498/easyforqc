@@ -1,0 +1,124 @@
+suite_name: "ai_726_five_distinct_passenger_bookings"
+generated_at: "2026-05-06T22:40:00+07:00"
+goal_summary: "Five realistic Chatwoot booking regressions for AI-726: Tiến Oanh Sài Gòn to Đà Lạt, 1 double room plus 2 large single rooms, with three distinct passenger names and phone numbers per booking."
+defaults:
+  webhook_url: "http://localhost:3000/webhook/chatwoot"
+  chat_ui_mode: "realistic"
+  ui_inbox_id: null
+  inbox_id: null
+  captain_assistant_id: null
+  labels:
+    - "ai"
+    - "bus"
+    - "booking"
+  assignee_name: "Bot"
+  reply_timeout_seconds: 300
+  reply_settle_seconds: 3
+  poll_interval_seconds: 2
+cases:
+  - case_id: "ai-726-five-distinct-20260508-2300"
+    title: "2026-05-08 23:00 distinct passenger mapping"
+    objective: "Book Tiến Oanh Sài Gòn -> Đà Lạt on 08/05/2026 around 23:00 with 1 double room and 2 large single rooms, preserving three distinct passengers."
+    opening_prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày 08/05/2026 chuyến 23:00, 3 khách. Mình cần 1 phòng đôi và 2 phòng đơn lớn. Nếu 23:00 không đủ đúng combo thì chọn giúp mình chuyến gần nhất cùng ngày còn đủ đúng combo."
+    metadata: &case_metadata
+      jira_key: "AI-726"
+      operator_name: "Tiến Oanh"
+      route_name: "Sài Gòn -> Đà Lạt"
+      shape: "1 phòng đôi + 2 phòng đơn lớn"
+      passenger_mapping:
+        double_room: "Thiện Thần Thánh - 0908375751"
+        single_large_1: "Khánh Sky - 0908765432"
+        single_large_2: "Thiện Thị Khánh - 0901234567"
+    conversation_id: null
+    contact_id: null
+    inbox_id: null
+    captain_assistant_id: null
+    labels: ["ai", "bus", "booking"]
+    assignee_name: "Bot"
+    contact: &contact
+      name: "AI 726 Distinct QA"
+      phone: "0908375751"
+      email: null
+    stop_regex_any: &success_stop
+      - "(?i)(mã vé|mã đặt chỗ|ticket code|booking code)[^\\n]{0,80}[A-Z0-9]{5,12}"
+    steps:
+      - prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày 08/05/2026 chuyến 23:00, 3 khách. Mình cần 1 phòng đôi và 2 phòng đơn lớn."
+        expectation:
+          contains_any: ["Đà Lạt", "Sài Gòn", "phòng", "ghế", "chuyến"]
+          regex_any: []
+
+  - case_id: "ai-726-five-distinct-20260509-2320"
+    title: "2026-05-09 23:20 distinct passenger mapping"
+    objective: "Book Tiến Oanh Sài Gòn -> Đà Lạt on 09/05/2026 around 23:20 with 1 double room and 2 large single rooms, preserving three distinct passengers."
+    opening_prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày 09/05/2026 chuyến 23:20, 3 khách. Mình cần 1 phòng đôi và 2 phòng đơn lớn. Nếu 23:20 không đủ đúng combo thì chọn giúp mình chuyến gần nhất cùng ngày còn đủ đúng combo."
+    metadata: *case_metadata
+    conversation_id: null
+    contact_id: null
+    inbox_id: null
+    captain_assistant_id: null
+    labels: ["ai", "bus", "booking"]
+    assignee_name: "Bot"
+    contact: *contact
+    stop_regex_any: *success_stop
+    steps:
+      - prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày 09/05/2026 chuyến 23:20, 3 khách. Mình cần 1 phòng đôi và 2 phòng đơn lớn."
+        expectation:
+          contains_any: ["Đà Lạt", "Sài Gòn", "phòng", "ghế", "chuyến"]
+          regex_any: []
+
+  - case_id: "ai-726-five-distinct-20260510-2330"
+    title: "2026-05-10 23:30 distinct passenger mapping"
+    objective: "Book Tiến Oanh Sài Gòn -> Đà Lạt on 10/05/2026 around 23:30 with 1 double room and 2 large single rooms, preserving three distinct passengers."
+    opening_prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày 10/05/2026 chuyến 23:30, 3 khách. Mình cần 1 phòng đôi và 2 phòng đơn lớn. Nếu 23:30 không đủ đúng combo thì chọn giúp mình chuyến gần nhất cùng ngày còn đủ đúng combo."
+    metadata: *case_metadata
+    conversation_id: null
+    contact_id: null
+    inbox_id: null
+    captain_assistant_id: null
+    labels: ["ai", "bus", "booking"]
+    assignee_name: "Bot"
+    contact: *contact
+    stop_regex_any: *success_stop
+    steps:
+      - prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày 10/05/2026 chuyến 23:30, 3 khách. Mình cần 1 phòng đôi và 2 phòng đơn lớn."
+        expectation:
+          contains_any: ["Đà Lạt", "Sài Gòn", "phòng", "ghế", "chuyến"]
+          regex_any: []
+
+  - case_id: "ai-726-five-distinct-20260511-2315"
+    title: "2026-05-11 23:15 distinct passenger mapping"
+    objective: "Book Tiến Oanh Sài Gòn -> Đà Lạt on 11/05/2026 around 23:15 with 1 double room and 2 large single rooms, preserving three distinct passengers."
+    opening_prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày 11/05/2026 chuyến 23:15, 3 khách. Mình cần 1 phòng đôi và 2 phòng đơn lớn. Nếu 23:15 không đủ đúng combo thì chọn giúp mình chuyến gần nhất cùng ngày còn đủ đúng combo."
+    metadata: *case_metadata
+    conversation_id: null
+    contact_id: null
+    inbox_id: null
+    captain_assistant_id: null
+    labels: ["ai", "bus", "booking"]
+    assignee_name: "Bot"
+    contact: *contact
+    stop_regex_any: *success_stop
+    steps:
+      - prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày 11/05/2026 chuyến 23:15, 3 khách. Mình cần 1 phòng đôi và 2 phòng đơn lớn."
+        expectation:
+          contains_any: ["Đà Lạt", "Sài Gòn", "phòng", "ghế", "chuyến"]
+          regex_any: []
+
+  - case_id: "ai-726-five-distinct-20260512-2300"
+    title: "2026-05-12 23:00 distinct passenger mapping"
+    objective: "Book Tiến Oanh Sài Gòn -> Đà Lạt on 12/05/2026 around 23:00 with 1 double room and 2 large single rooms, preserving three distinct passengers."
+    opening_prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày 12/05/2026 chuyến 23:00, 3 khách. Mình cần 1 phòng đôi và 2 phòng đơn lớn. Nếu 23:00 không đủ đúng combo thì chọn giúp mình chuyến gần nhất cùng ngày còn đủ đúng combo."
+    metadata: *case_metadata
+    conversation_id: null
+    contact_id: null
+    inbox_id: null
+    captain_assistant_id: null
+    labels: ["ai", "bus", "booking"]
+    assignee_name: "Bot"
+    contact: *contact
+    stop_regex_any: *success_stop
+    steps:
+      - prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày 12/05/2026 chuyến 23:00, 3 khách. Mình cần 1 phòng đôi và 2 phòng đơn lớn."
+        expectation:
+          contains_any: ["Đà Lạt", "Sài Gòn", "phòng", "ghế", "chuyến"]
+          regex_any: []

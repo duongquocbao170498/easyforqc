@@ -21,14 +21,6 @@ DEFAULT_STATUS = "Draft"
 TEST_CASE_FOLDER_TYPE = "TEST_CASE"
 TEST_RUN_FOLDER_TYPE = "TEST_RUN"
 ALWAYS_TESTCASE_LABEL = "AI_Testcases"
-PRIORITY_ALIASES = {
-    "": DEFAULT_PRIORITY,
-    "medium": DEFAULT_PRIORITY,
-    "mid": DEFAULT_PRIORITY,
-    "normal": DEFAULT_PRIORITY,
-    "trung bình": DEFAULT_PRIORITY,
-    "trung binh": DEFAULT_PRIORITY,
-}
 
 
 def requests_json(method: str, url: str, **kwargs: Any) -> Any:
@@ -122,12 +114,6 @@ def normalize_status_name(value: Any) -> str:
     text = str(((value or {}).get("name") if isinstance(value, dict) else value) or "").strip().lower()
     text = re.sub(r"\s+", " ", text)
     return text
-
-
-def normalize_priority(value: Any) -> str:
-    text = str(value or "").strip()
-    normalized = re.sub(r"\s+", " ", text).lower()
-    return PRIORITY_ALIASES.get(normalized, text or DEFAULT_PRIORITY)
 
 
 def testcase_status_label(status_name: str) -> Optional[str]:
@@ -380,7 +366,8 @@ def looks_like_multiline_bullets(value: str) -> bool:
 
 
 def looks_like_numbered_quotes(value: str) -> bool:
-    lines = [line.strip() for line in value.splitlines() if line.strip()]
+    normalized = re.sub(r"(?i)<br\s*/?>", "\n", value.strip())
+    lines = [line.strip() for line in normalized.splitlines() if line.strip()]
     if not lines:
         return False
     return all(re.match(r'^\d+\.\s+".+"$', line) for line in lines)
@@ -429,17 +416,18 @@ def build_testcase_payload(
     expected_result = case.get("expected_result")
     if not all(isinstance(value, str) and value.strip() for value in [title, precondition, test_data, expected_result]):
         raise SystemExit("Each case must have non-empty `title`, `precondition`, `test_data`, and `expected_result`.")
+    rendered_test_data = test_data.strip().replace("\n", "<br />")
     return {
         "projectKey": project_key,
         "name": normalize_title(index, title),
-        "priority": normalize_priority(case.get("priority")),
+        "priority": str(case.get("priority") or DEFAULT_PRIORITY),
         "status": str(case.get("status") or DEFAULT_STATUS),
         "folder": folder_path,
         "objective": str(case.get("objective") or title).strip(),
         "precondition": precondition.strip(),
         "testScript": {
             "type": "STEP_BY_STEP",
-            "steps": build_test_script_steps(case, test_data.strip(), expected_result.strip()),
+            "steps": build_test_script_steps(case, rendered_test_data, expected_result.strip()),
         },
     }
 

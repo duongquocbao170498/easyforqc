@@ -1,0 +1,302 @@
+suite_name: route-span-discovery-5-case
+generated_at: "2026-05-07T12:31:08+07:00"
+goal_summary: >
+  UAT route-span discovery suite for Tiến Oanh. Each case starts by asking
+  what trips are available on a route/date, then drills into a selected trip
+  to verify departure time, seat count, passenger identity, fare, origin,
+  pickup point, and dropoff/route-span handling before checkout.
+defaults:
+  webhook_url: http://localhost:3000/webhook/chatwoot
+  chat_ui_mode: realistic
+  ui_inbox_id: 3062
+  labels:
+    - ai
+    - tien-oanh
+    - route-span
+    - uat
+    - route-span-discovery
+  assignee_name: Bot
+  reply_timeout_seconds: 300
+  reply_settle_seconds: 3
+  poll_interval_seconds: 2
+  inbox_id: 3049
+  captain_assistant_id: 80
+cases:
+  - case_id: route-span-01-sgn-dalat-0500
+    title: Sài Gòn - Đà Lạt hỏi danh sách rồi chọn 05:00
+    objective: >
+      User first asks for available Tiến Oanh trips from Sài Gòn to Đà Lạt,
+      then selects the 05:00 trip and verifies pickup/dropoff, seat, fare,
+      passenger name, and checkout.
+    opening_prompt: Nhà xe Tiến Oanh tuyến Sài Gòn đi Đà Lạt ngày 01-05-2026 có những chuyến nào vậy em?
+    stop_regex_any:
+      - (?i)https?://\S+
+      - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+    contact:
+      name: Nguyen Van Route One
+      phone: "0908100001"
+      email: qa.route.span.1@example.com
+    metadata:
+      operator_name: Tiến Oanh
+      departure_date: "2026-05-01"
+      route_name: Sài Gòn - Đà Lạt
+      preferred_times: ["05:00"]
+      preferred_pickup: Bến Xe Miền Đông Mới
+      preferred_dropoff: Ngã 3 Madagui
+      ticket_count: 1
+      route_span_case: true
+      case_kind: discovery-then-booking
+    steps:
+      - prompt: Nhà xe Tiến Oanh tuyến Sài Gòn đi Đà Lạt ngày 01-05-2026 có những chuyến nào vậy em?
+        expectation:
+          contains_any:
+            - Sài Gòn
+            - Đà Lạt
+            - chuyến
+            - Tiến Oanh
+          regex_any:
+            - "(?i)(05:00|05h00|5:00|5h)"
+      - prompt: Anh muốn xem kỹ chuyến 05:00, còn ghế không và đi xe hạng gì?
+        expectation:
+          contains_any:
+            - "05:00"
+            - "05h00"
+            - ghế
+            - Limousine
+            - Phòng
+      - prompt: Anh đi 1 vé, đón ở Bến Xe Miền Đông Mới, trả ở Ngã 3 Madagui. Em báo lại giá vé và điểm đi/điểm trả giúp anh.
+        expectation:
+          contains_any:
+            - Bến Xe Miền Đông Mới
+            - Ngã 3 Madagui
+            - giá
+            - vé
+      - prompt: Hành khách tên Nguyễn Văn Route One, số điện thoại 0908100001. Em đặt giúp anh chuyến này nhé.
+        expectation:
+          contains_any:
+            - Nguyễn Văn Route One
+            - 0908100001
+            - thanh toán
+            - đặt vé
+            - xác nhận
+
+  - case_id: route-span-02-sgn-dalat-2300-two-seats
+    title: Sài Gòn - Đà Lạt hỏi danh sách rồi chọn 23:00 hai vé
+    objective: >
+      User asks for available trips first, chooses the 23:00 trip, then books
+      two seats with distinct passenger names and route-span pickup/dropoff.
+    opening_prompt: Ngày 01-05-2026 Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt?
+    stop_regex_any:
+      - (?i)https?://\S+
+      - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+    contact:
+      name: Tran Route Span
+      phone: "0908100002"
+      email: qa.route.span.2@example.com
+    metadata:
+      operator_name: Tiến Oanh
+      departure_date: "2026-05-01"
+      route_name: Sài Gòn - Đà Lạt
+      preferred_times: ["23:00"]
+      preferred_pickup: Bến Xe Miền Đông Mới
+      preferred_dropoff: Ngã 3 Madagui
+      ticket_count: 2
+      route_span_case: true
+      case_kind: discovery-then-booking
+    steps:
+      - prompt: Ngày 01-05-2026 Tiến Oanh có những chuyến nào từ Sài Gòn đi Đà Lạt?
+        expectation:
+          contains_any:
+            - Sài Gòn
+            - Đà Lạt
+            - chuyến
+            - Tiến Oanh
+          regex_any:
+            - "(?i)(23:00|23h00|11 giờ|11h)"
+      - prompt: Anh chọn chuyến 23:00, cho anh hỏi hạng xe, giá vé và còn đủ 2 chỗ không?
+        expectation:
+          contains_any:
+            - "23:00"
+            - "23h00"
+            - 2 chỗ
+            - giá
+            - ghế
+      - prompt: Anh muốn đón ở Bến Xe Miền Đông Mới và trả ở Ngã 3 Madagui. Hai vé này có áp dụng được điểm đón trả đó không?
+        expectation:
+          contains_any:
+            - Bến Xe Miền Đông Mới
+            - Ngã 3 Madagui
+            - đón
+            - trả
+      - prompt: Vé 1 tên Trần Route Span số 0908100002, vé 2 tên Lê Route Span số 0908100003. Em giữ đúng thông tin từng khách và chốt giúp anh.
+        expectation:
+          contains_any:
+            - Trần Route Span
+            - Lê Route Span
+            - thanh toán
+            - đặt vé
+            - xác nhận
+
+  - case_id: route-span-03-sgn-bmt-discovery
+    title: Sài Gòn - Buôn Ma Thuột hỏi danh sách rồi chọn một chuyến phù hợp
+    objective: >
+      User discovers available trips from Sài Gòn to Buôn Ma Thuột, asks the
+      bot to recommend a suitable trip, then confirms fare, seat count,
+      pickup/dropoff, and passenger details.
+    opening_prompt: Tiến Oanh ngày 01-05-2026 tuyến Sài Gòn đi Buôn Ma Thuột có những chuyến nào?
+    stop_regex_any:
+      - (?i)https?://\S+
+      - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+    contact:
+      name: Pham Route Span
+      phone: "0908100004"
+      email: qa.route.span.3@example.com
+    metadata:
+      operator_name: Tiến Oanh
+      departure_date: "2026-05-01"
+      route_name: Sài Gòn - Buôn Ma Thuột
+      preferred_pickup: Bến Xe Miền Đông Mới
+      preferred_dropoff: Bến xe phía nam Buôn Ma Thuột
+      ticket_count: 1
+      route_span_case: true
+      case_kind: discovery-then-booking
+    steps:
+      - prompt: Tiến Oanh ngày 01-05-2026 tuyến Sài Gòn đi Buôn Ma Thuột có những chuyến nào?
+        expectation:
+          contains_any:
+            - Sài Gòn
+            - Buôn Ma Thuột
+            - chuyến
+            - Tiến Oanh
+      - prompt: Em chọn giúp anh một chuyến còn ghế trong ngày đó, ưu tiên chuyến dễ đặt nhất, rồi báo giờ chạy và hạng xe.
+        expectation:
+          contains_any:
+            - giờ
+            - chuyến
+            - ghế
+            - hạng
+            - xe
+      - prompt: Anh đi 1 vé, đón ở Bến Xe Miền Đông Mới, trả ở Bến xe phía nam Buôn Ma Thuột. Cho anh biết giá vé và điểm chặng có đúng không.
+        expectation:
+          contains_any:
+            - Bến Xe Miền Đông Mới
+            - Buôn Ma Thuột
+            - giá
+            - vé
+      - prompt: Thông tin khách là Phạm Route Span, số điện thoại 0908100004. Em tiến hành đặt vé giúp anh.
+        expectation:
+          contains_any:
+            - Phạm Route Span
+            - 0908100004
+            - thanh toán
+            - đặt vé
+            - xác nhận
+
+  - case_id: route-span-04-dalat-sgn-return
+    title: Đà Lạt - Sài Gòn hỏi danh sách rồi chọn chuyến về
+    objective: >
+      User starts with available return trips from Đà Lạt to Sài Gòn, then
+      selects a trip and verifies departure time, fare, pickup, dropoff, seat,
+      and passenger details.
+    opening_prompt: Ngày 01-05-2026 nhà xe Tiến Oanh từ Đà Lạt về Sài Gòn có những chuyến nào?
+    stop_regex_any:
+      - (?i)https?://\S+
+      - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+    contact:
+      name: Vo Route Span
+      phone: "0908100005"
+      email: qa.route.span.4@example.com
+    metadata:
+      operator_name: Tiến Oanh
+      departure_date: "2026-05-01"
+      route_name: Đà Lạt - Sài Gòn
+      preferred_pickup: Bến xe liên tỉnh Đà Lạt
+      preferred_dropoff: Bến Xe Miền Đông Mới
+      ticket_count: 1
+      route_span_case: true
+      case_kind: discovery-then-booking
+    steps:
+      - prompt: Ngày 01-05-2026 nhà xe Tiến Oanh từ Đà Lạt về Sài Gòn có những chuyến nào?
+        expectation:
+          contains_any:
+            - Đà Lạt
+            - Sài Gòn
+            - chuyến
+            - Tiến Oanh
+      - prompt: Anh muốn chọn một chuyến còn ghế. Em báo giờ chạy, hạng xe và giá vé của chuyến phù hợp nhất giúp anh.
+        expectation:
+          contains_any:
+            - giờ
+            - ghế
+            - hạng
+            - giá
+            - vé
+      - prompt: Anh đón ở Bến xe liên tỉnh Đà Lạt và trả ở Bến Xe Miền Đông Mới, đi 1 vé. Điểm chặng này đặt được không em?
+        expectation:
+          contains_any:
+            - Bến xe liên tỉnh Đà Lạt
+            - Bến Xe Miền Đông Mới
+            - đón
+            - trả
+      - prompt: Khách tên Võ Route Span, số 0908100005. Nếu đúng chuyến thì em tạo đơn giúp anh.
+        expectation:
+          contains_any:
+            - Võ Route Span
+            - 0908100005
+            - thanh toán
+            - đặt vé
+            - xác nhận
+
+  - case_id: route-span-05-bmt-sgn-return-two-seats
+    title: Buôn Ma Thuột - Sài Gòn hỏi danh sách rồi chọn hai vé
+    objective: >
+      User asks for available trips from Buôn Ma Thuột to Sài Gòn, selects a
+      suitable trip, verifies route-span points and fare, then books two seats.
+    opening_prompt: Tiến Oanh ngày 01-05-2026 từ Buôn Ma Thuột đi Sài Gòn có những chuyến nào vậy?
+    stop_regex_any:
+      - (?i)https?://\S+
+      - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+    contact:
+      name: Dang Route Span
+      phone: "0908100006"
+      email: qa.route.span.5@example.com
+    metadata:
+      operator_name: Tiến Oanh
+      departure_date: "2026-05-01"
+      route_name: Buôn Ma Thuột - Sài Gòn
+      preferred_pickup: Bến xe phía nam Buôn Ma Thuột
+      preferred_dropoff: Bến Xe Miền Đông Mới
+      ticket_count: 2
+      route_span_case: true
+      case_kind: discovery-then-booking
+    steps:
+      - prompt: Tiến Oanh ngày 01-05-2026 từ Buôn Ma Thuột đi Sài Gòn có những chuyến nào vậy?
+        expectation:
+          contains_any:
+            - Buôn Ma Thuột
+            - Sài Gòn
+            - chuyến
+            - Tiến Oanh
+      - prompt: Anh cần 2 vé, em chọn giúp một chuyến còn đủ 2 ghế rồi báo giờ chạy, hạng xe và giá vé.
+        expectation:
+          contains_any:
+            - 2 vé
+            - 2 ghế
+            - giờ
+            - giá
+            - ghế
+      - prompt: Điểm đón là Bến xe phía nam Buôn Ma Thuột, điểm trả Bến Xe Miền Đông Mới. Em xác nhận lại điểm đi, điểm đón và điểm trả giúp anh.
+        expectation:
+          contains_any:
+            - Bến xe phía nam Buôn Ma Thuột
+            - Bến Xe Miền Đông Mới
+            - điểm đón
+            - điểm trả
+      - prompt: Vé 1 Đặng Route Span số 0908100006, vé 2 Bùi Route Span số 0908100007. Em chốt đơn nếu đủ thông tin nhé.
+        expectation:
+          contains_any:
+            - Đặng Route Span
+            - Bùi Route Span
+            - thanh toán
+            - đặt vé
+            - xác nhận

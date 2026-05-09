@@ -1,0 +1,58 @@
+suite_name: "ai_726_tien_oanh_23h_distinct_passengers"
+generated_at: "2026-05-06T15:10:00+07:00"
+goal_summary: "AI-726 realistic regression fixed at 23:00: preserve one double room plus two single large rooms with three distinct passenger names and phone numbers."
+defaults:
+  webhook_url: "http://localhost:3000/webhook/chatwoot"
+  chat_ui_mode: "realistic"
+  ui_inbox_id: null
+  inbox_id: null
+  captain_assistant_id: null
+  labels:
+    - "ai"
+    - "bus"
+    - "booking"
+  assignee_name: "Bot"
+  reply_timeout_seconds: 300
+  reply_settle_seconds: 3
+  poll_interval_seconds: 2
+cases:
+  - case_id: "ai-726-23h-distinct-passenger-mapping"
+    title: "23:00 booking keeps three distinct passenger mappings"
+    objective: "Book the 23:00 Tiến Oanh trip with one double room and two single large rooms, using different name/phone information for all three selected room codes."
+    opening_prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày mai chuyến 23:00, 3 khách. Mình cần 1 phòng đôi và 2 phòng đơn lớn."
+    metadata:
+      jira_key: "AI-726"
+      operator_name: "Tiến Oanh"
+      route_name: "Sài Gòn -> Đà Lạt"
+      fixed_time: "23:00"
+      shape: "1 phòng đôi + 2 phòng đơn lớn"
+      passenger_mapping:
+        double_room: "Thiện Thần Thánh - 0908375751"
+        single_large_1: "Khánh Sky - 0908765432"
+        single_large_2: "Thiện Thị Khánh - 0901234567"
+    conversation_id: null
+    contact_id: null
+    inbox_id: null
+    captain_assistant_id: null
+    labels:
+      - "ai"
+      - "bus"
+      - "booking"
+    assignee_name: "Bot"
+    contact:
+      name: "AI 726 23h Distinct"
+      phone: "0908375751"
+      email: null
+    stop_regex_any:
+      - "(?i)(mã vé|mã đặt chỗ|link thanh toán|đã tạo|đã giữ chỗ|đặt vé thành công)"
+    steps:
+      - prompt: "Cho mình đặt Tiến Oanh Sài Gòn đi Đà Lạt ngày mai chuyến 23:00, 3 khách. Mình cần 1 phòng đôi và 2 phòng đơn lớn."
+        timeout_seconds: null
+        expectation:
+          contains_any:
+            - "23:00"
+            - "Đà Lạt"
+            - "Sài Gòn"
+            - "phòng"
+            - "ghế"
+          regex_any: []

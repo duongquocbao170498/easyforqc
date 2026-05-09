@@ -1,0 +1,7 @@
+interface:
+  display_name: "Chatwoot Test UAT"
+  short_description: "Run OmniAgent repo-local UAT Chatwoot E2E suites"
+  default_prompt: "Use $chatwoot-test-uat from the OmniAgent repo to plan and run a UAT Chatwoot webhook regression suite, then produce YAML plus HTML reports."
+
+policy:
+  allow_implicit_invocation: true

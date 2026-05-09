@@ -22,10 +22,17 @@ services:
       GOOGLE_CALLBACK_URL: "${GOOGLE_CALLBACK_URL:-}"
       GOOGLE_ALLOWED_EMAILS: "${GOOGLE_ALLOWED_EMAILS:-}"
       QA_SOURCE_ROOT: "/app/vendor/qa-source"
+      CHATWOOT_UAT_SKILL_ROOT: "${CHATWOOT_UAT_SKILL_ROOT:-/app/vendor/qa-source/chatwoot-test-uat}"
+      CHATWOOT_UAT_INBOX_ID: "${CHATWOOT_UAT_INBOX_ID:-3062}"
+      CHATWOOT_UAT_UI_INBOX_ID: "${CHATWOOT_UAT_UI_INBOX_ID:-3062}"
+      CHATWOOT_UAT_CAPTAIN_ASSISTANT_ID: "${CHATWOOT_UAT_CAPTAIN_ASSISTANT_ID:-80}"
+      CHATWOOT_UAT_DEFAULT_WEBHOOK_URL: "${CHATWOOT_UAT_DEFAULT_WEBHOOK_URL:-http://host.docker.internal:3000/webhook/chatwoot}"
+      CHATWOOT_UAT_DEFAULT_HEALTHCHECK_URL: "${CHATWOOT_UAT_DEFAULT_HEALTHCHECK_URL:-http://host.docker.internal:3000/health}"
       DATABASE_URL: "postgres://qa_studio:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting}@postgres:5432/qa_studio"
     volumes:
       - qa_runs:/app/.qa-runs
       - ./qa:/app/qa
+      - ${SKILLS_CONFIG_DIR:-${HOME}/.skills}:/home/node/.skills:ro
 
   postgres:
     image: postgres:16-alpine

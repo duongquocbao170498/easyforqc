@@ -1,0 +1,160 @@
+{
+  "company_id": "2",
+  "departure_date": "01-05-2026",
+  "route_count": 8,
+  "case_count": 55,
+  "routes": [
+    {
+      "route_name": "Sài Gòn - Đà Lạt",
+      "base_trip_id": "10613349",
+      "origin_endpoint": "Văn Phòng Tân Bình",
+      "destination_endpoint": "Văn Phòng Đà Lạt",
+      "origin_pick": {
+        "name": "Bến Xe Miền Đông Mới",
+        "kind": "pickup",
+        "selection_key": "origin:pickup:28861:178091:1730",
+        "bus_stop_name": "Văn Phòng Tân Bình"
+      },
+      "destination_drop": {
+        "name": "Ngã 3 Madagui",
+        "kind": "dropoff",
+        "selection_key": "destination:dropoff:8852:159847:1063",
+        "bus_stop_name": "Bến xe Di Linh"
+      },
+      "schedule_count": 7
+    },
+    {
+      "route_name": "Sài Gòn - Đăk Lăk (BXMĐ)",
+      "base_trip_id": "32628284",
+      "origin_endpoint": "Văn Phòng Tân Bình",
+      "destination_endpoint": "Văn Phòng Buôn Ma Thuột",
+      "origin_pick": {
+        "name": "Văn Phòng Thủ Đức",
+        "kind": "pickup",
+        "selection_key": "origin:pickup:28804:159093:1730",
+        "bus_stop_name": "Văn Phòng Tân Bình"
+      },
+      "destination_drop": {
+        "name": "Chợ Hoà Phú",
+        "kind": "dropoff",
+        "selection_key": "destination:dropoff:22707:190012:1731",
+        "bus_stop_name": "Văn Phòng Buôn Ma Thuột"
+      },
+      "schedule_count": 2
+    },
+    {
+      "route_name": "Sài Gòn - Đăk Lăk (TB - BXMĐ)",
+      "base_trip_id": "32643669",
+      "origin_endpoint": "Văn Phòng Tân Bình",
+      "destination_endpoint": "Văn Phòng Buôn Ma Thuột",
+      "origin_pick": {
+        "name": "Văn Phòng Thủ Đức",
+        "kind": "pickup",
+        "selection_key": "origin:pickup:28858:159093:1730",
+        "bus_stop_name": "Văn Phòng Tân Bình"
+      },
+      "destination_drop": {
+        "name": "Cây Xăng Kiến Tạo Đắk Song",
+        "kind": "dropoff",
+        "selection_key": "destination:dropoff:22710:190010:1731",
+        "bus_stop_name": "Văn Phòng Buôn Ma Thuột"
+      },
+      "schedule_count": 8
+    },
+    {
+      "route_name": "Sài Gòn - Đăk Lăk (TB - NTG)",
+      "base_trip_id": "32644647",
+      "origin_endpoint": "Văn Phòng Tân Bình",
+      "destination_endpoint": "Văn Phòng Buôn Ma Thuột",
+      "origin_pick": {
+        "name": "Ngã Tư Chợ Đình",
+        "kind": "pickup",
+        "selection_key": "origin:pickup:22431:189995:168108",
+        "bus_stop_name": "Văn Phòng Bình Dương"
+      },
+      "destination_drop": {
+        "name": "Cây Xăng Kiến Tạo Đắk Song",
+        "kind": "dropoff",
+        "selection_key": "destination:dropoff:22710:190010:1731",
+        "bus_stop_name": "Văn Phòng Buôn Ma Thuột"
+      },
+      "schedule_count": 13
+    },
+    {
+      "route_name": "Đà Lạt - Sài Gòn",
+      "base_trip_id": "10613491",
+      "origin_endpoint": "Văn Phòng Đà Lạt",
+      "destination_endpoint": "Văn Phòng Tân Bình",
+      "origin_pick": {
+        "name": "Ngã 3 Tượng Phật",
+        "kind": "pickup",
+        "selection_key": "origin:pickup:8856:162000:153096",
+        "bus_stop_name": "Văn Phòng Đà Lạt"
+      },
+      "destination_drop": {
+        "name": "Bưu điện Trảng Bom",
+        "kind": "dropoff",
+        "selection_key": "destination:dropoff:28864:116339:1730",
+        "bus_stop_name": "Văn Phòng Tân Bình"
+      },
+      "schedule_count": 2
+    },
+    {
+      "route_name": "Đà Lạt - Sài Gòn (N)",
+      "base_trip_id": "16801395",
+      "origin_endpoint": "Văn Phòng Đà Lạt",
+      "destination_endpoint": "Văn Phòng Tân Bình",
+      "origin_pick": {
+        "name": "Vòng xoay Liên Khương",
+        "kind": "pickup",
+        "selection_key": "origin:pickup:12931:162017:153096",
+        "bus_stop_name": "Văn Phòng Đà Lạt"
+      },
+      "destination_drop": {
+        "name": "Bến xe Ngã 4 Ga",
+        "kind": "dropoff",
+        "selection_key": "destination:dropoff:28863:166619:173603",
+        "bus_stop_name": "Ngã 4 Thủ Đức (Trạm Xe Buýt)"
+      },
+      "schedule_count": 5
+    },
+    {
+      "route_name": "Đăk Lăk - Sài Gòn (BXMĐ - TB)",
+      "base_trip_id": "32643682",
+      "origin_endpoint": "Văn Phòng Buôn Ma Thuột",
+      "destination_endpoint": "Bến xe Miền Đông Cũ",
+      "origin_pick": {
+        "name": "Hồ Tây Đắk Mil",
+        "kind": "pickup",
+        "selection_key": "origin:pickup:22709:190009:1731",
+        "bus_stop_name": "Văn Phòng Buôn Ma Thuột"
+      },
+      "destination_drop": {
+        "name": "Phí Tân Lập",
+        "kind": "dropoff",
+        "selection_key": "destination:dropoff:22418:190003:168108",
+        "bus_stop_name": "Văn Phòng Bình Dương"
+      },
+      "schedule_count": 7
+    },
+    {
+      "route_name": "Đăk Lăk - Sài Gòn (NTG - TB)",
+      "base_trip_id": "32644662",
+      "origin_endpoint": "Văn Phòng Buôn Ma Thuột",
+      "destination_endpoint": "Bến Xe Ngã Tư Ga",
+      "origin_pick": {
+        "name": "Hồ Tây Đắk Mil",
+        "kind": "pickup",
+        "selection_key": "origin:pickup:22709:190009:1731",
+        "bus_stop_name": "Văn Phòng Buôn Ma Thuột"
+      },
+      "destination_drop": {
+        "name": "Phí Lái Thiêu",
+        "kind": "dropoff",
+        "selection_key": "destination:dropoff:22436:189991:168108",
+        "bus_stop_name": "Văn Phòng Bình Dương"
+      },
+      "schedule_count": 11
+    }
+  ]
+}

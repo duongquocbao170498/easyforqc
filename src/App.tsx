@@ -1,5 +1,7 @@
 import AlertCircle from "lucide-react/dist/esm/icons/alert-circle.js";
+import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left.js";
 import BookOpen from "lucide-react/dist/esm/icons/book-open.js";
+import Bot from "lucide-react/dist/esm/icons/bot.js";
 import Brain from "lucide-react/dist/esm/icons/brain.js";
 import Bug from "lucide-react/dist/esm/icons/bug.js";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.js";
@@ -28,6 +30,7 @@ import Save from "lucide-react/dist/esm/icons/save.js";
 import ScanSearch from "lucide-react/dist/esm/icons/scan-search.js";
 import Settings from "lucide-react/dist/esm/icons/settings.js";
 import ShieldCheck from "lucide-react/dist/esm/icons/shield-check.js";
+import Square from "lucide-react/dist/esm/icons/square.js";
 import Sun from "lucide-react/dist/esm/icons/sun.js";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2.js";
 import UploadCloud from "lucide-react/dist/esm/icons/upload-cloud.js";
@@ -40,6 +43,7 @@ import type {
   AiSettings,
   AiSettingsHistoryChange,
   AiSettingsHistoryEntry,
+  AutomationProfile,
   ArchetypeInfo,
   AuthEntry,
   ConfluenceCredentials,
@@ -49,19 +53,22 @@ import type {
   OutlineBranch,
   ProjectConfig,
   QaPlan,
+  StopConditions,
   StructuredStep,
   TestCase,
   TestDesignOutline,
 } from "./types";
 
 type TabKey = "cases" | "design" | "run";
-type BusyKey = "issue" | "docs" | "draft" | "promptImprove" | "save" | "xmind" | "attach" | "suite" | "cycle" | "";
-type SettingsSection = "project" | "auth" | "ai" | "knowledgeAi";
+type BusyKey = "issue" | "docs" | "draft" | "promptImprove" | "save" | "workspace" | "stopPatterns" | "xmind" | "attach" | "suite" | "cycle" | "";
+type SettingsSection = "project" | "auth" | "automation" | "ai" | "knowledgeAi";
 type KnowledgeSection = "principles" | "process" | "techniques" | "levels" | "reviews" | "defects" | "aiWriter";
 type StaticKnowledgeSection = Exclude<KnowledgeSection, "aiWriter">;
-type AppView = "run" | "settings" | "knowledge";
+type AppView = "run" | "workspace" | "settings" | "knowledge" | "chatwoot";
 type ThemeMode = "dark" | "light";
 type LanguageMode = "vi" | "en";
+
+const AUTOMATION_PROFILE_LIMIT = 20;
 
 type AiProviderInfo = {
   enabled?: boolean;
@@ -96,6 +103,186 @@ type DraftResponse = {
   aiGenerationError?: string;
   aiProvider?: AiProviderInfo;
 };
+
+type ChatwootSuiteCase = {
+  index: number;
+  caseId: string;
+  title: string;
+  openingPrompt: string;
+  objective?: string;
+  testData?: string;
+  expectedResult?: string;
+  plannerInstruction?: string;
+  stopPatterns?: string[];
+  failPatterns?: string[];
+  stopConditions?: StopConditions;
+  steps?: ChatwootSuiteStep[];
+};
+
+type ChatwootSuiteStep = {
+  index: number;
+  prompt: string;
+  expected?: string;
+  testData?: string;
+};
+
+type ChatwootStopConditionEdit = {
+  pass: string;
+  fail: string;
+};
+
+type ChatwootUatSuite = {
+  suiteName: string;
+  goalSummary: string;
+  caseCount: number;
+  cases?: ChatwootSuiteCase[];
+  path: string;
+  relativePath: string;
+  updatedAt: string;
+};
+
+type ChatwootUatInfo = {
+  skillRoot: string;
+  skillExists: boolean;
+  candidates: string[];
+  defaultWebhookUrl: string;
+  defaultHealthcheckUrl: string;
+  defaultChatwootApiBase: string;
+  defaultAccountId: string;
+  defaultInboxId: string;
+  defaultUiInboxId: string;
+  defaultCaptainAssistantId: string;
+  plannerAiReady: boolean;
+  defaultPlannerModel: string;
+  serverChatwootAuthReady: boolean;
+  codexCliAvailable: boolean;
+  suites: ChatwootUatSuite[];
+};
+
+type ChatwootUatRunForm = {
+  suiteFile: string;
+  mode: "adaptive" | "suite";
+  chatUiMode: "realistic" | "webhook-only";
+  plannerBackend: "openai-compatible" | "heuristic" | "codex-cli";
+  webhookUrl: string;
+  healthcheckUrl: string;
+  skipHealthcheck: boolean;
+  skipLocalWebhookPost: boolean;
+  chatwootApiBase: string;
+  inboxId: string;
+  uiInboxId: string;
+  captainAssistantId: string;
+  accountId: string;
+  caseId: string;
+  caseIndex: string;
+  limitCases: string;
+  maxUserTurns: string;
+  plannerModel: string;
+  plannerTimeoutSeconds: string;
+  labels: string;
+  assigneeName: string;
+  pinnedConversationId: string;
+};
+
+type ChatwootSuiteSource = "workspace" | "manual";
+
+type ChatwootSuiteDraftForm = {
+  source: ChatwootSuiteSource;
+  title: string;
+  scenario: string;
+  workspaceItemId: string;
+};
+
+type ChatwootUatRunResult = {
+  mode: string;
+  skillRoot: string;
+  suiteFile: string;
+  runDir: string;
+  files: {
+    report?: DownloadFileMeta | null;
+    raw?: DownloadFileMeta | null;
+    yaml?: DownloadFileMeta | null;
+  };
+  report: {
+    suiteName: string;
+    mode: string;
+    total: number;
+    success: number;
+    handoff: number;
+    failure: number;
+    runtime: {
+      webhookUrl: string;
+      chatwootApiBase: string;
+      accountId: string;
+      chatUiMode: string;
+      maxUserTurns?: number | null;
+    };
+    results: {
+      caseId: string;
+      title: string;
+      succeeded: boolean;
+      completedReason: string;
+      failureReason: string;
+      conversationId: string;
+      conversationUrl: string;
+      userTurnCount: number;
+      bookingCode: string;
+      ticketCode: string;
+      paymentLink: string;
+      handoffDetected: boolean;
+    }[];
+  };
+  stdout: string;
+  stderr: string;
+};
+
+type ChatwootUatRunPayload = ChatwootUatRunForm & {
+  selectedCaseIds?: string[];
+  caseStopPatterns?: Record<string, string[]>;
+  caseStopConditions?: Record<string, StopConditions>;
+  agentId?: string;
+  agentName?: string;
+};
+
+type ChatwootJobCaseState = {
+  index: number;
+  caseId: string;
+  title: string;
+  openingPrompt?: string;
+  testData?: string;
+  expectedResult?: string;
+  plannerInstruction?: string;
+  stopPatterns?: string[];
+  failPatterns?: string[];
+  stopConditions?: StopConditions;
+  steps?: ChatwootSuiteStep[];
+  status: "pending" | "running" | "completed" | "failed" | "handoff" | "interrupted" | "skipped" | string;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  result?: Partial<ChatwootUatRunResult["report"]["results"][number]> & {
+    reportUrl?: string;
+    rawUrl?: string;
+    yamlUrl?: string;
+  } | null;
+  error?: string;
+};
+
+type ChatwootUatJob = {
+  id: string;
+  status: "queued" | "running" | "completed" | "failed" | "interrupted" | string;
+  suiteName: string;
+  suiteFile: string;
+  runDir: string;
+  request: Partial<ChatwootUatRunPayload>;
+  result?: ChatwootUatRunResult | null;
+  error: string;
+  activeCaseId?: string;
+  caseStates?: ChatwootJobCaseState[];
+  createdAt: string;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  updatedAt: string;
+};
 type PromptImproveResponse = {
   improvedPrompt: string;
   targetField?: AiImproveField;
@@ -125,7 +312,7 @@ type PromptCompareDialog = {
   after: string;
 };
 type ConfluenceDocument = { title: string; url: string; text: string; error?: string };
-type DownloadFileMeta = { file: string; path: string; url: string };
+type DownloadFileMeta = { file: string; path: string; url: string; downloadUrl?: string };
 type SavedDraftFiles = {
   cases: DownloadFileMeta;
   design: DownloadFileMeta;
@@ -133,6 +320,22 @@ type SavedDraftFiles = {
 type BuiltDesignFiles = {
   xmind?: DownloadFileMeta | null;
   png?: DownloadFileMeta | null;
+};
+type QaWorkspaceItem = {
+  id: string;
+  issueKey: string;
+  title: string;
+  source: string;
+  sourceKey: string;
+  createdAt: string;
+  updatedAt: string;
+  archetypeKey: string;
+  testCases: TestCase[];
+  outline: TestDesignOutline;
+  qaPlan?: QaPlan | null;
+  chatwootSuiteFile?: string;
+  chatwootSuiteName?: string;
+  files?: Record<string, unknown>;
 };
 type CaseFilter = "all" | "happy" | "negative" | "edge" | "regression" | "auth" | "validation" | "doc";
 type QualityItem = {
@@ -210,6 +413,25 @@ const emptyProject: ProjectConfig = {
   testdesignLabels: "QA_testdesign",
   testcaseStatusLabels: "TODO=TestCase1\nIN PROGRESS=TestCase1\nREADY TO TEST=TestCase2\nTESTING=TestCase3\nDONE=TestCase3",
   testdesignStatusLabels: "TODO=TestDesign1\nIN PROGRESS=TestDesign1\nREADY TO TEST=TestDesign2\nTESTING=TestDesign3\nDONE=TestDesign3",
+  chatwootMode: "adaptive",
+  chatwootChatUiMode: "realistic",
+  chatwootPlannerBackend: "openai-compatible",
+  chatwootWebhookUrl: "",
+  chatwootHealthcheckUrl: "",
+  chatwootSkipHealthcheck: true,
+  chatwootSkipLocalWebhookPost: true,
+  chatwootApiBase: "https://uat-omniagent.vexere.net",
+  chatwootInboxId: "3062",
+  chatwootUiInboxId: "3062",
+  chatwootCaptainAssistantId: "80",
+  chatwootAccountId: "3",
+  chatwootMaxUserTurns: "10",
+  chatwootPlannerModel: "gpt-5.4-mini",
+  chatwootPlannerTimeoutSeconds: "60",
+  chatwootLabels: "ai",
+  chatwootAssigneeName: "Bot",
+  chatwootPinnedConversationId: "",
+  automationProfiles: [],
 };
 
 const emptyCredentials: Credentials = {
@@ -287,6 +509,7 @@ const emptyAiSettings: AiSettings = {
   model: "",
   apiKey: "",
   promptGuidelines: DEFAULT_AI_PROMPT_GUIDELINES,
+  stopConditionGuidelines: "",
   writingStyle: "",
   testCaseGuidelines: "",
   testDesignGuidelines: "",
@@ -306,6 +529,38 @@ const emptySecretStatus: SecretStatus = {
   jira: { hasPassword: false, hasToken: false },
   confluence: { hasPassword: false, hasToken: false },
   ai: { hasApiKey: false, hasKnowledgeApiKey: false },
+};
+
+const emptyChatwootUatForm: ChatwootUatRunForm = {
+  suiteFile: "",
+  mode: "adaptive",
+  chatUiMode: "realistic",
+  plannerBackend: "openai-compatible",
+  webhookUrl: "",
+  healthcheckUrl: "",
+  skipHealthcheck: true,
+  skipLocalWebhookPost: true,
+  chatwootApiBase: "",
+  inboxId: "3062",
+  uiInboxId: "3062",
+  captainAssistantId: "80",
+  accountId: "",
+  caseId: "",
+  caseIndex: "",
+  limitCases: "",
+  maxUserTurns: "10",
+  plannerModel: "gpt-5.4-mini",
+  plannerTimeoutSeconds: "60",
+  labels: "ai",
+  assigneeName: "Bot",
+  pinnedConversationId: "",
+};
+
+const emptyChatwootSuiteDraft: ChatwootSuiteDraftForm = {
+  source: "workspace",
+  title: "",
+  scenario: "",
+  workspaceItemId: "",
 };
 
 const idleGenerationStatus: GenerationStatus = {
@@ -371,8 +626,90 @@ const UI_TEXT = {
     fetchButton: "Đọc Jira",
     appNavigationLabel: "Điều hướng app",
     generateTask: "Tạo task",
+    qaWorkspace: "QA Workspace",
     knowledge: "Kiến thức QA",
+    chatwootUat: "Chatwoot UAT",
     workspaceSettings: "Cài đặt workspace",
+    automationSettings: "Cấu hình automation",
+    automationSettingsHelp: "Tạo connector cho từng web hội thoại. Màn chạy chỉ cần chọn connector, chọn test case và bấm chạy.",
+    automationProfiles: "Cấu hình đã lưu",
+    automationProfileName: "Tên cấu hình",
+    automationProfileNamePlaceholder: "Ví dụ: Omni UAT - BaoApiInbox",
+    chatwootAgents: "Agent UAT đã lưu",
+    chatwootAgent: "Agent xử lý",
+    chatwootAgentEditor: "Tạo / cập nhật connector",
+    chatwootSavedAgentList: "Connector đã lưu",
+    chatwootAgentName: "Tên connector",
+    chatwootAgentNamePlaceholder: "Ví dụ: Bus Tiến Oanh, Flight Vexere, Train Vexere...",
+    chatwootNoAgents: "Chưa có connector Chatwoot UAT đã lưu. Nhập website, Inbox ID/Captain assistant rồi lưu connector trước khi chạy.",
+    chatwootAgentRequired: "Cần chọn Agent xử lý đã lưu trong Cấu hình automation trước khi chuẩn bị hoặc chạy test.",
+    chatwootSelectedAgent: "Agent đang chọn",
+    automationTargetType: "Loại web/công cụ",
+    automationTargetChatwoot: "Chatwoot / OmniAgent",
+    automationTargetWeb: "Web app",
+    automationTargetApi: "API service",
+    automationTargetOther: "Khác",
+    saveAutomationProfile: "Lưu cấu hình hiện tại",
+    saveChatwootAgent: "Lưu connector hiện tại",
+    createConnector: "Tạo connector",
+    editConnector: "Sửa",
+    cancelConnector: "Quay lại",
+    backToConnectors: "Quay lại danh sách connector",
+    applyAutomationProfile: "Áp dụng",
+    deleteAutomationProfile: "Xóa",
+    noAutomationProfiles: "Chưa có cấu hình automation đã lưu.",
+    automationProfileSaved: "Đã lưu cấu hình automation",
+    automationProfileApplied: "Đã áp dụng cấu hình automation",
+    automationProfileDeleted: "Đã xóa cấu hình automation",
+    automationProfileDeleteConfirm: "Xóa cấu hình automation này?",
+    automationProfileChangedFields: "Thường đổi theo từng web",
+    automationProfileStableFields: "Thường giữ nguyên",
+    automationProfileChangedFieldsCopy: "Web/API base, auth server, account/inbox/assistant ID, labels, assignee.",
+    automationProfileStableFieldsCopy: "Kiểu chạy, AI planner, model từ AI Settings, timeout và số lượt user.",
+    automationConnectorTitle: "Connector cho web hội thoại",
+    automationConnectorIntro: "Mỗi connector đại diện cho một web hoặc agent bot có thể chạy test. Khách thường chỉ cần gửi link quản lý hội thoại, token/API key và các ID xử lý.",
+    automationConnectorStepPlatform: "1. Chọn nền tảng",
+    automationConnectorStepPlatformCopy: "Chatwoot/OmniAgent dùng runner hiện tại. Web/API khác sẽ cần map cách gửi và đọc tin nhắn.",
+    automationConnectorStepConnection: "2. Nhập kết nối",
+    automationConnectorStepConnectionCopy: "Web/API base, auth server, account/inbox/assistant ID và link xem hội thoại.",
+    automationConnectorStepRun: "3. Lưu và chạy",
+    automationConnectorStepRunCopy: "Sau khi lưu, màn Chatwoot UAT chỉ chọn connector và bộ test để chạy automation.",
+    automationCustomerNeeds: "Khách cần gửi",
+    automationCustomerNeedLink: "Link web quản lý hội thoại",
+    automationCustomerNeedAuth: "API key/token hoặc cách đăng nhập",
+    automationCustomerNeedIds: "Account, inbox, agent/assistant ID",
+    automationCustomerNeedRule: "Dấu hiệu pass/fail hoặc link report",
+    automationConnectionSection: "Kết nối website hội thoại",
+    automationConnectionHelp: "Với Chatwoot/OmniAgent, Web/API base thường là domain UAT. Webhook/healthcheck chỉ cần khi runner phải gọi qua service nội bộ.",
+    automationAgentSection: "Agent / kênh xử lý",
+    automationAgentHelp: "Inbox xử lý quyết định bot nào trả lời. Inbox hiển thị dùng để mở đúng hội thoại cho QA xem lại.",
+    automationRunSection: "Cách chạy AI",
+    automationRunBehaviorHelp: "Adaptive + AI planner phù hợp kiểm thử thông minh. Hỏi đúng data test phù hợp regression/debug theo script cố định.",
+    automationAdvancedSection: "Nâng cao",
+    automationAdvancedHelp: "Labels, assignee, conversation cố định và toggle chỉ cần chỉnh khi debug hoặc chạy một luồng đặc biệt.",
+    qaWorkspaceEyebrow: "Thư viện test artifact",
+    qaWorkspaceTitle: "QA Workspace",
+    qaWorkspaceIntro: "Lưu bộ test case, test design và suite UAT để theo dõi lại, mở vào Tạo task hoặc dùng làm nguồn chạy automation.",
+    qaWorkspaceEmpty: "Chưa có bộ test nào trong QA Workspace.",
+    saveToWorkspace: "Lưu vào QA Workspace",
+    workspaceSaved: "Đã lưu vào QA Workspace.",
+    workspaceSavedWithStopPatterns: "Đã lưu vào QA Workspace và cập nhật điều kiện Pass/Fail cho test case.",
+    workspaceSavedStopPatternsPartial: "Đã lưu vào QA Workspace. Một số điều kiện Pass/Fail vẫn cần AI cập nhật thêm.",
+    workspaceRefreshStopPatterns: "AI tạo/cập nhật Pass/Fail",
+    workspaceStopPatternsUpdated: "Đã cập nhật điều kiện Pass/Fail cho QA Workspace.",
+    workspaceStopPatternsReady: "Pass/Fail sẵn sàng",
+    workspaceRefreshStopPatternsAgain: "AI cập nhật lại Pass/Fail",
+    workspaceStopPatternsNeedUpdate: "cần cập nhật Pass/Fail",
+    workspaceStopPatternMetric: "Pass/Fail",
+    workspaceOpenItem: "Mở draft",
+    workspaceUseSuite: "Dùng suite",
+    workspaceCreateChatwootSuite: "Tạo suite Chatwoot",
+    workspaceDelete: "Xóa khỏi workspace",
+    workspaceImportedAi547: "AI-547 được import từ bộ test case OmniAgent chuẩn mới.",
+    workspaceImportedAi548: "AI-548 được import từ suite Chatwoot UAT chuẩn khác.",
+    workspaceCaseCount: "test case",
+    workspaceBranchCount: "nhánh design",
+    workspaceSuiteReady: "Suite sẵn sàng",
     knowledgeEyebrow: "QC / QA knowledge base",
     knowledgeTitle: "Kiến thức tester nền tảng",
     knowledgeIntro: "Tổng hợp nhanh các kiến thức tester chuẩn để QA tra cứu khi thiết kế test case, review scope và đánh giá risk.",
@@ -463,6 +800,8 @@ const UI_TEXT = {
     apiKeyPlaceholder: "Key riêng của từng user",
     aiPromptGuidelines: "Prompt tạo test case/test design",
     aiPromptGuidelinesPlaceholder: DEFAULT_AI_PROMPT_GUIDELINES,
+    aiStopConditionGuidelines: "Prompt sinh điều kiện Pass/Fail automation",
+    aiStopConditionGuidelinesPlaceholder: "Ví dụ: Sinh 2 nhóm điều kiện: Pass khi bot đạt đúng mục tiêu test case, Fail khi bot báo lỗi/sai ngữ cảnh/sai dữ liệu. Nội dung hiển thị phải là câu dễ hiểu cho QA, regex chỉ dùng nội bộ.",
     writingStyle: "Phong cách viết",
     writingStylePlaceholder: "Ví dụ: viết ngắn gọn, rõ precondition, expected result dạng bullet...",
     improveSkillNotes: "Ghi nhớ cải tiến",
@@ -475,30 +814,40 @@ const UI_TEXT = {
     aiFootnote: "API key và guideline được lưu mã hoá theo account. Base URL chính thức `api.openai.com` dùng Responses API; các OpenAI-compatible/custom proxy như llmproxy dùng Chat Completions. Khi bật AI Settings, app bắt buộc gọi AI provider thành công; nếu lỗi sẽ báo lỗi thay vì dùng fallback local.",
     runEyebrow: "Workspace tự động hóa QC / QA",
     runTitleEmpty: "Nhập Jira task để bắt đầu",
+    draftResultTitle: "Kết quả draft",
+    draftResultHelp: "Review test case/test design trước. Nguồn Jira, doc và góc nhìn thiết kế được thu gọn bên dưới để mở lại khi cần sửa.",
+    sourceConfigTitle: "Nguồn & cấu hình task",
+    sourceConfigHelp: "Jira, Confluence/doc context, archetype và góc nhìn thiết kế dùng để tạo draft.",
+    editSourceConfig: "Sửa input",
+    regenerateDraft: "Tạo lại draft",
     autoArchetype: "Tự chọn archetype",
     generateDraft: "Tạo draft",
-    improveDraftTitle: "Improve prompt và tạo lại draft bằng AI",
-    improveDraftHelp: "Nhập yêu cầu tinh chỉnh. AI sẽ tạo đề xuất prompt mới để bạn xem Trước/Sau; khi áp dụng, app lưu lịch sử rồi tạo lại bộ test case/test design.",
+    improveDraftTitle: "Tinh chỉnh draft bằng AI",
+    improveDraftHelp: "AI sẽ cập nhật test case/test design bên dưới theo yêu cầu tinh chỉnh trước, sau đó mới tạo đề xuất cải thiện Prompt AI để bạn xem và tự quyết định lưu.",
     improveDraftInput: "Yêu cầu tinh chỉnh",
     improveDraftPlaceholder: "Ví dụ: Bổ sung negative case cho thiếu auth Confluence, title viết rõ risk hơn, bỏ case trùng...",
     aiSettingsImproveTitle: "Improve prompt AI",
     aiSettingsImproveHelp: "Dùng khi muốn cải thiện riêng prompt trong Cài đặt AI. AI tạo đề xuất Trước/Sau; chỉ khi bạn áp dụng thì app mới lưu prompt mới.",
     aiSettingsImproveInput: "Yêu cầu improve prompt",
     aiSettingsImprovePlaceholder: "Ví dụ: Test case title cần nêu rõ risk hơn, expected result phải kiểm được, test design cần thêm branch regression...",
+    improveDraftButton: "Tinh chỉnh draft & gợi ý prompt AI",
     improvePromptButton: "Improve prompt bằng AI",
-    improvePromptRequiresInput: "Cần nhập Yêu cầu tinh chỉnh trước khi Improve prompt.",
+    improvePromptRequiresInput: "Cần nhập yêu cầu tinh chỉnh trước khi chạy AI.",
+    improveDraftDonePrefix: "Đã tinh chỉnh draft theo yêu cầu",
     improvePromptDonePrefix: "Đã cải thiện prompt từ yêu cầu tinh chỉnh",
     improvePromptSavedToAiSettings: "Đã lưu vào Cài đặt AI và tạo lịch sử chỉnh sửa.",
     improvePromptUpdatedFields: "Đã cập nhật",
     promptImprovePreviewTitle: "Đề xuất cải thiện prompt",
     promptImprovePreviewHelp: "Kiểm tra nội dung Trước/Sau. Prompt mới chỉ được lưu khi bạn bấm áp dụng.",
     promptImprovePreviewReady: "AI đã tạo đề xuất cải thiện prompt. Hãy kiểm tra Trước/Sau trước khi áp dụng.",
+    draftPromptProposalReady: "AI đã tạo đề xuất cập nhật Prompt AI từ cách tinh chỉnh task này. Hãy kiểm tra Trước/Sau trước khi lưu.",
+    draftImproveAndPromptReady: "Đã cập nhật draft theo yêu cầu và tạo đề xuất Prompt AI để bạn xem trước.",
     applyPromptImprove: "Áp dụng & lưu",
     applyPromptImproveAndRegenerate: "Áp dụng và tạo lại draft",
     discardPromptImprove: "Bỏ đề xuất",
     promptImproveApplied: "Đã áp dụng prompt mới và lưu lịch sử chỉnh sửa.",
     improveRequiresDraft: "Cần tạo draft trước khi tinh chỉnh bằng AI.",
-    improveRequiresAi: "Cần bật AI Settings và có API key/model để dùng Improve prompt.",
+    improveRequiresAi: "Cần bật AI Settings và có API key/model để dùng tính năng AI này.",
     improvePromptRegeneratedDraft: "Đã tạo lại draft mới bằng prompt vừa cải thiện.",
     aiSettingsPendingImprove: "AI vừa cập nhật prompt trong Cài đặt AI. Mở Lịch sử chỉnh sửa để xem Trước/Sau.",
     aiImprovedBadge: "AI cải thiện",
@@ -538,6 +887,155 @@ const UI_TEXT = {
     appliedKnowledgePrompt: "Đã đưa kiến thức này vào Yêu cầu improve prompt trong Cài đặt AI.",
     testConnection: "Test connection",
     connectionOk: "Kết nối thành công",
+    chatwootUatEyebrow: "OmniAgent UAT automation",
+    chatwootUatTitle: "Chạy Chatwoot UAT từ skill OmniAgent",
+    chatwootUatIntro: "Chọn bộ test Chatwoot UAT, chạy thật trên UAT, rồi xem conversation/report ngay trong EasyForQC.",
+    chatwootSkillStatus: "Trạng thái skill",
+    chatwootSkillReady: "Đã tìm thấy skill chatwoot-test-uat.",
+    chatwootSkillMissing: "Chưa tìm thấy skill. Cần mount OmniAgent repo hoặc cấu hình CHATWOOT_UAT_SKILL_ROOT.",
+    chatwootSuite: "Bộ test sẽ chạy",
+    chatwootRunnerMode: "Kiểu chạy",
+    chatwootAdaptiveMode: "Adaptive + AI planner",
+    chatwootSuiteMode: "Hỏi đúng data test",
+    chatwootRunModeForThisRun: "Cách chạy lượt này",
+    chatwootPlannerForThisRun: "Planner lượt này",
+    chatwootRunOverrideHint: "Mặc định lấy theo Agent đã lưu; đổi ở đây chỉ áp dụng cho lượt chạy hiện tại.",
+    chatwootPlannerDisabledForFixed: "Không dùng Planner khi hỏi đúng data test.",
+    chatwootPlannerBackend: "Planner",
+    chatwootPlannerAi: "AI planner từ AI Settings",
+    chatwootPlannerHeuristic: "Heuristic trong skill",
+    chatwootPlannerCodex: "Codex CLI",
+    chatwootPlannerAiHelp: "Dùng model/API key trong AI Settings để đọc phản hồi bot thật và quyết định câu chat tiếp theo theo ngữ cảnh. Đây là lựa chọn nên dùng cho kiểm thử thông minh.",
+    chatwootPlannerHeuristicHelp: "Dùng luật cố định có sẵn trong skill, không gọi AI. Phù hợp debug nhanh nhưng kém linh hoạt khi bot đổi flow hoặc option.",
+    chatwootPlannerCodexHelp: "Dùng Codex CLI làm planner để suy luận lượt chat tiếp theo. Phù hợp dev nội bộ vì phụ thuộc môi trường CLI trên server/local.",
+    chatwootPlannerModelSource: "Model planner",
+    chatwootPlannerModelAiSettings: "Tự lấy từ Cài đặt AI đã lưu.",
+    chatwootPlannerModelMissing: "Chưa có model trong AI Settings",
+    chatwootPlannerModelNotUsed: "Không dùng model AI",
+    chatwootPlannerModelNotUsedHelp: "Heuristic chạy bằng luật có sẵn nên không cần model hoặc timeout planner.",
+    chatwootPlannerCodexModelHelp: "Chỉ dùng khi chọn Codex CLI.",
+    chatwootPlannerTimeoutNotUsedHelp: "Heuristic không gọi planner AI nên timeout này không áp dụng.",
+    chatwootChatUiMode: "Chế độ Chat UI",
+    chatwootChatRealistic: "Chat thật trên UI",
+    chatwootChatWebhookOnly: "Chỉ chạy webhook",
+    chatwootWebhookUrl: "Webhook URL",
+    chatwootHealthcheckUrl: "Healthcheck URL",
+    chatwootApiBase: "Web/API base hội thoại",
+    chatwootSkipHealthcheck: "Bỏ qua healthcheck",
+    chatwootSkipLocalWebhookPost: "Dùng xử lý native của UAT Chatwoot",
+    chatwootInboxId: "Inbox ID xử lý",
+    chatwootUiInboxId: "Inbox ID hiển thị hội thoại",
+    chatwootCaptainAssistantId: "Captain assistant ID",
+    chatwootAccountId: "Account ID",
+    chatwootCaseId: "Case ID",
+    chatwootCaseIndex: "Case index",
+    chatwootLimitCases: "Giới hạn số case",
+    chatwootCaseSelection: "Chọn case để chạy",
+    chatwootCaseSelectionHelp: "Mặc định chạy toàn bộ case trong suite. Bỏ tick những case không muốn chạy hoặc chọn từng case cần chạy.",
+    chatwootCaseSearch: "Tìm test case",
+    chatwootCaseDetails: "Chi tiết",
+    chatwootCaseCollapse: "Thu gọn",
+    chatwootOpeningPrompt: "Tin nhắn mở đầu",
+    chatwootCaseRunData: "Test data dùng để chạy",
+    chatwootCaseSteps: "Các bước / user turns",
+    chatwootCaseExpected: "Kết quả mong đợi",
+    chatwootCaseStopPatterns: "Điều kiện Pass/Fail",
+    chatwootCaseStopPatternsEdit: "Sửa điều kiện Pass/Fail",
+    chatwootCaseStopPatternsHelp: "Mỗi dòng là một câu nghiệp vụ. Pass sẽ dừng và đánh dấu đạt; Fail sẽ dừng và đánh dấu lỗi.",
+    chatwootCasePassConditions: "Điều kiện Pass",
+    chatwootCaseFailConditions: "Điều kiện Fail",
+    chatwootCasePlannerContext: "Planner theo ngữ cảnh",
+    chatwootCasePlannerContextHelp: "Planner đọc phản hồi bot sau mỗi lượt, đối chiếu test data/steps của case này và chọn câu user tiếp theo phù hợp thay vì chỉ gửi cứng từng dòng.",
+    chatwootCaseNoDetails: "Case này chưa có steps/test data chi tiết trong suite.",
+    chatwootRunAllCases: "Tất cả case",
+    chatwootSelectAllCases: "Chọn tất cả",
+    chatwootClearSelection: "Bỏ chọn",
+    chatwootSelectedCases: "case được chọn",
+    chatwootWillRunAllCases: "Sẽ chạy toàn bộ",
+    chatwootNoCaseMetadata: "Suite này chưa có metadata case để chọn từng case; app sẽ chạy theo cấu hình trong suite.",
+    chatwootRunConfigSummary: "Cấu hình run cho lượt chạy này",
+    chatwootOpenAutomationSettings: "Mở cấu hình automation",
+    chatwootStopCase: "Dừng case",
+    chatwootSkipPendingCase: "Bỏ case khỏi lượt chạy",
+    chatwootCasePending: "Chờ chạy",
+    chatwootCaseRunning: "Đang chạy",
+    chatwootCaseCompleted: "Đã chạy xong",
+    chatwootCaseSkipped: "Đã bỏ qua",
+    chatwootCaseInterrupted: "Đã dừng",
+    chatwootCaseHandoff: "Chuyển agent",
+    chatwootCaseFailed: "Lỗi",
+    chatwootCaseLocked: "Case đã khóa theo lượt chạy hiện tại.",
+    chatwootCaseStopQueued: "Đã gửi yêu cầu dừng/bỏ test case.",
+    chatwootMaxUserTurns: "Số lượt user tối đa",
+    chatwootLabels: "Labels",
+    chatwootAssigneeName: "Assignee",
+    chatwootPinnedConversationId: "Conversation ID cố định",
+    chatwootPlannerTimeoutSeconds: "Timeout planner (giây)",
+    chatwootRun: "Bắt đầu kiểm thử",
+    chatwootStartRun: "Bắt đầu chạy",
+    chatwootStopRun: "Dừng chạy",
+    chatwootConfirmTitle: "Xác nhận chạy UAT thật",
+    chatwootConfirmCopy: "Run này sẽ gửi message thật vào môi trường UAT. Kiểm tra bộ test và case trước khi bắt đầu.",
+    chatwootCancelRun: "Hủy",
+    chatwootJobQueued: "Đã tạo job Chatwoot UAT. App sẽ tự cập nhật khi có kết quả.",
+    chatwootJobRunning: "Đang chạy Chatwoot UAT...",
+    chatwootJobFailed: "Chatwoot UAT thất bại.",
+    chatwootRunHistory: "Lịch sử run",
+    chatwootSuiteSearch: "Tìm suite",
+    chatwootStatus: "Trạng thái",
+    chatwootNoHistory: "Chưa có lịch sử run Chatwoot UAT.",
+    chatwootReloadSuites: "Tải lại bộ test",
+    chatwootReloadHistory: "Tải lại lịch sử",
+    chatwootResult: "Kết quả Chatwoot UAT",
+    chatwootOpenReport: "Mở report HTML",
+    chatwootOpenRaw: "Mở raw JSON",
+    chatwootOpenYaml: "Mở YAML",
+    chatwootConversation: "Hội thoại UAT",
+    chatwootPaymentLink: "Link thanh toán",
+    chatwootMetricTotal: "Tổng",
+    chatwootMetricPass: "Đạt",
+    chatwootMetricHandoff: "Chuyển agent",
+    chatwootMetricFail: "Lỗi",
+    chatwootRunCountUnit: "lượt chạy",
+    chatwootNoSuites: "Chưa có bộ test Chatwoot UAT nào.",
+    chatwootCodexReady: "Codex CLI đã sẵn sàng.",
+    chatwootCodexUnavailable: "Codex CLI chưa có trong môi trường server; nếu chọn Codex CLI, command có thể lỗi. Heuristic vẫn chạy được.",
+    chatwootServerAuthReady: "Server đã có Chatwoot UAT API key.",
+    chatwootServerAuthMissing: "Server chưa có Chatwoot UAT API key; cần cấu hình env hoặc ~/.skills/config.yml trước khi chạy thật.",
+    chatwootPlannerAiReady: "AI planner đã sẵn sàng từ AI Settings.",
+    chatwootPlannerAiMissing: "AI planner cần cấu hình đủ model và API key trong AI Settings.",
+    chatwootReadiness: "Điều kiện chạy",
+    chatwootReady: "Sẵn sàng",
+    chatwootNeedConfig: "Cần cấu hình",
+    chatwootShowReadiness: "Xem chi tiết",
+    chatwootHideReadiness: "Ẩn chi tiết",
+    chatwootReadinessHint: "Các trạng thái này chỉ là kiểm tra môi trường hiện tại; chỉnh agent/inbox ở Cấu hình automation, chỉnh AI ở Cài đặt AI, còn API key server nằm trong env hoặc ~/.skills/config.yml.",
+    chatwootFailureSummary: "Case lỗi cần kiểm tra",
+    chatwootCaseStatusPassed: "Đạt",
+    chatwootCaseStatusFailed: "Lỗi",
+    chatwootCaseStatusHandoff: "Chuyển agent",
+    chatwootFailureReason: "Lý do lỗi",
+    chatwootCompletionReason: "Điều kiện kết thúc",
+    chatwootFailureHint: "Gợi ý kiểm tra",
+    chatwootUnknownFailure: "Không có failure_reason trong report; mở raw JSON hoặc hội thoại UAT để kiểm tra thêm.",
+    chatwootRunDone: "Đã chạy Chatwoot UAT xong.",
+    chatwootRunStopped: "Đã dừng run Chatwoot UAT.",
+    chatwootSuiteBuilderTitle: "Chuẩn bị bộ test automation",
+    chatwootSuiteBuilderHelp: "Chọn bộ test đã lưu trong QA Workspace hoặc nhập nhanh một kịch bản user trước khi chạy UAT thật.",
+    chatwootSuiteSource: "Nguồn bộ test",
+    chatwootSourceWorkspace: "QA Workspace",
+    chatwootSourceManual: "Nhập kịch bản",
+    chatwootSuiteTitle: "Tên bộ test",
+    chatwootWorkspaceItem: "Bộ test trong QA Workspace",
+    chatwootManualScenario: "Kịch bản user",
+    chatwootManualScenarioPlaceholder: "Nhập yêu cầu để AI tạo test case, ví dụ: Tạo 2 test case đổi vé máy bay sang ngày 20/5...",
+    chatwootCreateSuiteFromSource: "Lấy test case để chuẩn bị chạy",
+    chatwootAiCreateCases: "AI tạo test case",
+    chatwootWorkspacePrepareHint: "Chọn bộ test trong QA Workspace rồi nhấn Lấy test case để chuẩn bị chạy.",
+    chatwootManualPrepareHint: "Nhập kịch bản user rồi nhấn AI tạo test case để app sinh đúng số case cần chạy.",
+    chatwootSuiteCreated: "Đã lấy test case và sẵn sàng chạy.",
+    chatwootSuiteCreatedAi: "AI đã tạo test case và sẵn sàng chạy.",
+    chatwootSuiteCreatedFallback: "Chưa có AI Settings sẵn sàng; app đã tạm tạo test case từ kịch bản nhập.",
     taskContext: "Ngữ cảnh task",
     issueKey: "Issue key",
     status: "Trạng thái",
@@ -650,8 +1148,90 @@ const UI_TEXT = {
     fetchButton: "Fetch",
     appNavigationLabel: "App navigation",
     generateTask: "Generate Task",
+    qaWorkspace: "QA Workspace",
     knowledge: "Knowledge",
+    chatwootUat: "Chatwoot UAT",
     workspaceSettings: "Workspace Settings",
+    automationSettings: "Automation config",
+    automationSettingsHelp: "Create connectors for each conversation website. The run screen only needs a connector, selected cases, and run.",
+    automationProfiles: "Saved configs",
+    automationProfileName: "Config name",
+    automationProfileNamePlaceholder: "Example: Omni UAT - BaoApiInbox",
+    chatwootAgents: "Saved UAT agents",
+    chatwootAgent: "Processing agent",
+    chatwootAgentEditor: "Create / update connector",
+    chatwootSavedAgentList: "Saved connectors",
+    chatwootAgentName: "Connector name",
+    chatwootAgentNamePlaceholder: "Example: Tien Oanh Bus, Vexere Flight, Vexere Train...",
+    chatwootNoAgents: "No saved Chatwoot UAT connectors yet. Enter the website, Inbox ID/Captain assistant, then save a connector before running.",
+    chatwootAgentRequired: "Choose a saved processing agent from Automation config before preparing or running tests.",
+    chatwootSelectedAgent: "Selected agent",
+    automationTargetType: "Website/tool type",
+    automationTargetChatwoot: "Chatwoot / OmniAgent",
+    automationTargetWeb: "Web app",
+    automationTargetApi: "API service",
+    automationTargetOther: "Other",
+    saveAutomationProfile: "Save current config",
+    saveChatwootAgent: "Save current connector",
+    createConnector: "Create connector",
+    editConnector: "Edit",
+    cancelConnector: "Back",
+    backToConnectors: "Back to connector list",
+    applyAutomationProfile: "Apply",
+    deleteAutomationProfile: "Delete",
+    noAutomationProfiles: "No saved automation configs yet.",
+    automationProfileSaved: "Saved automation config",
+    automationProfileApplied: "Applied automation config",
+    automationProfileDeleted: "Deleted automation config",
+    automationProfileDeleteConfirm: "Delete this automation config?",
+    automationProfileChangedFields: "Usually changes per website",
+    automationProfileStableFields: "Usually stays stable",
+    automationProfileChangedFieldsCopy: "Web/API base, server auth, account/inbox/assistant IDs, labels, assignee.",
+    automationProfileStableFieldsCopy: "Run mode, AI planner, AI Settings model, timeout, and max user turns.",
+    automationConnectorTitle: "Conversation website connector",
+    automationConnectorIntro: "Each connector represents one website or bot agent that can run tests. A customer usually provides the conversation console URL, token/API key, and processing IDs.",
+    automationConnectorStepPlatform: "1. Choose platform",
+    automationConnectorStepPlatformCopy: "Chatwoot/OmniAgent uses the current runner. Other web/API systems need a mapping for sending and reading messages.",
+    automationConnectorStepConnection: "2. Enter connection",
+    automationConnectorStepConnectionCopy: "Web/API base, server auth, account/inbox/assistant IDs, and the conversation viewer link.",
+    automationConnectorStepRun: "3. Save and run",
+    automationConnectorStepRunCopy: "After saving, Chatwoot UAT only selects a connector and test set to run automation.",
+    automationCustomerNeeds: "Customer should provide",
+    automationCustomerNeedLink: "Conversation console URL",
+    automationCustomerNeedAuth: "API key/token or login method",
+    automationCustomerNeedIds: "Account, inbox, agent/assistant IDs",
+    automationCustomerNeedRule: "Pass/fail signal or report link",
+    automationConnectionSection: "Conversation website connection",
+    automationConnectionHelp: "For Chatwoot/OmniAgent, Web/API base is usually the UAT domain. Webhook/healthcheck are only needed when the runner calls an internal service.",
+    automationAgentSection: "Agent / processing channel",
+    automationAgentHelp: "The processing inbox decides which bot replies. The visible inbox opens the correct conversation for QA review.",
+    automationRunSection: "AI run behavior",
+    automationRunBehaviorHelp: "Adaptive + AI planner is best for smart testing. Exact test data is best for fixed regression/debug runs.",
+    automationAdvancedSection: "Advanced",
+    automationAdvancedHelp: "Labels, assignee, pinned conversation, and toggles are mostly for debugging or special runs.",
+    qaWorkspaceEyebrow: "Test artifact library",
+    qaWorkspaceTitle: "QA Workspace",
+    qaWorkspaceIntro: "Save test cases, test design outlines, and UAT suites so QA can reopen, review, or use them as automation sources.",
+    qaWorkspaceEmpty: "No saved test suites in QA Workspace yet.",
+    saveToWorkspace: "Save to QA Workspace",
+    workspaceSaved: "Saved to QA Workspace.",
+    workspaceSavedWithStopPatterns: "Saved to QA Workspace and updated test-case pass/fail conditions.",
+    workspaceSavedStopPatternsPartial: "Saved to QA Workspace. Some pass/fail conditions still need AI update.",
+    workspaceRefreshStopPatterns: "AI create/update Pass/Fail",
+    workspaceStopPatternsUpdated: "Updated QA Workspace pass/fail conditions.",
+    workspaceStopPatternsReady: "Pass/Fail ready",
+    workspaceRefreshStopPatternsAgain: "AI update Pass/Fail again",
+    workspaceStopPatternsNeedUpdate: "need pass/fail update",
+    workspaceStopPatternMetric: "Pass/Fail",
+    workspaceOpenItem: "Open draft",
+    workspaceUseSuite: "Use suite",
+    workspaceCreateChatwootSuite: "Create Chatwoot suite",
+    workspaceDelete: "Remove from workspace",
+    workspaceImportedAi547: "AI-547 was imported from the new OmniAgent reference test cases.",
+    workspaceImportedAi548: "AI-548 was imported from the standards-specific Chatwoot UAT suite.",
+    workspaceCaseCount: "test cases",
+    workspaceBranchCount: "design branches",
+    workspaceSuiteReady: "Suite ready",
     knowledgeEyebrow: "QC / QA knowledge base",
     knowledgeTitle: "Tester knowledge base",
     knowledgeIntro: "A compact reference for designing test cases, reviewing scope, and assessing product risk.",
@@ -742,6 +1322,8 @@ const UI_TEXT = {
     apiKeyPlaceholder: "User-specific key",
     aiPromptGuidelines: "Test case/test design prompt",
     aiPromptGuidelinesPlaceholder: DEFAULT_AI_PROMPT_GUIDELINES,
+    aiStopConditionGuidelines: "Automation Pass/Fail condition prompt",
+    aiStopConditionGuidelinesPlaceholder: "Example: Generate two groups: Pass when the bot reaches the test goal; Fail when the bot errors, goes out of context, or uses wrong data. Visible text must be readable QA sentences; regex is internal only.",
     writingStyle: "Writing style",
     writingStylePlaceholder: "Example: concise writing, clear preconditions, bullet expected results...",
     improveSkillNotes: "Improve skill notes",
@@ -754,30 +1336,40 @@ const UI_TEXT = {
     aiFootnote: "API keys and guidelines are encrypted per account. The official `api.openai.com` Base URL uses the Responses API; OpenAI-compatible/custom proxies such as llmproxy use Chat Completions. When AI Settings are enabled, the app must call the AI provider successfully; errors are shown instead of falling back silently.",
     runEyebrow: "QC / QA automation workspace",
     runTitleEmpty: "Enter a Jira task to start",
+    draftResultTitle: "Draft results",
+    draftResultHelp: "Review test cases/test design first. Jira source, docs, and design lens are collapsed below and can be reopened when needed.",
+    sourceConfigTitle: "Task source & config",
+    sourceConfigHelp: "Jira, Confluence/doc context, archetype, and design lens used to generate this draft.",
+    editSourceConfig: "Edit input",
+    regenerateDraft: "Regenerate draft",
     autoArchetype: "Auto archetype",
     generateDraft: "Generate draft",
-    improveDraftTitle: "Improve prompt and regenerate draft with AI",
-    improveDraftHelp: "Enter a refine request. AI creates a prompt proposal for Before/After review; when applied, the app saves history and regenerates the test case/test design draft.",
+    improveDraftTitle: "Refine this draft with AI",
+    improveDraftHelp: "AI updates the test cases/test design below from your refine request first, then creates an AI prompt improvement proposal for you to review and save manually.",
     improveDraftInput: "Improve request",
     improveDraftPlaceholder: "Example: Add negative cases for missing Confluence auth, make titles risk-specific, remove duplicates...",
     aiSettingsImproveTitle: "Improve AI prompt",
     aiSettingsImproveHelp: "Use this to improve AI Settings prompts independently. AI creates a Before/After proposal; the app saves the new prompt only after you apply it.",
     aiSettingsImproveInput: "Prompt improve request",
     aiSettingsImprovePlaceholder: "Example: Make test case titles risk-specific, make expected results verifiable, add regression branches to test design...",
+    improveDraftButton: "Refine draft & suggest AI prompt",
     improvePromptButton: "Improve prompt with AI",
-    improvePromptRequiresInput: "Enter an improve request before improving the prompt.",
+    improvePromptRequiresInput: "Enter an improve request before running AI.",
+    improveDraftDonePrefix: "Refined draft from request",
     improvePromptDonePrefix: "Improved prompt from refine request",
     improvePromptSavedToAiSettings: "Saved to AI Settings and created a revision history entry.",
     improvePromptUpdatedFields: "Updated",
     promptImprovePreviewTitle: "Prompt improvement proposal",
     promptImprovePreviewHelp: "Review the Before/After diff. The new prompt is saved only after you apply it.",
     promptImprovePreviewReady: "AI created a prompt improvement proposal. Review Before/After before applying it.",
+    draftPromptProposalReady: "AI created a reusable AI prompt proposal from this task refinement. Review Before/After before saving it.",
+    draftImproveAndPromptReady: "Updated the draft from your request and created an AI prompt proposal for review.",
     applyPromptImprove: "Apply & save",
     applyPromptImproveAndRegenerate: "Apply and regenerate draft",
     discardPromptImprove: "Discard proposal",
     promptImproveApplied: "Applied the new prompt and saved revision history.",
     improveRequiresDraft: "Generate a draft before improving it with AI.",
-    improveRequiresAi: "Enable AI Settings with API key/model before using Improve prompt.",
+    improveRequiresAi: "Enable AI Settings with API key/model before using this AI action.",
     improvePromptRegeneratedDraft: "Regenerated a new draft using the improved prompt.",
     aiSettingsPendingImprove: "AI updated the AI Settings prompt. Open Revision history to review Before/After.",
     aiImprovedBadge: "AI improved",
@@ -817,6 +1409,155 @@ const UI_TEXT = {
     appliedKnowledgePrompt: "Added this knowledge to the AI Settings prompt improve request.",
     testConnection: "Test connection",
     connectionOk: "Connection successful",
+    chatwootUatEyebrow: "OmniAgent UAT automation",
+    chatwootUatTitle: "Run Chatwoot UAT from the OmniAgent skill",
+    chatwootUatIntro: "Select a Chatwoot UAT test set, run it against UAT, then review the conversation/report in EasyForQC.",
+    chatwootSkillStatus: "Skill status",
+    chatwootSkillReady: "Found the chatwoot-test-uat skill.",
+    chatwootSkillMissing: "Skill not found. Mount the OmniAgent repo or configure CHATWOOT_UAT_SKILL_ROOT.",
+    chatwootSuite: "Test set to run",
+    chatwootRunnerMode: "Run mode",
+    chatwootAdaptiveMode: "Adaptive + AI planner",
+    chatwootSuiteMode: "Use exact test data",
+    chatwootRunModeForThisRun: "Run behavior",
+    chatwootPlannerForThisRun: "Planner for this run",
+    chatwootRunOverrideHint: "Defaults come from the saved Agent; changes here apply only to the current run.",
+    chatwootPlannerDisabledForFixed: "Planner is not used when running exact test data.",
+    chatwootPlannerBackend: "Planner",
+    chatwootPlannerAi: "AI planner from AI Settings",
+    chatwootPlannerHeuristic: "Skill heuristic",
+    chatwootPlannerCodex: "Codex CLI",
+    chatwootPlannerAiHelp: "Uses the model/API key from AI Settings to read real bot replies and decide the next user message from context. This is the recommended smart-testing mode.",
+    chatwootPlannerHeuristicHelp: "Uses fixed rules inside the skill without calling AI. Useful for quick debugging, but less flexible when the bot flow or options change.",
+    chatwootPlannerCodexHelp: "Uses Codex CLI as the planner for the next chat turn. Best for internal development because it depends on CLI availability on the server/local machine.",
+    chatwootPlannerModelSource: "Planner model",
+    chatwootPlannerModelAiSettings: "Automatically uses the saved AI Settings model.",
+    chatwootPlannerModelMissing: "No model in AI Settings",
+    chatwootPlannerModelNotUsed: "No AI model used",
+    chatwootPlannerModelNotUsedHelp: "Heuristic mode runs fixed rules, so it does not need a model or planner timeout.",
+    chatwootPlannerCodexModelHelp: "Only used when Codex CLI is selected.",
+    chatwootPlannerTimeoutNotUsedHelp: "Heuristic does not call an AI planner, so this timeout does not apply.",
+    chatwootChatUiMode: "Chat UI mode",
+    chatwootChatRealistic: "Realistic UI chat",
+    chatwootChatWebhookOnly: "Webhook only",
+    chatwootWebhookUrl: "Webhook URL",
+    chatwootHealthcheckUrl: "Healthcheck URL",
+    chatwootApiBase: "Conversation Web/API base",
+    chatwootSkipHealthcheck: "Skip healthcheck",
+    chatwootSkipLocalWebhookPost: "Use native UAT Chatwoot processing",
+    chatwootInboxId: "Processing inbox ID",
+    chatwootUiInboxId: "Visible conversation inbox ID",
+    chatwootCaptainAssistantId: "Captain assistant ID",
+    chatwootAccountId: "Account ID",
+    chatwootCaseId: "Case ID",
+    chatwootCaseIndex: "Case index",
+    chatwootLimitCases: "Limit cases",
+    chatwootCaseSelection: "Select cases to run",
+    chatwootCaseSelectionHelp: "By default the app runs every case in the suite. Uncheck cases you do not want to run or select only the cases needed.",
+    chatwootCaseSearch: "Search test cases",
+    chatwootCaseDetails: "Details",
+    chatwootCaseCollapse: "Collapse",
+    chatwootOpeningPrompt: "Opening prompt",
+    chatwootCaseRunData: "Test data used for the run",
+    chatwootCaseSteps: "Steps / user turns",
+    chatwootCaseExpected: "Expected result",
+    chatwootCaseStopPatterns: "Pass/Fail conditions",
+    chatwootCaseStopPatternsEdit: "Edit Pass/Fail conditions",
+    chatwootCaseStopPatternsHelp: "One business sentence per line. Pass stops and marks the case passed; Fail stops and marks the case failed.",
+    chatwootCasePassConditions: "Pass conditions",
+    chatwootCaseFailConditions: "Fail conditions",
+    chatwootCasePlannerContext: "Context-aware planner",
+    chatwootCasePlannerContextHelp: "The planner reads each real bot reply, compares it with this case's test data/steps, then chooses the next suitable user message instead of blindly sending fixed lines.",
+    chatwootCaseNoDetails: "This case does not include detailed steps/test data in the suite.",
+    chatwootRunAllCases: "All cases",
+    chatwootSelectAllCases: "Select all",
+    chatwootClearSelection: "Clear selection",
+    chatwootSelectedCases: "selected cases",
+    chatwootWillRunAllCases: "Will run all",
+    chatwootNoCaseMetadata: "This suite has no case metadata for per-case selection; the app will run the suite configuration.",
+    chatwootRunConfigSummary: "Run config for this test run",
+    chatwootOpenAutomationSettings: "Open automation config",
+    chatwootStopCase: "Stop case",
+    chatwootSkipPendingCase: "Remove case from this run",
+    chatwootCasePending: "Pending",
+    chatwootCaseRunning: "Running",
+    chatwootCaseCompleted: "Completed",
+    chatwootCaseSkipped: "Skipped",
+    chatwootCaseInterrupted: "Stopped",
+    chatwootCaseHandoff: "Handoff",
+    chatwootCaseFailed: "Failed",
+    chatwootCaseLocked: "This case is locked by the current run.",
+    chatwootCaseStopQueued: "Sent the stop/remove request for this test case.",
+    chatwootMaxUserTurns: "Max user turns",
+    chatwootLabels: "Labels",
+    chatwootAssigneeName: "Assignee",
+    chatwootPinnedConversationId: "Pinned conversation ID",
+    chatwootPlannerTimeoutSeconds: "Planner timeout seconds",
+    chatwootRun: "Start test run",
+    chatwootStartRun: "Start run",
+    chatwootStopRun: "Stop run",
+    chatwootConfirmTitle: "Confirm real UAT run",
+    chatwootConfirmCopy: "This run will send real messages into UAT. Check the test set and cases before starting.",
+    chatwootCancelRun: "Cancel",
+    chatwootJobQueued: "Created the Chatwoot UAT job. The app will update when results are ready.",
+    chatwootJobRunning: "Chatwoot UAT is running...",
+    chatwootJobFailed: "Chatwoot UAT failed.",
+    chatwootRunHistory: "Run history",
+    chatwootSuiteSearch: "Search suites",
+    chatwootStatus: "Status",
+    chatwootNoHistory: "No Chatwoot UAT run history yet.",
+    chatwootReloadSuites: "Reload suites",
+    chatwootReloadHistory: "Reload history",
+    chatwootResult: "Chatwoot UAT result",
+    chatwootOpenReport: "Open HTML report",
+    chatwootOpenRaw: "Open raw JSON",
+    chatwootOpenYaml: "Open YAML",
+    chatwootConversation: "UAT conversation",
+    chatwootPaymentLink: "Payment link",
+    chatwootMetricTotal: "Total",
+    chatwootMetricPass: "Pass",
+    chatwootMetricHandoff: "Handoff",
+    chatwootMetricFail: "Fail",
+    chatwootRunCountUnit: "runs",
+    chatwootNoSuites: "No Chatwoot UAT test sets found.",
+    chatwootCodexReady: "Codex CLI is ready.",
+    chatwootCodexUnavailable: "Codex CLI is not available in the server environment; choosing Codex CLI may fail. Heuristic mode can still run.",
+    chatwootServerAuthReady: "Server has the Chatwoot UAT API key.",
+    chatwootServerAuthMissing: "Server does not have the Chatwoot UAT API key; configure env or ~/.skills/config.yml before a real run.",
+    chatwootPlannerAiReady: "AI planner is ready from AI Settings.",
+    chatwootPlannerAiMissing: "AI planner needs model and API key in AI Settings.",
+    chatwootReadiness: "Run readiness",
+    chatwootReady: "Ready",
+    chatwootNeedConfig: "Needs config",
+    chatwootShowReadiness: "Show details",
+    chatwootHideReadiness: "Hide details",
+    chatwootReadinessHint: "These statuses are checks against the current environment; edit agent/inbox in Automation config, edit AI in AI Settings, and server API keys in env or ~/.skills/config.yml.",
+    chatwootFailureSummary: "Failed cases to inspect",
+    chatwootCaseStatusPassed: "Passed",
+    chatwootCaseStatusFailed: "Failed",
+    chatwootCaseStatusHandoff: "Handoff",
+    chatwootFailureReason: "Failure reason",
+    chatwootCompletionReason: "Completion reason",
+    chatwootFailureHint: "Check hint",
+    chatwootUnknownFailure: "No failure_reason was returned in the report; open raw JSON or the UAT conversation for more detail.",
+    chatwootRunDone: "Chatwoot UAT run finished.",
+    chatwootRunStopped: "Stopped the Chatwoot UAT run.",
+    chatwootSuiteBuilderTitle: "Prepare automation test set",
+    chatwootSuiteBuilderHelp: "Use a saved QA Workspace test set or enter a quick user scenario before running real UAT.",
+    chatwootSuiteSource: "Test set source",
+    chatwootSourceWorkspace: "QA Workspace",
+    chatwootSourceManual: "Manual scenario",
+    chatwootSuiteTitle: "Test set name",
+    chatwootWorkspaceItem: "QA Workspace item",
+    chatwootManualScenario: "User scenario",
+    chatwootManualScenarioPlaceholder: "Enter an AI prompt, for example: Create 2 test cases for changing a flight ticket to May 20...",
+    chatwootCreateSuiteFromSource: "Load test cases to prepare run",
+    chatwootAiCreateCases: "AI create test cases",
+    chatwootWorkspacePrepareHint: "Select a QA Workspace test set, then load test cases to prepare the run.",
+    chatwootManualPrepareHint: "Enter a user scenario, then let AI create the exact test cases to run.",
+    chatwootSuiteCreated: "Loaded test cases and ready to run.",
+    chatwootSuiteCreatedAi: "AI created test cases and they are ready to run.",
+    chatwootSuiteCreatedFallback: "AI Settings are not ready; the app created temporary test cases from the scenario.",
     taskContext: "Task context",
     issueKey: "Issue key",
     status: "Status",
@@ -920,7 +1661,10 @@ function aiImproveFieldLabel(field: AiImproveField, ui: UiText) {
 
 function promptImproveNoticeClass(status: string, ui: UiText) {
   const isOk =
+    status.startsWith(ui.improveDraftDonePrefix) ||
     status.startsWith(ui.improvePromptDonePrefix) ||
+    status.startsWith(ui.draftPromptProposalReady) ||
+    status.startsWith(ui.draftImproveAndPromptReady) ||
     status.startsWith(ui.promptImprovePreviewReady) ||
     status.startsWith(ui.promptImproveApplied);
   return isOk ? "notice ok improve-status" : "notice improve-status";
@@ -1592,6 +2336,27 @@ function projectFromDefaults(payload: DefaultsResponse): ProjectConfig {
     jsonOutputDir: payload.defaults.jsonOutputDir,
     outputDir: payload.defaults.outputDir,
     testCaseNumberTemplate: payload.defaults.testCaseNumberTemplate || "TC_{0000}",
+    chatwootMode: payload.defaults.chatwootMode === "suite" ? "suite" : "adaptive",
+    chatwootChatUiMode: payload.defaults.chatwootChatUiMode === "webhook-only" ? "webhook-only" : "realistic",
+    chatwootPlannerBackend: ["openai-compatible", "heuristic", "codex-cli"].includes(payload.defaults.chatwootPlannerBackend)
+      ? payload.defaults.chatwootPlannerBackend
+      : "openai-compatible",
+    chatwootWebhookUrl: payload.defaults.chatwootWebhookUrl || "",
+    chatwootHealthcheckUrl: payload.defaults.chatwootHealthcheckUrl || "",
+    chatwootSkipHealthcheck: payload.defaults.chatwootSkipHealthcheck !== false,
+    chatwootSkipLocalWebhookPost: payload.defaults.chatwootSkipLocalWebhookPost !== false,
+    chatwootApiBase: payload.defaults.chatwootApiBase || "https://uat-omniagent.vexere.net",
+    chatwootInboxId: payload.defaults.chatwootInboxId || "3062",
+    chatwootUiInboxId: payload.defaults.chatwootUiInboxId || payload.defaults.chatwootInboxId || "3062",
+    chatwootCaptainAssistantId: payload.defaults.chatwootCaptainAssistantId || "80",
+    chatwootAccountId: payload.defaults.chatwootAccountId || "3",
+    chatwootMaxUserTurns: payload.defaults.chatwootMaxUserTurns || "10",
+    chatwootPlannerModel: payload.defaults.chatwootPlannerModel || "gpt-5.4-mini",
+    chatwootPlannerTimeoutSeconds: payload.defaults.chatwootPlannerTimeoutSeconds || "60",
+    chatwootLabels: payload.defaults.chatwootLabels || "ai",
+    chatwootAssigneeName: payload.defaults.chatwootAssigneeName || "Bot",
+    chatwootPinnedConversationId: payload.defaults.chatwootPinnedConversationId || "",
+    automationProfiles: Array.isArray(payload.defaults.automationProfiles) ? payload.defaults.automationProfiles : [],
     labelMode: payload.defaults.labelPolicy.mode,
     testcaseLabels: payload.defaults.labelPolicy.testcaseLabels,
     testdesignLabels: payload.defaults.labelPolicy.testdesignLabels,
@@ -1616,6 +2381,79 @@ function projectSettingsSnapshot(project: ProjectConfig) {
     testcaseStatusLabels: project.testcaseStatusLabels,
     testdesignStatusLabels: project.testdesignStatusLabels,
   });
+}
+
+function automationProfileConfigFromProject(project: ProjectConfig): AutomationProfile["config"] {
+  return {
+    chatwootMode: project.chatwootMode,
+    chatwootChatUiMode: project.chatwootChatUiMode,
+    chatwootPlannerBackend: project.chatwootPlannerBackend,
+    chatwootWebhookUrl: project.chatwootWebhookUrl,
+    chatwootHealthcheckUrl: project.chatwootHealthcheckUrl,
+    chatwootSkipHealthcheck: project.chatwootSkipHealthcheck,
+    chatwootSkipLocalWebhookPost: project.chatwootSkipLocalWebhookPost,
+    chatwootApiBase: project.chatwootApiBase,
+    chatwootInboxId: project.chatwootInboxId,
+    chatwootUiInboxId: project.chatwootUiInboxId,
+    chatwootCaptainAssistantId: project.chatwootCaptainAssistantId,
+    chatwootAccountId: project.chatwootAccountId,
+    chatwootMaxUserTurns: project.chatwootMaxUserTurns,
+    chatwootPlannerModel: project.chatwootPlannerModel,
+    chatwootPlannerTimeoutSeconds: project.chatwootPlannerTimeoutSeconds,
+    chatwootLabels: project.chatwootLabels,
+    chatwootAssigneeName: project.chatwootAssigneeName,
+    chatwootPinnedConversationId: project.chatwootPinnedConversationId,
+  };
+}
+
+function blankAutomationProfileConfig(): AutomationProfile["config"] {
+  return {
+    chatwootMode: "adaptive",
+    chatwootChatUiMode: "realistic",
+    chatwootPlannerBackend: "openai-compatible",
+    chatwootWebhookUrl: "",
+    chatwootHealthcheckUrl: "",
+    chatwootSkipHealthcheck: true,
+    chatwootSkipLocalWebhookPost: true,
+    chatwootApiBase: "",
+    chatwootInboxId: "",
+    chatwootUiInboxId: "",
+    chatwootCaptainAssistantId: "",
+    chatwootAccountId: "",
+    chatwootMaxUserTurns: "",
+    chatwootPlannerModel: "",
+    chatwootPlannerTimeoutSeconds: "",
+    chatwootLabels: "",
+    chatwootAssigneeName: "",
+    chatwootPinnedConversationId: "",
+  };
+}
+
+function automationSettingsSnapshot(project: ProjectConfig) {
+  return JSON.stringify({
+    ...automationProfileConfigFromProject(project),
+    automationProfiles: project.automationProfiles,
+  });
+}
+
+function projectWithAutomationProfileConfig(project: ProjectConfig, config: AutomationProfile["config"]): ProjectConfig {
+  return {
+    ...project,
+    ...config,
+  };
+}
+
+function createAutomationProfileId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `automation-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function defaultAutomationProfileName(project: ProjectConfig) {
+  const base = project.chatwootApiBase.replace(/^https?:\/\//i, "").replace(/\/$/, "") || "Automation";
+  const inbox = project.chatwootUiInboxId || project.chatwootInboxId;
+  return inbox ? `${base} - Inbox ${inbox}` : base;
 }
 
 function authSettingsSnapshot(credentials: Credentials, confluenceCredentials: ConfluenceCredentials, authEntries: AuthEntry[]) {
@@ -1654,6 +2492,7 @@ function aiCoreSettingsSnapshot(aiSettings: AiSettings) {
     model: aiSettings.model,
     apiKey: aiSettings.apiKey,
     promptGuidelines: aiSettings.promptGuidelines,
+    stopConditionGuidelines: aiSettings.stopConditionGuidelines,
     writingStyle: aiSettings.writingStyle,
     testCaseGuidelines: aiSettings.testCaseGuidelines,
     testDesignGuidelines: aiSettings.testDesignGuidelines,
@@ -1695,6 +2534,7 @@ function settingsSnapshots(
   return {
     project: projectSettingsSnapshot(project),
     auth: authSettingsSnapshot(credentials, confluenceCredentials, authEntries),
+    automation: automationSettingsSnapshot(project),
     ai: aiCoreSettingsSnapshot(aiSettings),
     knowledgeAi: knowledgeAiSettingsSnapshot(aiSettings),
   };
@@ -1851,6 +2691,88 @@ function caseMatchesFilter(testCase: TestCase, filter: CaseFilter) {
     doc: /\b(doc|document|confluence|article|reference|chunk|source|knowledge|tai lieu)\b/,
   };
   return patterns[filter].test(text);
+}
+
+function testCaseStopPatterns(testCase: TestCase) {
+  const raw = testCase.stop_patterns || (testCase as TestCase & { stopPatterns?: string[] }).stopPatterns || [];
+  return raw.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+function normalizeStopConditionLines(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value : String(value || "").split(/\r?\n/);
+  return raw.map((item) => String(item || "").replace(/\s+/g, " ").trim()).filter(Boolean);
+}
+
+function humanizeStopPatternForUi(pattern = "", kind: "pass" | "fail" = "pass") {
+  const text = pattern.toLowerCase();
+  if (/https|payment|thanh\s*to[aá]n|link/.test(text)) {
+    return kind === "fail"
+      ? "Bot không tạo được link thanh toán hoặc trả lời rằng không thể tiếp tục thanh toán."
+      : "Bot trả về link thanh toán hoặc link hoàn tất đúng với mục tiêu test case.";
+  }
+  if (/booking|ticket|mã|ma|code/.test(text)) {
+    return kind === "fail"
+      ? "Bot không trả về mã booking/mã vé hợp lệ hoặc báo không tạo được mã theo dữ liệu test."
+      : "Bot trả về mã booking/mã vé hợp lệ theo dữ liệu test.";
+  }
+  if (/không|khong|hết|het|no\s*trip|not\s*available|unavailable/.test(text)) {
+    return kind === "fail"
+      ? "Bot đưa ra kết luận không có chuyến/lựa chọn sai với dữ liệu test hoặc không có hướng xử lý tiếp."
+      : "Bot xác nhận đúng trạng thái không có chuyến hoặc không còn lựa chọn phù hợp với điều kiện tìm kiếm.";
+  }
+  if (/handoff|agent|nhân viên|nhan vien|tư vấn|tu van/.test(text)) {
+    return kind === "fail"
+      ? "Bot chuyển agent ngoài mong đợi hoặc dừng hội thoại khi test case cần bot tự xử lý."
+      : "Bot chuyển hội thoại sang nhân viên tư vấn đúng lúc test case yêu cầu handoff.";
+  }
+  return kind === "fail"
+    ? "Bot phản hồi sai ngữ cảnh, báo lỗi hoặc không đạt expected result của test case."
+    : "Bot phản hồi đúng expected result và mục tiêu kiểm thử của test case đã đạt.";
+}
+
+function looksLikeRegexForUi(value = "") {
+  return /(\(\?i\)|\\[bdsw]|\[[^\]]+\]|\.\*|\.\{|\{\d|https\?:|[|])/.test(value);
+}
+
+function sanitizeStopConditionsForUi(values: string[], kind: "pass" | "fail") {
+  return normalizeStopConditionLines(values).map((value) => (looksLikeRegexForUi(value) ? humanizeStopPatternForUi(value, kind) : value));
+}
+
+function testCaseStopConditions(testCase: TestCase): StopConditions {
+  const raw = (testCase.stop_conditions || (testCase as TestCase & { stopConditions?: StopConditions }).stopConditions || {}) as Partial<StopConditions>;
+  let pass = sanitizeStopConditionsForUi(normalizeStopConditionLines(raw.pass), "pass");
+  let fail = sanitizeStopConditionsForUi(normalizeStopConditionLines(raw.fail), "fail");
+  if (!pass.length) {
+    pass = testCaseStopPatterns(testCase).map((pattern) => humanizeStopPatternForUi(pattern, "pass"));
+  }
+  if (!fail.length) {
+    const rawFail = testCase.fail_patterns || (testCase as TestCase & { failPatterns?: string[] }).failPatterns || [];
+    fail = normalizeStopConditionLines(rawFail).map((pattern) => humanizeStopPatternForUi(pattern, "fail"));
+  }
+  return {
+    pass: pass.length ? pass : ["Bot phản hồi đúng expected result và mục tiêu kiểm thử của test case đã đạt."],
+    fail: fail.length ? fail : ["Bot phản hồi sai ngữ cảnh, báo lỗi hoặc không đạt expected result của test case."],
+  };
+}
+
+function isGenericStopPattern(pattern = "") {
+  const normalized = pattern.replace(/\s+/g, "").toLowerCase();
+  return normalized === "(?i)https?://\\s+" || normalized === "https?://\\s+";
+}
+
+function stopPatternStats(testCases: TestCase[]) {
+  const total = testCases.length;
+  const ready = testCases.filter((testCase) => {
+    const conditions = testCaseStopConditions(testCase);
+    const passPatterns = testCaseStopPatterns(testCase);
+    const failPatterns = normalizeStopConditionLines(testCase.fail_patterns || (testCase as TestCase & { failPatterns?: string[] }).failPatterns || []);
+    return conditions.pass.length > 0 && conditions.fail.length > 0 && passPatterns.length > 0 && failPatterns.length > 0;
+  }).length;
+  return {
+    total,
+    ready,
+    needs: Math.max(total - ready, 0),
+  };
 }
 
 function buildQualityItems(testCases: TestCase[], outline: TestDesignOutline, docContext: string, issueKey: string, ui: UiText): QualityItem[] {
@@ -2065,6 +2987,7 @@ function Field(props: {
       value={props.value}
       rows={props.rows || 4}
       placeholder={props.placeholder}
+      autoComplete="off"
       onChange={(event) => props.onChange(event.target.value)}
       aria-invalid={Boolean(props.error)}
       aria-describedby={errorId}
@@ -2076,6 +2999,7 @@ function Field(props: {
       value={props.value}
       type={inputType}
       placeholder={props.placeholder}
+      autoComplete="off"
       onChange={(event) => props.onChange(event.target.value)}
       aria-invalid={Boolean(props.error)}
       aria-describedby={errorId}
@@ -2367,6 +3291,7 @@ function App() {
   const [googleAuthEnabled, setGoogleAuthEnabled] = useState(false);
   const [appView, setAppView] = useState<AppView>("run");
   const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSection>("project");
+  const [settingsNavOpen, setSettingsNavOpen] = useState(false);
   const [activeKnowledgeSection, setActiveKnowledgeSection] = useState<KnowledgeSection>("principles");
   const [expandedKnowledgeCards, setExpandedKnowledgeCards] = useState<string[]>([]);
   const [knowledgeSearch, setKnowledgeSearch] = useState("");
@@ -2388,9 +3313,15 @@ function App() {
   const [settingsStatus, setSettingsStatus] = useState<Record<SettingsSection, string>>({
     project: "",
     auth: "",
+    automation: "",
     ai: "",
     knowledgeAi: "",
   });
+  const [automationProfileName, setAutomationProfileName] = useState("");
+  const [automationProfileTargetType, setAutomationProfileTargetType] = useState<AutomationProfile["targetType"]>("chatwoot");
+  const [automationEditorOpen, setAutomationEditorOpen] = useState(false);
+  const [automationEditorBackupConfig, setAutomationEditorBackupConfig] = useState<AutomationProfile["config"] | null>(null);
+  const [selectedChatwootAgentId, setSelectedChatwootAgentId] = useState("");
   const [connectionBusy, setConnectionBusy] = useState<ConnectionTarget | "">("");
   const [connectionStatus, setConnectionStatus] = useState<Partial<Record<ConnectionTarget, string>>>({});
   const [savedSettingsSnapshot, setSavedSettingsSnapshot] = useState<Record<SettingsSection, string>>(initialSavedSettingsSnapshot);
@@ -2419,6 +3350,8 @@ function App() {
   const [detailCaseIndex, setDetailCaseIndex] = useState<number | null>(null);
   const [caseFilter, setCaseFilter] = useState<CaseFilter>("all");
   const [outline, setOutline] = useState<TestDesignOutline>(emptyOutline(emptyIssue));
+  const [sourceConfigOpen, setSourceConfigOpen] = useState(true);
+  const [improvePanelOpen, setImprovePanelOpen] = useState(false);
   const [improveInstruction, setImproveInstruction] = useState("");
   const [lastImproveInstruction, setLastImproveInstruction] = useState("");
   const [settingsImproveInstruction, setSettingsImproveInstruction] = useState("");
@@ -2450,7 +3383,137 @@ function App() {
   const [knowledgeArticles, setKnowledgeArticles] = useState<KnowledgeArticle[]>([]);
   const [knowledgeBusy, setKnowledgeBusy] = useState<"generate" | "save" | "">("");
   const [knowledgeMessage, setKnowledgeMessage] = useState("");
+  const [qaWorkspaceItems, setQaWorkspaceItems] = useState<QaWorkspaceItem[]>([]);
+  const [workspaceBusy, setWorkspaceBusy] = useState<"load" | "save" | "delete" | "">("");
+  const [workspaceStopPatternBusyId, setWorkspaceStopPatternBusyId] = useState("");
+  const [workspaceMessage, setWorkspaceMessage] = useState("");
+  const [chatwootInfo, setChatwootInfo] = useState<ChatwootUatInfo | null>(null);
+  const [chatwootForm, setChatwootForm] = useState<ChatwootUatRunForm>(emptyChatwootUatForm);
+  const [chatwootBusy, setChatwootBusy] = useState<"load" | "run" | "history" | "cancel" | "">("");
+  const [chatwootSuiteDraft, setChatwootSuiteDraft] = useState<ChatwootSuiteDraftForm>(emptyChatwootSuiteDraft);
+  const [chatwootSuiteBusy, setChatwootSuiteBusy] = useState(false);
+  const [chatwootMessage, setChatwootMessage] = useState("");
+  const [chatwootResult, setChatwootResult] = useState<ChatwootUatRunResult | null>(null);
+  const [chatwootJobs, setChatwootJobs] = useState<ChatwootUatJob[]>([]);
+  const [chatwootActiveJob, setChatwootActiveJob] = useState<ChatwootUatJob | null>(null);
+  const [chatwootConfirmOpen, setChatwootConfirmOpen] = useState(false);
+  const [chatwootCaseSearch, setChatwootCaseSearch] = useState("");
+  const [chatwootRunAllCases, setChatwootRunAllCases] = useState(true);
+  const [chatwootSelectedCaseIds, setChatwootSelectedCaseIds] = useState<string[]>([]);
+  const [expandedChatwootCaseIds, setExpandedChatwootCaseIds] = useState<string[]>([]);
+  const [chatwootCaseStopConditionEdits, setChatwootCaseStopConditionEdits] = useState<Record<string, ChatwootStopConditionEdit>>({});
+  const [chatwootPreparedSource, setChatwootPreparedSource] = useState<ChatwootSuiteSource | "">("");
+  const [chatwootReadinessOpen, setChatwootReadinessOpen] = useState(false);
+  const [plannerMenuOpen, setPlannerMenuOpen] = useState(false);
   const ui: UiText = UI_TEXT[languageMode];
+  const automationTargetLabels: Record<AutomationProfile["targetType"], string> = {
+    chatwoot: ui.automationTargetChatwoot,
+    web: ui.automationTargetWeb,
+    api: ui.automationTargetApi,
+    other: ui.automationTargetOther,
+  };
+  const chatwootAgentProfiles = useMemo(
+    () => project.automationProfiles.filter((profile) => profile.targetType === "chatwoot"),
+    [project.automationProfiles],
+  );
+  const selectedChatwootAgent =
+    chatwootAgentProfiles.find((profile) => profile.id === selectedChatwootAgentId) || chatwootAgentProfiles[0] || null;
+  const chatwootAutomationConfig = selectedChatwootAgent?.config || automationProfileConfigFromProject(project);
+  const effectiveChatwootRunMode = chatwootForm.mode || chatwootAutomationConfig.chatwootMode;
+  const effectiveChatwootChatUiMode = chatwootForm.chatUiMode || chatwootAutomationConfig.chatwootChatUiMode;
+  const effectiveChatwootPlannerBackend = chatwootForm.plannerBackend || chatwootAutomationConfig.chatwootPlannerBackend;
+  const chatwootRunUsesPlanner = effectiveChatwootRunMode === "adaptive";
+  const chatwootPreparedSuiteReady = Boolean(chatwootForm.suiteFile && chatwootPreparedSource === chatwootSuiteDraft.source);
+  const selectedChatwootSuite = useMemo(
+    () => (chatwootPreparedSuiteReady ? chatwootInfo?.suites.find((suite) => suite.relativePath === chatwootForm.suiteFile) || null : null),
+    [chatwootForm.suiteFile, chatwootInfo?.suites, chatwootPreparedSuiteReady],
+  );
+  const selectedChatwootCases = useMemo(
+    () =>
+      (selectedChatwootSuite?.cases || []).map((testCase) => {
+        const edited = chatwootCaseStopConditionEdits[testCase.caseId];
+        if (edited === undefined) return testCase;
+        return {
+          ...testCase,
+          stopConditions: {
+            pass: normalizeStopConditionLines(edited.pass),
+            fail: normalizeStopConditionLines(edited.fail),
+          },
+        };
+      }),
+    [chatwootCaseStopConditionEdits, selectedChatwootSuite?.cases],
+  );
+  const chatwootHasActiveJob = Boolean(chatwootActiveJob && ["queued", "running"].includes(chatwootActiveJob.status));
+  const activeChatwootRunMatchesSuite = Boolean(
+    chatwootHasActiveJob &&
+      chatwootActiveJob?.request?.suiteFile &&
+      chatwootActiveJob.request.suiteFile === chatwootForm.suiteFile,
+  );
+  const chatwootCaseStateById = useMemo(() => {
+    const states = activeChatwootRunMatchesSuite ? chatwootActiveJob?.caseStates || [] : [];
+    return new globalThis.Map(states.map((state) => [state.caseId, state]));
+  }, [activeChatwootRunMatchesSuite, chatwootActiveJob?.caseStates]);
+  const filteredChatwootCases = useMemo(() => {
+    const query = chatwootCaseSearch.trim().toLowerCase();
+    if (!query) return selectedChatwootCases;
+    return selectedChatwootCases.filter((testCase) =>
+      [
+        testCase.caseId,
+        testCase.title,
+        testCase.openingPrompt,
+        testCase.testData,
+        testCase.expectedResult,
+        testCase.plannerInstruction,
+        ...(testCase.steps || []).flatMap((step) => [step.prompt, step.testData, step.expected]),
+      ].some((value) => (value || "").toLowerCase().includes(query)),
+    );
+  }, [chatwootCaseSearch, selectedChatwootCases]);
+  const chatwootEffectiveSelectedCaseCount = chatwootRunAllCases ? selectedChatwootCases.length : chatwootSelectedCaseIds.length;
+  const chatwootFailedResults = useMemo(
+    () => chatwootResult?.report.results.filter((result) => !result.succeeded) || [],
+    [chatwootResult],
+  );
+  const qaWorkspaceTestItems = useMemo(
+    () => qaWorkspaceItems.filter((item) => item.testCases.length > 0),
+    [qaWorkspaceItems],
+  );
+  const selectedWorkspaceItem = useMemo(
+    () => qaWorkspaceTestItems.find((item) => item.id === chatwootSuiteDraft.workspaceItemId) || null,
+    [chatwootSuiteDraft.workspaceItemId, qaWorkspaceTestItems],
+  );
+  const chatwootReadinessItems = useMemo(
+    () => [
+      {
+        key: "skill",
+        label: ui.chatwootSkillStatus,
+        ready: Boolean(chatwootInfo?.skillExists),
+        detail: chatwootInfo?.skillExists ? ui.chatwootSkillReady : ui.chatwootSkillMissing,
+      },
+      {
+        key: "codex",
+        label: "Codex CLI",
+        ready: Boolean(chatwootInfo?.codexCliAvailable),
+        optional: true,
+        detail: chatwootInfo?.codexCliAvailable ? ui.chatwootCodexReady : ui.chatwootCodexUnavailable,
+      },
+      {
+        key: "planner",
+        label: ui.chatwootPlannerAi,
+        ready: Boolean(chatwootInfo?.plannerAiReady),
+        detail: chatwootInfo?.plannerAiReady ? ui.chatwootPlannerAiReady : ui.chatwootPlannerAiMissing,
+      },
+      {
+        key: "auth",
+        label: "Chatwoot UAT auth",
+        ready: Boolean(chatwootInfo?.serverChatwootAuthReady),
+        detail: chatwootInfo?.serverChatwootAuthReady ? ui.chatwootServerAuthReady : ui.chatwootServerAuthMissing,
+      },
+    ],
+    [chatwootInfo, ui],
+  );
+  const chatwootBlockingReadinessCount = chatwootReadinessItems.filter((item) => !item.ready && !item.optional).length;
+  const aiSettingsPlannerModel =
+    (savedAiSettings.model || aiSettings.model || chatwootInfo?.defaultPlannerModel || "gpt-5.4-mini").trim();
 
   function applyDefaults(payload: DefaultsResponse) {
     setDefaults(payload);
@@ -2459,6 +3522,7 @@ function App() {
     setSavedSettingsSnapshot((current) => ({
       ...current,
       project: projectSettingsSnapshot(nextProject),
+      automation: automationSettingsSnapshot(nextProject),
     }));
   }
 
@@ -2485,6 +3549,7 @@ function App() {
         aiSettings?: Partial<AiSettings> | null;
         aiSettingsHistory?: AiSettingsHistoryEntry[] | null;
         knowledgeArticles?: KnowledgeArticle[] | null;
+        qaWorkspaceItems?: QaWorkspaceItem[] | null;
       };
       if (settings.project) {
         nextProject = { ...nextProject, ...settings.project };
@@ -2542,6 +3607,9 @@ function App() {
       if (Array.isArray(settings.aiSettingsHistory)) {
         setAiSettingsHistory(settings.aiSettingsHistory);
       }
+      if (Array.isArray(settings.qaWorkspaceItems)) {
+        setQaWorkspaceItems(settings.qaWorkspaceItems);
+      }
     }
     setProject(nextProject);
     setCredentials(nextCredentials);
@@ -2556,6 +3624,96 @@ function App() {
     setSettingsPromptProposal(null);
     setDraftPromptProposal(null);
     setSavedKnowledgeDraftSnapshot("");
+  }
+
+  async function loadChatwootUatInfo() {
+    setChatwootBusy((current) => current || "load");
+    try {
+      const response = await fetch("/api/chatwoot-uat");
+      const payload = (await response.json()) as ChatwootUatInfo & { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || `HTTP ${response.status}`);
+      }
+      setChatwootInfo(payload);
+      setChatwootForm((current) => ({
+        ...current,
+        suiteFile: current.suiteFile && !current.suiteFile.endsWith("default_suite.yml") ? current.suiteFile : "",
+      }));
+      if (chatwootPreparedSource && chatwootPreparedSource !== chatwootSuiteDraft.source) {
+        setChatwootPreparedSource("");
+      }
+      setChatwootMessage(payload.skillExists ? "" : ui.chatwootSkillMissing);
+    } catch (error) {
+      setChatwootMessage(error instanceof Error ? error.message : "Không load được Chatwoot UAT.");
+    } finally {
+      setChatwootBusy((current) => (current === "load" ? "" : current));
+    }
+  }
+
+  async function loadChatwootJobs() {
+    setChatwootBusy((current) => current || "history");
+    try {
+      const response = await fetch("/api/chatwoot-uat/jobs");
+      const payload = (await response.json()) as { jobs?: ChatwootUatJob[]; error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || `HTTP ${response.status}`);
+      }
+      const jobs = payload.jobs || [];
+      setChatwootJobs(jobs);
+      const latestActive = jobs.find((job) => job.status === "queued" || job.status === "running");
+      if (latestActive) {
+        setChatwootActiveJob(latestActive);
+      }
+    } catch (error) {
+      setChatwootMessage(error instanceof Error ? error.message : "Không load được lịch sử Chatwoot UAT.");
+    } finally {
+      setChatwootBusy((current) => (current === "history" ? "" : current));
+    }
+  }
+
+  async function loadQaWorkspace() {
+    setWorkspaceBusy((current) => current || "load");
+    try {
+      const response = await fetch("/api/qa-workspace");
+      const payload = (await response.json()) as { items?: QaWorkspaceItem[]; error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || `HTTP ${response.status}`);
+      }
+      const items = payload.items || [];
+      setQaWorkspaceItems(items);
+      setChatwootSuiteDraft((current) => {
+        if (current.workspaceItemId && items.some((item) => item.id === current.workspaceItemId)) return current;
+        const preferred = items.find((item) => /AI-548/i.test(`${item.issueKey} ${item.sourceKey} ${item.title}`)) || items[0];
+        return { ...current, workspaceItemId: preferred?.id || "" };
+      });
+      setWorkspaceMessage(items.length ? "" : ui.qaWorkspaceEmpty);
+    } catch (error) {
+      setWorkspaceMessage(error instanceof Error ? error.message : "Không load được QA Workspace.");
+    } finally {
+      setWorkspaceBusy((current) => (current === "load" ? "" : current));
+    }
+  }
+
+  async function refreshChatwootJob(jobId: string) {
+    const response = await fetch(`/api/chatwoot-uat/jobs/${encodeURIComponent(jobId)}`);
+    const payload = (await response.json()) as { job?: ChatwootUatJob; error?: string };
+    if (!response.ok || !payload.job) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    const job = payload.job;
+    setChatwootActiveJob(job);
+    setChatwootJobs((current) => [job, ...current.filter((item) => item.id !== job.id)]);
+    if (job.status === "completed" && job.result) {
+      setChatwootResult(job.result);
+      setChatwootMessage(ui.chatwootRunDone);
+    } else if (job.status === "interrupted") {
+      setChatwootMessage(job.error || ui.chatwootRunStopped);
+    } else if (job.status === "failed") {
+      setChatwootMessage(job.error || ui.chatwootJobFailed);
+    } else {
+      setChatwootMessage(ui.chatwootJobRunning);
+    }
+    return job;
   }
 
   useEffect(() => {
@@ -2601,6 +3759,64 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (authenticated) {
+      void loadQaWorkspace();
+      void loadChatwootUatInfo();
+      void loadChatwootJobs();
+    }
+  }, [authenticated]);
+
+  useEffect(() => {
+    if (!chatwootActiveJob || !["queued", "running"].includes(chatwootActiveJob.status)) return;
+    const timer = window.setInterval(() => {
+      void refreshChatwootJob(chatwootActiveJob.id).catch((error) => {
+        setChatwootMessage(error instanceof Error ? error.message : "Không cập nhật được trạng thái Chatwoot UAT.");
+      });
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [chatwootActiveJob?.id, chatwootActiveJob?.status]);
+
+  useEffect(() => {
+    if (!chatwootAgentProfiles.length) {
+      if (selectedChatwootAgentId) setSelectedChatwootAgentId("");
+      return;
+    }
+    if (!selectedChatwootAgentId || !chatwootAgentProfiles.some((profile) => profile.id === selectedChatwootAgentId)) {
+      setSelectedChatwootAgentId(chatwootAgentProfiles[0].id);
+    }
+  }, [chatwootAgentProfiles, selectedChatwootAgentId]);
+
+  useEffect(() => {
+    if (!selectedChatwootAgent) return;
+    setChatwootForm((current) => ({
+      ...current,
+      mode: selectedChatwootAgent.config.chatwootMode,
+      chatUiMode: selectedChatwootAgent.config.chatwootChatUiMode,
+      plannerBackend: selectedChatwootAgent.config.chatwootPlannerBackend,
+      maxUserTurns: selectedChatwootAgent.config.chatwootMaxUserTurns || current.maxUserTurns,
+      plannerModel: selectedChatwootAgent.config.chatwootPlannerModel || current.plannerModel,
+      plannerTimeoutSeconds: selectedChatwootAgent.config.chatwootPlannerTimeoutSeconds || current.plannerTimeoutSeconds,
+    }));
+    setPlannerMenuOpen(false);
+  }, [
+    selectedChatwootAgent?.id,
+    selectedChatwootAgent?.config.chatwootMode,
+    selectedChatwootAgent?.config.chatwootChatUiMode,
+    selectedChatwootAgent?.config.chatwootPlannerBackend,
+    selectedChatwootAgent?.config.chatwootMaxUserTurns,
+    selectedChatwootAgent?.config.chatwootPlannerModel,
+    selectedChatwootAgent?.config.chatwootPlannerTimeoutSeconds,
+  ]);
+
+  useEffect(() => {
+    setChatwootRunAllCases(true);
+    setChatwootSelectedCaseIds([]);
+    setChatwootCaseSearch("");
+    setExpandedChatwootCaseIds([]);
+    setChatwootCaseStopConditionEdits({});
+  }, [chatwootForm.suiteFile]);
+
+  useEffect(() => {
     if (!userMenuOpen) return;
 
     function closeUserMenuOnOutsideClick(event: MouseEvent) {
@@ -2643,6 +3859,7 @@ function App() {
     () => ({
       project: projectSettingsSnapshot(project) !== savedSettingsSnapshot.project,
       auth: authSettingsSnapshot(credentials, confluenceCredentials, authEntries) !== savedSettingsSnapshot.auth,
+      automation: automationSettingsSnapshot(project) !== savedSettingsSnapshot.automation,
       ai: aiCoreSettingsSnapshot(aiSettings) !== savedSettingsSnapshot.ai,
       knowledgeAi: knowledgeAiSettingsSnapshot(aiSettings) !== savedSettingsSnapshot.knowledgeAi,
     }),
@@ -2710,6 +3927,7 @@ function App() {
     () => buildQualityItems(testCases, outline, docContext, issueKeyFromText(jiraUrl) || issue.key, ui),
     [testCases, outline, docContext, jiraUrl, issue.key, ui],
   );
+  const currentStopPatternStats = useMemo(() => stopPatternStats(testCases), [testCases]);
   const coverageRows = useMemo(
     () => buildCoverageRows(issue, qaPlan, testCases),
     [issue, qaPlan, testCases],
@@ -2903,9 +4121,18 @@ function App() {
     return errors;
   }
 
-  function setProjectValue(key: keyof ProjectConfig, value: string) {
+  function setProjectValue<K extends keyof ProjectConfig>(key: K, value: ProjectConfig[K]) {
     clearValidationErrors(key === "labelMode" ? ["project.testcaseLabels", "project.testdesignLabels"] : [`project.${key}`]);
     setProject((current) => ({ ...current, [key]: value }));
+  }
+
+  function setChatwootPlannerBackend(value: ProjectConfig["chatwootPlannerBackend"]) {
+    clearValidationErrors(["project.chatwootPlannerBackend", "project.chatwootPlannerModel"]);
+    setProject((current) => ({
+      ...current,
+      chatwootPlannerBackend: value,
+      chatwootPlannerModel: value === "openai-compatible" ? aiSettingsPlannerModel : current.chatwootPlannerModel || aiSettingsPlannerModel,
+    }));
   }
 
   function setCredentialValue(key: "user" | "password" | "token", value: string) {
@@ -2996,6 +4223,7 @@ function App() {
       model: nextAiSettingsForm.model,
       apiKey: nextAiSettingsForm.apiKey,
       promptGuidelines: nextAiSettingsForm.promptGuidelines,
+      stopConditionGuidelines: nextAiSettingsForm.stopConditionGuidelines,
       writingStyle: nextAiSettingsForm.writingStyle,
       testCaseGuidelines: nextAiSettingsForm.testCaseGuidelines,
       testDesignGuidelines: nextAiSettingsForm.testDesignGuidelines,
@@ -3056,6 +4284,8 @@ function App() {
     setLastImproveInstruction("");
     setPromptImproveStatus("");
     setDraftPromptProposal(null);
+    setSourceConfigOpen(true);
+    setImprovePanelOpen(false);
     setGenerationStatus(idleGenerationStatus);
     setActiveTab("cases");
   }
@@ -3081,6 +4311,8 @@ function App() {
     setDetailCaseIndex(null);
     setCaseFilter("all");
     setActiveTab("cases");
+    setSourceConfigOpen(false);
+    setImprovePanelOpen(false);
     setMessage(`Đã khôi phục draft ${entry.issueKey} từ ${new Date(entry.createdAt).toLocaleString(languageMode === "en" ? "en-US" : "vi-VN")}.`);
   }
 
@@ -3223,6 +4455,7 @@ function App() {
             model: aiSettings.model,
             apiKey: aiSettings.apiKey,
             promptGuidelines: aiSettings.promptGuidelines,
+            stopConditionGuidelines: aiSettings.stopConditionGuidelines,
             writingStyle: aiSettings.writingStyle,
             testCaseGuidelines: aiSettings.testCaseGuidelines,
             testDesignGuidelines: aiSettings.testDesignGuidelines,
@@ -3236,7 +4469,7 @@ function App() {
             }
           : aiSettings;
     const body =
-      section === "project"
+      section === "project" || section === "automation"
         ? { project }
         : section === "auth"
           ? { credentials, confluenceCredentials: savedConfluenceCredentials, authEntries }
@@ -3244,6 +4477,8 @@ function App() {
     const label =
       section === "project"
         ? "Project config"
+        : section === "automation"
+          ? "Automation config"
         : section === "auth"
           ? "Authentication"
           : section === "knowledgeAi"
@@ -3261,10 +4496,11 @@ function App() {
       if (Array.isArray(payload.aiSettingsHistory)) {
         setAiSettingsHistory(payload.aiSettingsHistory);
       }
-      if (section === "project") {
+      if (section === "project" || section === "automation") {
         setSavedSettingsSnapshot((current) => ({
           ...current,
           project: projectSettingsSnapshot(project),
+          automation: automationSettingsSnapshot(project),
         }));
       }
       if (section === "auth") {
@@ -3357,6 +4593,116 @@ function App() {
       setMessage(text);
     } finally {
       setSettingsBusy("");
+    }
+  }
+
+  async function persistAutomationProjectSettings(nextProject: ProjectConfig, successText: string, summary: string) {
+    setSettingsBusy("automation");
+    setSettingsStatus((current) => ({ ...current, automation: "" }));
+    try {
+      await apiPost("/api/user-settings", {
+        project: nextProject,
+        settingsSection: "automation",
+        historyMeta: { source: "manual_save", summary },
+      });
+      setProject(nextProject);
+      setSavedSettingsSnapshot((current) => ({
+        ...current,
+        project: projectSettingsSnapshot(nextProject),
+        automation: automationSettingsSnapshot(nextProject),
+      }));
+      setSettingsStatus((current) => ({ ...current, automation: successText }));
+      setMessage(successText);
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "Không lưu được cấu hình automation.";
+      setSettingsStatus((current) => ({ ...current, automation: text }));
+      setMessage(text);
+    } finally {
+      setSettingsBusy("");
+    }
+  }
+
+  async function saveAutomationProfile() {
+    const name = automationProfileName.trim() || defaultAutomationProfileName(project);
+    const existingProfile = project.automationProfiles.find((profile) => profile.name.trim().toLowerCase() === name.toLowerCase());
+    const now = new Date().toISOString();
+    const nextProfile: AutomationProfile = {
+      id: existingProfile?.id || createAutomationProfileId(),
+      name,
+      targetType: automationProfileTargetType,
+      createdAt: existingProfile?.createdAt || now,
+      updatedAt: now,
+      config: automationProfileConfigFromProject(project),
+    };
+    const nextProfiles = [
+      nextProfile,
+      ...project.automationProfiles.filter((profile) => profile.id !== nextProfile.id && profile.name.trim().toLowerCase() !== name.toLowerCase()),
+    ].slice(0, AUTOMATION_PROFILE_LIMIT);
+    const nextProject = { ...project, automationProfiles: nextProfiles };
+    await persistAutomationProjectSettings(nextProject, `${ui.automationProfileSaved}: ${name}`, `Automation profile: ${name}`);
+    if (nextProfile.targetType === "chatwoot") {
+      setSelectedChatwootAgentId(nextProfile.id);
+    }
+    setAutomationProfileName("");
+    setAutomationEditorBackupConfig(null);
+    setAutomationEditorOpen(false);
+  }
+
+  function openNewAutomationConnector() {
+    setAutomationEditorBackupConfig((currentBackup) => currentBackup || automationProfileConfigFromProject(project));
+    setProject((current) => projectWithAutomationProfileConfig(current, blankAutomationProfileConfig()));
+    setAutomationProfileName("");
+    setAutomationProfileTargetType("chatwoot");
+    setAutomationEditorOpen(true);
+    setSettingsStatus((current) => ({ ...current, automation: "" }));
+  }
+
+  function editAutomationProfile(profile: AutomationProfile) {
+    setAutomationEditorBackupConfig((currentBackup) => currentBackup || automationProfileConfigFromProject(project));
+    const nextProject = projectWithAutomationProfileConfig(project, profile.config);
+    setProject(nextProject);
+    setAutomationProfileName(profile.name);
+    setAutomationProfileTargetType(profile.targetType);
+    setAutomationEditorOpen(true);
+    if (profile.targetType === "chatwoot") {
+      setSelectedChatwootAgentId(profile.id);
+    }
+  }
+
+  function applyAutomationProfile(profile: AutomationProfile) {
+    const nextProject = projectWithAutomationProfileConfig(project, profile.config);
+    setProject(nextProject);
+    setAutomationProfileName(profile.name);
+    setAutomationProfileTargetType(profile.targetType);
+    setAutomationEditorBackupConfig(null);
+    setAutomationEditorOpen(false);
+    if (profile.targetType === "chatwoot") {
+      setSelectedChatwootAgentId(profile.id);
+    }
+    const text = `${ui.automationProfileApplied}: ${profile.name}`;
+    setSettingsStatus((current) => ({ ...current, automation: text }));
+    setMessage(text);
+  }
+
+  function closeAutomationConnectorEditor() {
+    if (automationEditorBackupConfig) {
+      setProject((current) => projectWithAutomationProfileConfig(current, automationEditorBackupConfig));
+    }
+    setAutomationProfileName("");
+    setAutomationEditorBackupConfig(null);
+    setAutomationEditorOpen(false);
+  }
+
+  async function deleteAutomationProfile(profile: AutomationProfile) {
+    if (!window.confirm(ui.automationProfileDeleteConfirm)) return;
+    const nextProject = {
+      ...project,
+      automationProfiles: project.automationProfiles.filter((item) => item.id !== profile.id),
+    };
+    await persistAutomationProjectSettings(nextProject, `${ui.automationProfileDeleted}: ${profile.name}`, `Delete automation profile: ${profile.name}`);
+    if (selectedChatwootAgentId === profile.id) {
+      const nextAgent = nextProject.automationProfiles.find((item) => item.targetType === "chatwoot");
+      setSelectedChatwootAgentId(nextAgent?.id || "");
     }
   }
 
@@ -3572,6 +4918,8 @@ function App() {
       setDetailCaseIndex(null);
       setOutline(payload.outline);
       setActiveTab("cases");
+      setSourceConfigOpen(false);
+      setImprovePanelOpen(false);
       setOutput(JSON.stringify(payload, null, 2));
       setGenerationStatus(generationStatusFromPayload(payload));
       recordDraftHistory(payload.aiGenerationUsed ? "AI generate" : "Fallback generate", payload.testCases, payload.outline, payload.qaPlan || null);
@@ -3584,7 +4932,7 @@ function App() {
     });
   }
 
-  function improvePromptWithAi() {
+  function improveDraftWithAi() {
     const trimmedInstruction = improveInstruction.trim() || lastImproveInstruction.trim();
     const activeAiSettings = savedAiSettings;
     if (!trimmedInstruction) {
@@ -3604,104 +4952,103 @@ function App() {
     }
     const draftErrors = validateGenerateDraft();
     if (Object.keys(draftErrors).length) {
-      setValidationFailure(draftErrors, "Vui lòng bổ sung các field bắt buộc đang được highlight trước khi Improve prompt.");
+      setValidationFailure(draftErrors, "Vui lòng bổ sung các field bắt buộc đang được highlight trước khi tinh chỉnh draft.");
       return;
     }
     setBusyRun("promptImprove", async () => {
       setPromptImproveStatus("");
-      const payload = await apiPost<PromptImproveResponse>("/api/improve-prompt", {
-        instruction: trimmedInstruction,
-        jiraUrl,
-        issue,
+      setDraftPromptProposal(null);
+      setPromptCompare(null);
+      const effectiveIssueKey = issueKeyFromText(jiraUrl) || issue.key;
+      const effectiveIssue = { ...issue, key: effectiveIssueKey };
+      const shouldUseConfluenceDocs = Boolean(docContext.trim() && (!docIssueKey || docIssueKey === effectiveIssueKey));
+      setGenerationStatus({
+        state: "running",
+        title: ui.improveDraftTitle,
+        detail: trimmedInstruction,
+        provider: activeAiSettings.provider,
+        model: activeAiSettings.model,
+        endpoint: activeAiSettings.baseUrl,
+      });
+      const payload = await apiPost<DraftResponse>("/api/improve-draft", {
+        ...requestBody,
+        issue: effectiveIssue,
         aiSettings: activeAiSettings,
+        improveInstruction: trimmedInstruction,
         testCases,
         outline,
-        language: languageMode,
+        qaPlan,
+        confluenceLinks: shouldUseConfluenceDocs ? confluenceLinks : "",
+        docContext: shouldUseConfluenceDocs ? docContext : "",
       }).catch((error) => {
-        const errorMessage = error instanceof Error ? error.message : "Không cải thiện được prompt.";
+        const errorMessage = error instanceof Error ? error.message : "Không tinh chỉnh được draft.";
         setPromptImproveStatus(errorMessage);
+        setGenerationStatus({
+          state: "error",
+          title: "Tinh chỉnh draft lỗi",
+          detail: errorMessage.split("\n")[0],
+          provider: activeAiSettings.provider,
+          model: activeAiSettings.model,
+          endpoint: activeAiSettings.baseUrl,
+        });
         throw error;
       });
-      const updates = normalizePromptImproveUpdates(payload);
-      if (!updates.length) {
-        throw new Error("AI chưa trả về prompt cải thiện hợp lệ.");
+      setArchetypeKey(payload.archetypeKey);
+      setQaPlan(payload.qaPlan || null);
+      setTestCases(payload.testCases);
+      setDetailCaseIndex(null);
+      setCaseFilter("all");
+      setOutline(payload.outline);
+      setActiveTab("cases");
+      setSourceConfigOpen(false);
+      setOutput(JSON.stringify(payload, null, 2));
+      setGenerationStatus({
+        ...generationStatusFromPayload(payload),
+        title: `Đã tinh chỉnh ${payload.testCases.length} test case/test design bằng AI provider`,
+      });
+      recordDraftHistory("AI refine draft", payload.testCases, payload.outline, payload.qaPlan || null);
+      setLastImproveInstruction(trimmedInstruction);
+      let promptProposalCreated = false;
+      try {
+        const promptPayload = await apiPost<PromptImproveResponse>("/api/improve-prompt", {
+          instruction: trimmedInstruction,
+          jiraUrl,
+          issue: effectiveIssue,
+          aiSettings: activeAiSettings,
+          testCases: payload.testCases,
+          outline: payload.outline,
+          language: languageMode,
+        });
+        const updates = normalizePromptImproveUpdates(promptPayload);
+        if (updates.length) {
+          const proposal = createPromptImproveProposal("draft", trimmedInstruction, activeAiSettings, updates, promptPayload.summary);
+          setPromptCompare(null);
+          setDraftPromptProposal(proposal);
+          promptProposalCreated = true;
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Không tạo được đề xuất Prompt AI.";
+        const successWithPromptError = `${ui.improveDraftDonePrefix}: "${trimmedInstruction}". Không tạo được đề xuất Prompt AI: ${errorMessage}`;
+        setPromptImproveStatus(successWithPromptError);
+        setMessage(successWithPromptError);
+        return;
       }
-      const proposal = createPromptImproveProposal("draft", trimmedInstruction, activeAiSettings, updates, payload.summary);
-      setPromptCompare(null);
-      setDraftPromptProposal(proposal);
-      setPromptImproveStatus(ui.promptImprovePreviewReady);
-      setMessage(ui.promptImprovePreviewReady);
+      const successText = promptProposalCreated ? ui.draftImproveAndPromptReady : `${ui.improveDraftDonePrefix}: "${trimmedInstruction}"`;
+      setPromptImproveStatus(successText);
+      setMessage(successText);
     });
   }
 
   function applyDraftPromptProposal() {
     if (!draftPromptProposal) return;
-    const draftErrors = validateGenerateDraft();
-    if (Object.keys(draftErrors).length) {
-      setValidationFailure(draftErrors, "Vui lòng bổ sung các field bắt buộc đang được highlight trước khi áp dụng prompt.");
-      return;
-    }
     const proposal = draftPromptProposal;
     setBusyRun("promptImprove", async () => {
       setPromptImproveStatus("");
-      const nextSavedAiSettings = await persistImprovedAiSettings(proposal);
-      const effectiveIssueKey = issueKeyFromText(jiraUrl) || issue.key;
-      const effectiveIssue = { ...issue, key: effectiveIssueKey };
-      const shouldUseConfluenceDocs = Boolean(docContext.trim() && (!docIssueKey || docIssueKey === effectiveIssueKey));
-      setTestCases([]);
-      setDetailCaseIndex(null);
-      setCaseFilter("all");
-      setOutline(emptyOutline(effectiveIssue));
-      setCaseKeys("");
-      setSavedFiles(null);
-      setBuiltDesignFiles(null);
-      setOutput("");
-      setQaPlan(null);
-      setActiveTab("cases");
-      setGenerationStatus({
-        state: "running",
-        title: ui.improveDraftTitle,
-        detail: proposal.changedLabels ? `${ui.improvePromptUpdatedFields}: ${proposal.changedLabels}` : proposal.instruction,
-        provider: nextSavedAiSettings.provider,
-        model: nextSavedAiSettings.model,
-        endpoint: nextSavedAiSettings.baseUrl,
-      });
-      let draftPayload: DraftResponse;
-      try {
-        draftPayload = await apiPost<DraftResponse>("/api/draft", {
-          ...requestBody,
-          issue: effectiveIssue,
-          aiSettings: nextSavedAiSettings,
-          confluenceLinks: shouldUseConfluenceDocs ? confluenceLinks : "",
-          docContext: shouldUseConfluenceDocs ? docContext : "",
-        });
-      } catch (error) {
-        const text = error instanceof Error ? error.message : "Generate draft lỗi.";
-        const errorText = `Đã lưu prompt mới, nhưng tạo lại draft lỗi: ${text}`;
-        setGenerationStatus({
-          state: "error",
-          title: "Tạo lại draft lỗi",
-          detail: text.split("\n")[0],
-          provider: nextSavedAiSettings.provider,
-          model: nextSavedAiSettings.model,
-          endpoint: nextSavedAiSettings.baseUrl,
-        });
-        setPromptImproveStatus(errorText);
-        throw error;
-      }
-      setArchetypeKey(draftPayload.archetypeKey);
-      setQaPlan(draftPayload.qaPlan || null);
-      setTestCases(draftPayload.testCases);
-      setDetailCaseIndex(null);
-      setOutline(draftPayload.outline);
-      setActiveTab("cases");
-      setOutput(JSON.stringify(draftPayload, null, 2));
-      setGenerationStatus(generationStatusFromPayload(draftPayload));
-      recordDraftHistory("AI improve prompt", draftPayload.testCases, draftPayload.outline, draftPayload.qaPlan || null);
+      await persistImprovedAiSettings(proposal);
       setDraftPromptProposal(null);
       setPromptCompare(null);
       setLastImproveInstruction(proposal.instruction);
-      const successText = `${ui.promptImproveApplied} ${ui.improvePromptRegeneratedDraft} ${ui.aiSettingsUnsavedGuard}`;
+      const successText = `${ui.promptImproveApplied} ${ui.aiSettingsUnsavedGuard}`;
       setPromptImproveStatus(successText);
       setMessage(successText);
     });
@@ -3824,6 +5171,7 @@ function App() {
     setSettingsPromptProposal(null);
     setSettingsPromptImproveStatus("");
     setAppView("settings");
+    setSettingsNavOpen(true);
     setActiveSettingsSection("ai");
     setMessage(ui.appliedKnowledgePrompt);
   }
@@ -3902,6 +5250,144 @@ function App() {
     });
   }
 
+  function currentWorkspacePayload(): QaWorkspaceItem {
+    const effectiveIssueKey = (outline.issue_key || issue.key || issueKeyFromText(jiraUrl)).toUpperCase();
+    const sourceKey = effectiveIssueKey || `draft-${Date.now()}`;
+    const existing = qaWorkspaceItems.find((item) => item.sourceKey === sourceKey || item.issueKey === effectiveIssueKey);
+    return {
+      id: existing?.id || "",
+      issueKey: effectiveIssueKey,
+      title: issue.summary || outline.title || (effectiveIssueKey ? `[${effectiveIssueKey}] QA draft` : "QA draft"),
+      source: "easyforqc_draft",
+      sourceKey,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      archetypeKey: archetypeKey === "auto" ? outline.template || "auto" : archetypeKey,
+      testCases,
+      outline,
+      qaPlan,
+      chatwootSuiteFile: existing?.chatwootSuiteFile || "",
+      chatwootSuiteName: existing?.chatwootSuiteName || "",
+      files: {
+        savedFiles,
+        builtDesignFiles,
+      },
+    };
+  }
+
+  function saveCurrentToWorkspace() {
+    if (!testCases.length) {
+      const text = languageMode === "en"
+        ? "Generate or import at least one test case before saving to QA Workspace."
+        : "Cần generate hoặc import ít nhất 1 test case trước khi lưu vào QA Workspace.";
+      setWorkspaceMessage(text);
+      setMessage(text);
+      return;
+    }
+    setBusyRun("workspace", async () => {
+      const payload = await apiPost<{ item: QaWorkspaceItem; items: QaWorkspaceItem[] }>("/api/qa-workspace", {
+        item: currentWorkspacePayload(),
+        refreshStopPatterns: true,
+        forceStopPatterns: true,
+      });
+      setQaWorkspaceItems(payload.items || []);
+      if (payload.item?.testCases?.length) {
+        setTestCases(payload.item.testCases);
+      }
+      const savedStopStats = stopPatternStats(payload.item?.testCases || []);
+      const savedText = savedStopStats.total && savedStopStats.needs === 0
+        ? ui.workspaceSavedWithStopPatterns
+        : savedStopStats.ready
+          ? ui.workspaceSavedStopPatternsPartial
+          : ui.workspaceSaved;
+      setWorkspaceMessage(savedText);
+      setMessage(savedText);
+      if (!chatwootSuiteDraft.workspaceItemId) {
+        setChatwootSuiteDraft((current) => ({ ...current, workspaceItemId: payload.item.id }));
+      }
+    });
+  }
+
+  function openWorkspaceItem(item: QaWorkspaceItem) {
+    const nextIssue = {
+      ...emptyIssue,
+      key: item.issueKey,
+      summary: item.title,
+      title: item.title,
+    };
+    setIssue(nextIssue);
+    setJiraUrl(item.issueKey);
+    setArchetypeKey(item.archetypeKey || "auto");
+    setQaPlan(item.qaPlan || null);
+    setTestCases(JSON.parse(JSON.stringify(item.testCases || [])) as TestCase[]);
+    setOutline(item.outline ? (JSON.parse(JSON.stringify(item.outline)) as TestDesignOutline) : emptyOutline(nextIssue));
+    setDetailCaseIndex(null);
+    setCaseFilter("all");
+    setSavedFiles(null);
+    setBuiltDesignFiles(null);
+    setSourceConfigOpen(false);
+    setImprovePanelOpen(false);
+    if (item.chatwootSuiteFile) {
+      updateChatwootSuiteFile(item.chatwootSuiteFile, "workspace");
+    }
+    setActiveTab("cases");
+    setAppView("run");
+    setMessage(languageMode === "en" ? `Opened ${item.title} from QA Workspace.` : `Đã mở ${item.title} từ QA Workspace.`);
+  }
+
+  async function deleteWorkspaceItem(item: QaWorkspaceItem) {
+    setWorkspaceBusy("delete");
+    try {
+      const response = await fetch(`/api/qa-workspace/${encodeURIComponent(item.id)}`, { method: "DELETE" });
+      const payload = (await response.json()) as { items?: QaWorkspaceItem[]; error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || `HTTP ${response.status}`);
+      }
+      setQaWorkspaceItems(payload.items || []);
+      setWorkspaceMessage(languageMode === "en" ? "Removed from QA Workspace." : "Đã xóa khỏi QA Workspace.");
+    } catch (error) {
+      setWorkspaceMessage(error instanceof Error ? error.message : "Không xóa được khỏi QA Workspace.");
+    } finally {
+      setWorkspaceBusy("");
+    }
+  }
+
+  function applyWorkspaceStopPatternPayload(item: QaWorkspaceItem, items: QaWorkspaceItem[]) {
+    setQaWorkspaceItems(items || []);
+    if (item.testCases?.length && (item.id === chatwootSuiteDraft.workspaceItemId || item.issueKey === issue.key || item.sourceKey === issue.key)) {
+      setTestCases(item.testCases);
+    }
+    const text = stopPatternStats(item.testCases || []).needs === 0 ? ui.workspaceStopPatternsUpdated : ui.workspaceSavedStopPatternsPartial;
+    setWorkspaceMessage(text);
+    setMessage(text);
+  }
+
+  function refreshCurrentStopPatterns() {
+    if (!testCases.length) return;
+    setBusyRun("stopPatterns", async () => {
+      const payload = await apiPost<{ item: QaWorkspaceItem; items: QaWorkspaceItem[] }>("/api/qa-workspace", {
+        item: currentWorkspacePayload(),
+        refreshStopPatterns: true,
+      });
+      applyWorkspaceStopPatternPayload(payload.item, payload.items || []);
+    });
+  }
+
+  async function refreshWorkspaceStopPatterns(item: QaWorkspaceItem) {
+    setWorkspaceStopPatternBusyId(item.id);
+    try {
+      const payload = await apiPost<{ item: QaWorkspaceItem; items: QaWorkspaceItem[] }>(
+        `/api/qa-workspace/${encodeURIComponent(item.id)}/stop-patterns`,
+        { force: true },
+      );
+      applyWorkspaceStopPatternPayload(payload.item, payload.items || []);
+    } catch (error) {
+      setWorkspaceMessage(error instanceof Error ? error.message : "Không cập nhật được điều kiện dừng.");
+    } finally {
+      setWorkspaceStopPatternBusyId("");
+    }
+  }
+
   async function generateKnowledgeArticle() {
     if (!knowledgeTopic.trim()) {
       setKnowledgeMessage(languageMode === "en" ? "Enter a QA knowledge topic first." : "Cần nhập chủ đề kiến thức QA trước.");
@@ -3944,6 +5430,379 @@ function App() {
       setKnowledgeMessage(error instanceof Error ? error.message : languageMode === "en" ? "Could not save knowledge article." : "Không lưu được bài kiến thức.");
     } finally {
       setKnowledgeBusy("");
+    }
+  }
+
+  function updateChatwootForm<K extends keyof ChatwootUatRunForm>(key: K, value: ChatwootUatRunForm[K]) {
+    setChatwootForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateChatwootSuiteFile(value: string, source: ChatwootSuiteSource | "" = value ? chatwootSuiteDraft.source : "") {
+    setChatwootForm((current) => ({ ...current, suiteFile: value }));
+    setChatwootPreparedSource(value ? source : "");
+    setChatwootRunAllCases(true);
+    setChatwootSelectedCaseIds([]);
+    setChatwootCaseSearch("");
+    setExpandedChatwootCaseIds([]);
+    setChatwootCaseStopConditionEdits({});
+  }
+
+  function setChatwootCaseChecked(caseId: string, checked: boolean) {
+    const allCaseIds = selectedChatwootCases.map((testCase) => testCase.caseId).filter(Boolean);
+    if (!allCaseIds.length) return;
+    const baseline = chatwootRunAllCases ? allCaseIds : chatwootSelectedCaseIds;
+    const nextIds = checked
+      ? Array.from(new Set([...baseline, caseId]))
+      : baseline.filter((item) => item !== caseId);
+    setChatwootRunAllCases(false);
+    setChatwootSelectedCaseIds(nextIds);
+  }
+
+  function selectAllChatwootCases() {
+    setChatwootRunAllCases(false);
+    setChatwootSelectedCaseIds(selectedChatwootCases.map((testCase) => testCase.caseId).filter(Boolean));
+  }
+
+  function runAllChatwootCases() {
+    setChatwootRunAllCases(true);
+    setChatwootSelectedCaseIds([]);
+  }
+
+  function clearChatwootCaseSelection() {
+    setChatwootRunAllCases(false);
+    setChatwootSelectedCaseIds([]);
+  }
+
+  function toggleChatwootCaseDetails(caseId: string) {
+    setExpandedChatwootCaseIds((current) =>
+      current.includes(caseId) ? current.filter((item) => item !== caseId) : [...current, caseId],
+    );
+  }
+
+  function updateChatwootCaseStopCondition(caseId: string, key: keyof ChatwootStopConditionEdit, value: string) {
+    setChatwootCaseStopConditionEdits((current) => ({
+      ...current,
+      [caseId]: {
+        pass: current[caseId]?.pass ?? "",
+        fail: current[caseId]?.fail ?? "",
+        [key]: value,
+      },
+    }));
+  }
+
+  function chatwootCaseStopConditionOverrides(): Record<string, StopConditions> {
+    return Object.fromEntries(
+      Object.entries(chatwootCaseStopConditionEdits).map(([caseId, value]) => [
+        caseId,
+        {
+          pass: normalizeStopConditionLines(value.pass),
+          fail: normalizeStopConditionLines(value.fail),
+        },
+      ]),
+    );
+  }
+
+  function chatwootCaseStatusLabel(status = "") {
+    if (status === "pending") return ui.chatwootCasePending;
+    if (status === "running") return ui.chatwootCaseRunning;
+    if (status === "completed") return ui.chatwootCaseCompleted;
+    if (status === "skipped") return ui.chatwootCaseSkipped;
+    if (status === "interrupted") return ui.chatwootCaseInterrupted;
+    if (status === "failed") return ui.chatwootCaseFailed;
+    if (status === "handoff") return ui.chatwootCaseHandoff;
+    return status;
+  }
+
+  function chatwootJobStatusLabel(status = "") {
+    if (status === "queued") return ui.chatwootCasePending;
+    if (status === "running") return ui.chatwootCaseRunning;
+    if (status === "completed") return ui.chatwootCaseCompleted;
+    if (status === "failed") return ui.chatwootCaseFailed;
+    if (status === "interrupted") return ui.chatwootCaseInterrupted;
+    return status;
+  }
+
+  function chatwootModeLabel(value = "") {
+    if (value === "adaptive") return ui.chatwootAdaptiveMode;
+    if (value === "suite") return ui.chatwootSuiteMode;
+    return value;
+  }
+
+  function chatwootChatUiModeLabel(value = "") {
+    if (value === "realistic") return ui.chatwootChatRealistic;
+    if (value === "webhook-only") return ui.chatwootChatWebhookOnly;
+    return value;
+  }
+
+  function chatwootPlannerBackendLabel(value = "") {
+    if (value === "openai-compatible") return ui.chatwootPlannerAi;
+    if (value === "heuristic") return ui.chatwootPlannerHeuristic;
+    if (value === "codex-cli") return ui.chatwootPlannerCodex;
+    return value;
+  }
+
+  function chatwootPlannerBackendHelp(value = "") {
+    if (value === "openai-compatible") return ui.chatwootPlannerAiHelp;
+    if (value === "heuristic") return ui.chatwootPlannerHeuristicHelp;
+    if (value === "codex-cli") return ui.chatwootPlannerCodexHelp;
+    return "";
+  }
+
+  function chatwootPlannerModelLabel(
+    backend: ProjectConfig["chatwootPlannerBackend"],
+    configuredModel = "",
+  ) {
+    if (backend === "openai-compatible") return aiSettingsPlannerModel || ui.chatwootPlannerModelMissing;
+    if (backend === "heuristic") return ui.chatwootPlannerModelNotUsed;
+    return configuredModel || aiSettingsPlannerModel || "gpt-5.4-mini";
+  }
+
+  function compactChatwootReasons(...values: string[]) {
+    return Array.from(
+      new Set(
+        values
+          .flatMap((value) => String(value || "").split(/\s*[·|]\s*/))
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
+    );
+  }
+
+  function chatwootCaseResultStatus(result: ChatwootUatRunResult["report"]["results"][number]) {
+    if (result.succeeded) return { label: ui.chatwootCaseStatusPassed, className: "passed" };
+    if (result.handoffDetected) return { label: ui.chatwootCaseStatusHandoff, className: "handoff" };
+    return { label: ui.chatwootCaseStatusFailed, className: "failed" };
+  }
+
+  function chatwootCaseResultReasons(result: ChatwootUatRunResult["report"]["results"][number]) {
+    return compactChatwootReasons(result.failureReason, result.completedReason);
+  }
+
+  function chatwootFailureHint(reasons: string[]) {
+    const reasonText = reasons.join(" ").toLowerCase();
+    if (!reasonText) return ui.chatwootUnknownFailure;
+    if (reasonText.includes("max_user_turns")) {
+      return languageMode === "en"
+        ? "The bot did not finish before the max user-turn limit. Increase max user turns or inspect whether the bot/tool got stuck."
+        : "Bot chưa hoàn tất trước giới hạn số lượt user. Tăng Số lượt user tối đa hoặc kiểm tra bot/tool có bị kẹt không.";
+    }
+    if (reasonText.includes("timeout")) {
+      return languageMode === "en"
+        ? "The run hit a timeout. Check the UAT conversation and planner timeout/config."
+        : "Run bị timeout. Kiểm tra hội thoại UAT và timeout/cấu hình planner.";
+    }
+    if (reasonText.includes("handoff")) {
+      return languageMode === "en"
+        ? "The conversation was handed off. Check whether this is expected for the selected agent and scenario."
+        : "Hội thoại đã chuyển agent. Kiểm tra đây có phải expected result của agent/kịch bản đang chạy không.";
+    }
+    if (reasonText.includes("success")) {
+      return languageMode === "en"
+        ? "The stop condition was reached. If the case is still marked failed, inspect the raw report for assertion mismatch."
+        : "Đã đạt điều kiện dừng. Nếu case vẫn bị đánh lỗi, mở raw report để kiểm tra assertion bị lệch.";
+    }
+    return languageMode === "en"
+      ? "Open the UAT conversation/raw report to inspect the exact bot response and tool trace."
+      : "Mở hội thoại UAT/raw report để kiểm tra câu trả lời bot và tool trace cụ thể.";
+  }
+
+  function requireSelectedChatwootAgent() {
+    if (selectedChatwootAgent) return true;
+    setChatwootMessage(ui.chatwootAgentRequired);
+    return false;
+  }
+
+  async function cancelChatwootCase(caseId: string) {
+    if (!chatwootActiveJob || !["queued", "running"].includes(chatwootActiveJob.status)) return;
+    setChatwootBusy("cancel");
+    setChatwootMessage("");
+    try {
+      const payload = await apiPost<{ job: ChatwootUatJob }>(
+        `/api/chatwoot-uat/jobs/${encodeURIComponent(chatwootActiveJob.id)}/cases/${encodeURIComponent(caseId)}/cancel`,
+        {},
+      );
+      setChatwootActiveJob(payload.job);
+      setChatwootJobs((current) => [payload.job, ...current.filter((job) => job.id !== payload.job.id)]);
+      setChatwootMessage(ui.chatwootCaseStopQueued);
+    } catch (error) {
+      setChatwootMessage(error instanceof Error ? error.message : languageMode === "en" ? "Could not stop this test case." : "Không dừng được test case này.");
+    } finally {
+      setChatwootBusy("");
+    }
+  }
+
+  function buildChatwootRunPayload(): ChatwootUatRunPayload {
+    return {
+      ...chatwootForm,
+      mode: effectiveChatwootRunMode,
+      chatUiMode: effectiveChatwootChatUiMode,
+      plannerBackend: effectiveChatwootPlannerBackend,
+      webhookUrl: chatwootAutomationConfig.chatwootWebhookUrl,
+      healthcheckUrl: chatwootAutomationConfig.chatwootHealthcheckUrl,
+      skipHealthcheck: chatwootAutomationConfig.chatwootSkipHealthcheck,
+      skipLocalWebhookPost: chatwootAutomationConfig.chatwootSkipLocalWebhookPost,
+      chatwootApiBase: chatwootAutomationConfig.chatwootApiBase,
+      inboxId: chatwootAutomationConfig.chatwootInboxId,
+      uiInboxId: chatwootAutomationConfig.chatwootUiInboxId,
+      captainAssistantId: chatwootAutomationConfig.chatwootCaptainAssistantId,
+      accountId: chatwootAutomationConfig.chatwootAccountId,
+      caseId: "",
+      caseIndex: "",
+      limitCases: "",
+      maxUserTurns: chatwootForm.maxUserTurns || chatwootAutomationConfig.chatwootMaxUserTurns,
+      plannerModel:
+        !chatwootRunUsesPlanner
+          ? ""
+          : effectiveChatwootPlannerBackend === "openai-compatible"
+            ? aiSettingsPlannerModel
+            : effectiveChatwootPlannerBackend === "codex-cli"
+              ? chatwootForm.plannerModel || chatwootAutomationConfig.chatwootPlannerModel || aiSettingsPlannerModel
+              : "",
+      plannerTimeoutSeconds: chatwootForm.plannerTimeoutSeconds || chatwootAutomationConfig.chatwootPlannerTimeoutSeconds,
+      labels: chatwootAutomationConfig.chatwootLabels,
+      assigneeName: chatwootAutomationConfig.chatwootAssigneeName,
+      pinnedConversationId: chatwootAutomationConfig.chatwootPinnedConversationId,
+      selectedCaseIds: chatwootRunAllCases ? [] : chatwootSelectedCaseIds,
+      caseStopConditions: chatwootCaseStopConditionOverrides(),
+      agentId: selectedChatwootAgent?.id,
+      agentName: selectedChatwootAgent?.name,
+    };
+  }
+
+  function updateChatwootSuiteDraft<K extends keyof ChatwootSuiteDraftForm>(key: K, value: ChatwootSuiteDraftForm[K]) {
+    setChatwootSuiteDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  async function createChatwootSuiteFromSource(override: Partial<ChatwootSuiteDraftForm> = {}) {
+    if (!requireSelectedChatwootAgent()) return;
+    const draft = { ...chatwootSuiteDraft, ...override };
+    const workspaceItemId = draft.workspaceItemId || selectedWorkspaceItem?.id || "";
+    const workspaceItem = qaWorkspaceItems.find((item) => item.id === workspaceItemId || item.sourceKey === workspaceItemId);
+    const commonPayload = {
+      suiteName: draft.source === "workspace" ? draft.title : "",
+      inboxId: chatwootAutomationConfig.chatwootInboxId,
+      uiInboxId: chatwootAutomationConfig.chatwootUiInboxId,
+      captainAssistantId: chatwootAutomationConfig.chatwootCaptainAssistantId,
+      labels: chatwootAutomationConfig.chatwootLabels,
+      assigneeName: chatwootAutomationConfig.chatwootAssigneeName,
+      webhookUrl: chatwootAutomationConfig.chatwootWebhookUrl,
+      chatUiMode: chatwootAutomationConfig.chatwootChatUiMode,
+      agentId: selectedChatwootAgent?.id,
+      agentName: selectedChatwootAgent?.name,
+    };
+    let endpoint = "";
+    let body: Record<string, unknown> = {};
+    if (draft.source === "workspace") {
+      if (!workspaceItemId) {
+        setChatwootMessage(ui.qaWorkspaceEmpty);
+        return;
+      }
+      endpoint = "/api/chatwoot-uat/suites/workspace";
+      body = { ...commonPayload, workspaceItemId };
+    } else {
+      if (!draft.scenario.trim()) {
+        setChatwootMessage(languageMode === "en" ? "Enter a manual scenario before creating a suite." : "Cần nhập kịch bản trước khi tạo suite.");
+        return;
+      }
+      endpoint = "/api/chatwoot-uat/suites/manual";
+      body = {
+        ...commonPayload,
+        scenario: draft.scenario,
+      };
+    }
+    setChatwootSuiteBusy(true);
+    setChatwootMessage("");
+    try {
+      const payload = await apiPost<{
+        suite?: ChatwootUatSuite;
+        suites?: ChatwootUatSuite[];
+        workspaceItems?: QaWorkspaceItem[];
+        planningMode?: "ai" | "fallback";
+        error?: string;
+      }>(endpoint, body);
+      if (payload.suites) {
+        setChatwootInfo((current) => (current ? { ...current, suites: payload.suites || [] } : current));
+      } else {
+        await loadChatwootUatInfo();
+      }
+      if (payload.workspaceItems) {
+        setQaWorkspaceItems(payload.workspaceItems);
+      }
+      if (payload.suite?.relativePath) {
+        updateChatwootSuiteFile(payload.suite.relativePath, draft.source);
+      }
+      const createdMessage =
+        draft.source === "manual"
+          ? payload.planningMode === "ai"
+            ? ui.chatwootSuiteCreatedAi
+            : ui.chatwootSuiteCreatedFallback
+          : ui.chatwootSuiteCreated;
+      setChatwootMessage(createdMessage);
+      setWorkspaceMessage(createdMessage);
+      if (draft.source === "workspace" && payload.workspaceItems) {
+        const selected = payload.workspaceItems.find((item) => item.id === draft.workspaceItemId) || payload.workspaceItems[0];
+        if (selected) {
+          setChatwootSuiteDraft((current) => ({ ...current, workspaceItemId: selected.id }));
+        }
+      }
+    } catch (error) {
+      setChatwootMessage(error instanceof Error ? error.message : "Không tạo được Chatwoot UAT suite.");
+    } finally {
+      setChatwootSuiteBusy(false);
+    }
+  }
+
+  async function runChatwootUat() {
+    if (!requireSelectedChatwootAgent()) return;
+    if (!chatwootPreparedSuiteReady) {
+      setChatwootMessage(chatwootSuiteDraft.source === "manual" ? ui.chatwootManualPrepareHint : ui.chatwootWorkspacePrepareHint);
+      return;
+    }
+    if (!chatwootRunAllCases && selectedChatwootCases.length && !chatwootSelectedCaseIds.length) {
+      setChatwootMessage(languageMode === "en" ? "Select at least one case before starting." : "Cần chọn ít nhất một case trước khi chạy.");
+      return;
+    }
+    if (chatwootRunUsesPlanner && effectiveChatwootPlannerBackend === "openai-compatible" && !chatwootInfo?.plannerAiReady) {
+      setChatwootMessage(ui.chatwootPlannerAiMissing);
+      return;
+    }
+    setChatwootConfirmOpen(true);
+  }
+
+  async function startChatwootUatJob() {
+    if (!requireSelectedChatwootAgent()) return;
+    if (!chatwootPreparedSuiteReady) {
+      setChatwootMessage(chatwootSuiteDraft.source === "manual" ? ui.chatwootManualPrepareHint : ui.chatwootWorkspacePrepareHint);
+      return;
+    }
+    setChatwootConfirmOpen(false);
+    setChatwootBusy("run");
+    setChatwootMessage("");
+    setChatwootResult(null);
+    try {
+      const payload = await apiPost<{ job: ChatwootUatJob }>("/api/chatwoot-uat/jobs", buildChatwootRunPayload());
+      setChatwootActiveJob(payload.job);
+      setChatwootJobs((current) => [payload.job, ...current.filter((job) => job.id !== payload.job.id)]);
+      setChatwootMessage(ui.chatwootJobQueued);
+    } catch (error) {
+      setChatwootMessage(error instanceof Error ? error.message : languageMode === "en" ? "Could not run Chatwoot UAT." : "Không chạy được Chatwoot UAT.");
+    } finally {
+      setChatwootBusy("");
+    }
+  }
+
+  async function cancelChatwootUatJob() {
+    if (!chatwootActiveJob || !["queued", "running"].includes(chatwootActiveJob.status)) return;
+    setChatwootBusy("cancel");
+    try {
+      const payload = await apiPost<{ job: ChatwootUatJob }>(`/api/chatwoot-uat/jobs/${encodeURIComponent(chatwootActiveJob.id)}/cancel`, {});
+      setChatwootActiveJob(payload.job);
+      setChatwootJobs((current) => [payload.job, ...current.filter((job) => job.id !== payload.job.id)]);
+      setChatwootMessage(payload.job.error || ui.chatwootRunStopped);
+    } catch (error) {
+      setChatwootMessage(error instanceof Error ? error.message : languageMode === "en" ? "Could not stop Chatwoot UAT." : "Không dừng được Chatwoot UAT.");
+    } finally {
+      setChatwootBusy("");
     }
   }
 
@@ -4052,29 +5911,108 @@ function App() {
         </div>
 
         <nav className="side-nav" aria-label={ui.appNavigationLabel}>
-          <button className={appView === "run" ? "active" : ""} type="button" onClick={() => setAppView("run")}>
+          <button className={appView === "run" ? "active" : ""} type="button" onClick={() => {
+            setAppView("run");
+            setSettingsNavOpen(false);
+          }}>
             <Play size={16} />
             <span>{ui.generateTask}</span>
           </button>
-          <button className={appView === "knowledge" ? "active" : ""} type="button" onClick={() => setAppView("knowledge")}>
+          <button className={appView === "workspace" ? "active" : ""} type="button" onClick={() => {
+            setAppView("workspace");
+            setSettingsNavOpen(false);
+          }}>
+            <Layers size={16} />
+            <span>{ui.qaWorkspace}</span>
+          </button>
+          <button className={appView === "chatwoot" ? "active" : ""} type="button" onClick={() => {
+            setAppView("chatwoot");
+            setSettingsNavOpen(false);
+          }}>
+            <Bot size={16} />
+            <span>{ui.chatwootUat}</span>
+          </button>
+          <button className={appView === "knowledge" ? "active" : ""} type="button" onClick={() => {
+            setAppView("knowledge");
+            setSettingsNavOpen(false);
+          }}>
             <BookOpen size={16} />
             <span>{ui.knowledge}</span>
           </button>
+          <div className={`${appView === "settings" ? "side-nav-group active" : "side-nav-group"} ${settingsNavOpen ? "open" : "collapsed"}`}>
+            <button
+              className={appView === "settings" ? "active" : ""}
+              type="button"
+              onClick={() => {
+                if (appView !== "settings") {
+                  setAppView("settings");
+                  setSettingsNavOpen(true);
+                  return;
+                }
+                setSettingsNavOpen((current) => !current);
+              }}
+              aria-expanded={settingsNavOpen}
+            >
+              <Settings size={16} />
+              <span>{ui.workspaceSettings}</span>
+              {aiSettingsImprovePending ? (
+                <span className="nav-badge" title={ui.aiSettingsPendingImprove} aria-label={ui.aiSettingsPendingImprove}>
+                  <Wand2 size={11} />
+                </span>
+              ) : null}
+              <ChevronDown className="side-nav-chevron" size={14} />
+            </button>
+            <div className="side-nav-subitems">
+              <button className={appView === "settings" && activeSettingsSection === "project" ? "active" : ""} type="button" onClick={() => {
+                setAppView("settings");
+                setSettingsNavOpen(true);
+                setActiveSettingsSection("project");
+              }}>
+                <Settings size={14} />
+                <span>{ui.project}</span>
+              </button>
+              <button className={appView === "settings" && activeSettingsSection === "auth" ? "active" : ""} type="button" onClick={() => {
+                setAppView("settings");
+                setSettingsNavOpen(true);
+                setActiveSettingsSection("auth");
+              }}>
+                <ShieldCheck size={14} />
+                <span>{ui.authentication}</span>
+              </button>
+              <button className={appView === "settings" && activeSettingsSection === "automation" ? "active" : ""} type="button" onClick={() => {
+                setAppView("settings");
+                setSettingsNavOpen(true);
+                setActiveSettingsSection("automation");
+              }}>
+                <Bot size={14} />
+                <span>{ui.automationSettings}</span>
+              </button>
+              <button className={appView === "settings" && activeSettingsSection === "ai" ? "active" : ""} type="button" onClick={() => {
+                setAppView("settings");
+                setSettingsNavOpen(true);
+                setActiveSettingsSection("ai");
+              }}>
+                <Wand2 size={14} />
+                <span>{ui.aiSettings}</span>
+                {aiSettingsImprovePending ? (
+                  <span className="nav-badge" title={ui.aiSettingsPendingImprove} aria-label={ui.aiSettingsPendingImprove}>
+                    <Wand2 size={11} />
+                  </span>
+                ) : null}
+              </button>
+              <button className={appView === "settings" && activeSettingsSection === "knowledgeAi" ? "active" : ""} type="button" onClick={() => {
+                setAppView("settings");
+                setSettingsNavOpen(true);
+                setActiveSettingsSection("knowledgeAi");
+              }}>
+                <BookOpen size={14} />
+                <span>{ui.knowledgeAiSettings}</span>
+              </button>
+            </div>
+          </div>
         </nav>
 
         <div className="sidebar-spacer" />
-
-        <nav className="side-nav sidebar-bottom-nav" aria-label={ui.workspaceSettings}>
-          <button className={appView === "settings" ? "active" : ""} type="button" onClick={() => setAppView("settings")}>
-            <Settings size={16} />
-            <span>{ui.workspaceSettings}</span>
-            {aiSettingsImprovePending ? (
-              <span className="nav-badge" title={ui.aiSettingsPendingImprove} aria-label={ui.aiSettingsPendingImprove}>
-                <Wand2 size={11} />
-              </span>
-            ) : null}
-          </button>
-        </nav>
 
         <div className="sidebar-user">
           <div className="user-menu" ref={userMenuRef}>
@@ -4156,7 +6094,108 @@ function App() {
           />
         ) : null}
 
-        {appView === "knowledge" ? (
+        {appView === "workspace" ? (
+          <>
+            <header className="topbar">
+              <div>
+                <p className="eyebrow">{ui.qaWorkspaceEyebrow}</p>
+                <h2>{ui.qaWorkspaceTitle}</h2>
+              </div>
+              <div className="top-actions">
+                <IconButton icon={workspaceBusy === "load" ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />} onClick={loadQaWorkspace} disabled={Boolean(workspaceBusy)}>
+                  {ui.chatwootReloadSuites}
+                </IconButton>
+              </div>
+            </header>
+
+            <section className="panel workspace-panel">
+              <div className="section-heading">
+                <div>
+                  <h2>{ui.qaWorkspace}</h2>
+                  <p>{ui.qaWorkspaceIntro}</p>
+                </div>
+              </div>
+              {workspaceMessage ? <div className={workspaceMessage.startsWith("Đã") || workspaceMessage.startsWith("Saved") ? "notice ok" : "notice"}>{workspaceMessage}</div> : null}
+              {qaWorkspaceTestItems.length ? (
+                <div className="qa-workspace-grid">
+                  {qaWorkspaceTestItems.map((item) => {
+                    const importNote = /AI-547/i.test(`${item.issueKey} ${item.sourceKey} ${item.title}`)
+                      ? ui.workspaceImportedAi547
+                      : /AI-548/i.test(`${item.issueKey} ${item.sourceKey} ${item.title}`)
+                        ? ui.workspaceImportedAi548
+                        : "";
+                    const itemStopStats = stopPatternStats(item.testCases || []);
+                    return (
+                    <article className="qa-workspace-card compact-artifact-card" key={item.id}>
+                      <div className="qa-workspace-main">
+                        <div className="qa-workspace-card-head">
+                          <div>
+                            <span>{item.issueKey || item.sourceKey}</span>
+                            <h3>{item.title}</h3>
+                          </div>
+                          {item.chatwootSuiteFile ? <small>{ui.workspaceSuiteReady}</small> : null}
+                        </div>
+                        <div className="workspace-card-meta">
+                          <span>{formatHistoryDate(item.updatedAt || item.createdAt, languageMode)}</span>
+                          {item.chatwootSuiteFile ? <small>{item.chatwootSuiteName || item.chatwootSuiteFile}</small> : null}
+                          {importNote ? <small>{importNote}</small> : null}
+                        </div>
+                      </div>
+                      <div className="workspace-compact-metrics" aria-label={`${item.testCases.length} ${ui.workspaceCaseCount}, ${item.outline?.branches?.length || 0} ${ui.workspaceBranchCount}`}>
+                        <span><strong>{item.testCases.length}</strong>{ui.workspaceCaseCount}</span>
+                        <span><strong>{item.outline?.branches?.length || 0}</strong>{ui.workspaceBranchCount}</span>
+                        <span className={itemStopStats.needs ? "warn" : "ok"}><strong>{itemStopStats.ready}/{itemStopStats.total}</strong>{ui.workspaceStopPatternMetric}</span>
+                      </div>
+                      <div className="button-row compact-actions workspace-card-actions">
+                        <IconButton icon={<FileText size={15} />} onClick={() => openWorkspaceItem(item)}>
+                          {ui.workspaceOpenItem}
+                        </IconButton>
+                        {!itemStopStats.needs ? <span className="workspace-stop-ready">{ui.workspaceStopPatternsReady}</span> : null}
+                        <IconButton
+                          icon={workspaceStopPatternBusyId === item.id ? <Loader2 className="spin" size={15} /> : <Wand2 size={15} />}
+                          onClick={() => void refreshWorkspaceStopPatterns(item)}
+                          disabled={Boolean(workspaceStopPatternBusyId)}
+                          title={itemStopStats.needs ? `${itemStopStats.needs} ${ui.workspaceStopPatternsNeedUpdate}` : ui.workspaceRefreshStopPatternsAgain}
+                        >
+                          {itemStopStats.needs ? ui.workspaceRefreshStopPatterns : ui.workspaceRefreshStopPatternsAgain}
+                        </IconButton>
+                        <IconButton
+                          icon={chatwootSuiteBusy && chatwootSuiteDraft.workspaceItemId === item.id ? <Loader2 className="spin" size={15} /> : <Bot size={15} />}
+                          onClick={() => {
+                            setChatwootSuiteDraft((current) => ({ ...current, source: "workspace", workspaceItemId: item.id, title: item.chatwootSuiteName || item.title }));
+                            void createChatwootSuiteFromSource({ source: "workspace", workspaceItemId: item.id, title: item.chatwootSuiteName || item.title });
+                          }}
+                          disabled={chatwootSuiteBusy || !item.testCases.length}
+                          variant="primary"
+                        >
+                          {ui.workspaceCreateChatwootSuite}
+                        </IconButton>
+                        {item.chatwootSuiteFile ? (
+                          <IconButton
+                            icon={<Play size={15} />}
+                            onClick={() => {
+                              updateChatwootSuiteFile(item.chatwootSuiteFile || "", "workspace");
+                              setChatwootSuiteDraft((current) => ({ ...current, source: "workspace", workspaceItemId: item.id }));
+                              setAppView("chatwoot");
+                            }}
+                          >
+                            {ui.workspaceUseSuite}
+                          </IconButton>
+                        ) : null}
+                        <IconButton icon={workspaceBusy === "delete" ? <Loader2 className="spin" size={15} /> : <Trash2 size={15} />} onClick={() => void deleteWorkspaceItem(item)} disabled={Boolean(workspaceBusy)}>
+                          {ui.workspaceDelete}
+                        </IconButton>
+                      </div>
+                    </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="empty">{ui.qaWorkspaceEmpty}</p>
+              )}
+            </section>
+          </>
+        ) : appView === "knowledge" ? (
           <>
             <header className="topbar">
               <div>
@@ -4350,6 +6389,580 @@ function App() {
               </div>
             </section>
           </>
+        ) : appView === "chatwoot" ? (
+          <>
+            <header className="topbar">
+              <div>
+                <p className="eyebrow">{ui.chatwootUatEyebrow}</p>
+                <h2>{ui.chatwootUatTitle}</h2>
+              </div>
+              <div className="top-actions">
+                <IconButton icon={chatwootBusy === "load" ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />} onClick={loadChatwootUatInfo} disabled={Boolean(chatwootBusy)}>
+                  {ui.chatwootReloadSuites}
+                </IconButton>
+              </div>
+            </header>
+
+            <section className="chatwoot-layout">
+              <div className="panel chatwoot-config-panel">
+                <div className="panel-title">
+                  <Bot size={18} />
+                  <h2>{ui.chatwootUat}</h2>
+                </div>
+                <div className="chatwoot-readiness">
+                  <div className="chatwoot-readiness-head">
+                    <div>
+                      <strong>{ui.chatwootReadiness}</strong>
+                      <small>
+                        {chatwootBlockingReadinessCount
+                          ? `${chatwootBlockingReadinessCount} ${ui.chatwootNeedConfig.toLowerCase()}`
+                          : ui.chatwootReady}
+                      </small>
+                    </div>
+                    <div className="chatwoot-readiness-chips">
+                      {chatwootReadinessItems.map((item) => (
+                        <span className={item.ready ? "readiness-chip ok" : item.optional ? "readiness-chip warn" : "readiness-chip bad"} key={item.key}>
+                          {item.ready ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
+                          {item.label}
+                        </span>
+                      ))}
+                      <button className="tiny" type="button" onClick={() => setChatwootReadinessOpen((current) => !current)}>
+                        {chatwootReadinessOpen ? ui.chatwootHideReadiness : ui.chatwootShowReadiness}
+                      </button>
+                    </div>
+                  </div>
+                  {chatwootReadinessOpen ? (
+                    <div className="chatwoot-readiness-detail">
+                      <small>{ui.chatwootReadinessHint}</small>
+                      <div className="chatwoot-readiness-detail-grid">
+                        {chatwootReadinessItems.map((item) => (
+                          <span className={item.ready ? "ok" : item.optional ? "warn" : "bad"} key={item.key}>
+                            <strong>{item.label}</strong>
+                            <small>{item.detail}</small>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="chatwoot-suite-builder">
+                  <div className="section-heading compact-heading">
+                    <div>
+                      <h3>{ui.chatwootSuiteBuilderTitle}</h3>
+                    </div>
+                  </div>
+                  <label className="field">
+                    <span>{ui.chatwootAgent}</span>
+                    <select
+                      value={selectedChatwootAgent?.id || ""}
+                      onChange={(event) => {
+                        setSelectedChatwootAgentId(event.target.value);
+                        setChatwootMessage("");
+                      }}
+                    >
+                      {chatwootAgentProfiles.length ? (
+                        chatwootAgentProfiles.map((profile) => (
+                          <option value={profile.id} key={profile.id}>
+                            {profile.name} · Inbox {profile.config.chatwootUiInboxId || profile.config.chatwootInboxId || "-"}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="">{ui.chatwootNoAgents}</option>
+                      )}
+                    </select>
+                  </label>
+                  {selectedChatwootAgent ? (
+                    <div className="mini-note">
+                      {ui.chatwootSelectedAgent}: {selectedChatwootAgent.name} · {ui.chatwootInboxId} {chatwootAutomationConfig.chatwootInboxId || "-"} · {ui.chatwootUiInboxId} {chatwootAutomationConfig.chatwootUiInboxId || "-"} · {ui.chatwootCaptainAssistantId} {chatwootAutomationConfig.chatwootCaptainAssistantId || "-"}
+                    </div>
+                  ) : (
+                    <div className="mini-note warn-text">{ui.chatwootNoAgents}</div>
+                  )}
+                  <div className="chatwoot-run-config-summary">
+                    <div className="chatwoot-run-config-head">
+                      <div>
+                        <strong>{ui.chatwootRunConfigSummary}</strong>
+                        <small>
+                          {(selectedChatwootAgent?.name || ui.chatwootAgentRequired)} · {chatwootModeLabel(effectiveChatwootRunMode)} · {chatwootChatUiModeLabel(effectiveChatwootChatUiMode)} · {chatwootRunUsesPlanner ? chatwootPlannerBackendLabel(effectiveChatwootPlannerBackend) : ui.chatwootPlannerDisabledForFixed} · {ui.chatwootUiInboxId} {chatwootAutomationConfig.chatwootUiInboxId || chatwootAutomationConfig.chatwootInboxId || "-"}
+                        </small>
+                      </div>
+                      <IconButton
+                        icon={<Settings size={15} />}
+                        onClick={() => {
+                          setActiveSettingsSection("automation");
+                          setAppView("settings");
+                          setSettingsNavOpen(true);
+                        }}
+                      >
+                        {ui.chatwootOpenAutomationSettings}
+                      </IconButton>
+                    </div>
+                    <div className="chatwoot-run-config-controls">
+                      <label className="field compact-run-field">
+                        <span>{ui.chatwootRunModeForThisRun}</span>
+                        <select value={effectiveChatwootRunMode} onChange={(event) => updateChatwootForm("mode", event.target.value as ChatwootUatRunForm["mode"])}>
+                          <option value="adaptive">{ui.chatwootAdaptiveMode}</option>
+                          <option value="suite">{ui.chatwootSuiteMode}</option>
+                        </select>
+                      </label>
+                      <label className="field compact-run-field">
+                        <span>{ui.chatwootPlannerForThisRun}</span>
+                        <select
+                          value={effectiveChatwootPlannerBackend}
+                          onChange={(event) => updateChatwootForm("plannerBackend", event.target.value as ChatwootUatRunForm["plannerBackend"])}
+                          disabled={!chatwootRunUsesPlanner}
+                        >
+                          <option value="openai-compatible">{ui.chatwootPlannerAi}</option>
+                          <option value="heuristic">{ui.chatwootPlannerHeuristic}</option>
+                          <option value="codex-cli">{ui.chatwootPlannerCodex}</option>
+                        </select>
+                      </label>
+                    </div>
+                    <small className="chatwoot-run-override-hint">{ui.chatwootRunOverrideHint}</small>
+                  </div>
+                  <div className="chatwoot-source-tabs" aria-label={ui.chatwootSuiteSource}>
+                    <button
+                      className={chatwootSuiteDraft.source === "workspace" ? "active" : ""}
+                      type="button"
+                      onClick={() => {
+                        updateChatwootSuiteDraft("source", "workspace");
+                        updateChatwootSuiteFile("");
+                        setChatwootMessage("");
+                      }}
+                    >
+                      <Layers size={15} />
+                      {ui.chatwootSourceWorkspace}
+                    </button>
+                    <button
+                      className={chatwootSuiteDraft.source === "manual" ? "active" : ""}
+                      type="button"
+                      onClick={() => {
+                        updateChatwootSuiteDraft("source", "manual");
+                        updateChatwootSuiteFile("");
+                        setChatwootMessage("");
+                      }}
+                    >
+                      <FileText size={15} />
+                      {ui.chatwootSourceManual}
+                    </button>
+                  </div>
+                  {chatwootSuiteDraft.source === "workspace" ? (
+                    <>
+                      <label className="field">
+                        <span>{ui.chatwootWorkspaceItem}</span>
+                        <select
+                          value={chatwootSuiteDraft.workspaceItemId}
+                          onChange={(event) => {
+                            updateChatwootSuiteDraft("workspaceItemId", event.target.value);
+                            updateChatwootSuiteFile("");
+                            setChatwootMessage("");
+                          }}
+                        >
+                          {qaWorkspaceTestItems.length ? (
+                            qaWorkspaceTestItems.map((item) => (
+                              <option value={item.id} key={item.id}>
+                                {item.issueKey || item.sourceKey} · {item.title} ({item.testCases.length})
+                              </option>
+                            ))
+                          ) : (
+                            <option value="">{ui.qaWorkspaceEmpty}</option>
+                          )}
+                        </select>
+                      </label>
+                      {selectedWorkspaceItem ? (
+                        <div className="mini-note">
+                          {selectedWorkspaceItem.testCases.length} {ui.workspaceCaseCount} · {selectedWorkspaceItem.outline?.branches?.length || 0} {ui.workspaceBranchCount}
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
+                  {chatwootSuiteDraft.source === "manual" ? (
+                    <Field
+                      label={ui.chatwootManualScenario}
+                      value={chatwootSuiteDraft.scenario}
+                      onChange={(value) => updateChatwootSuiteDraft("scenario", value)}
+                      textarea
+                      rows={5}
+                      placeholder={ui.chatwootManualScenarioPlaceholder}
+                    />
+                  ) : null}
+                  <div className="button-row compact-actions">
+                    <IconButton icon={chatwootSuiteBusy ? <Loader2 className="spin" size={16} /> : <Plus size={16} />} onClick={() => void createChatwootSuiteFromSource()} disabled={chatwootSuiteBusy || !chatwootInfo?.skillExists || !selectedChatwootAgent} variant="primary">
+                      {chatwootSuiteDraft.source === "manual" ? ui.chatwootAiCreateCases : ui.chatwootCreateSuiteFromSource}
+                    </IconButton>
+                  </div>
+                </div>
+
+                {chatwootPreparedSuiteReady && selectedChatwootCases.length ? (
+                  <div className="chatwoot-case-picker">
+                    <div className="section-heading compact-heading">
+                      <div>
+                        <h3>{ui.chatwootCaseSelection}</h3>
+                        <p>
+                          {chatwootRunAllCases
+                            ? `${ui.chatwootWillRunAllCases} ${selectedChatwootCases.length} ${ui.workspaceCaseCount}.`
+                            : `${chatwootSelectedCaseIds.length}/${selectedChatwootCases.length} ${ui.chatwootSelectedCases}.`}
+                        </p>
+                      </div>
+                      <div className="chatwoot-case-picker-actions">
+                        <button className="tiny" type="button" onClick={selectAllChatwootCases} disabled={chatwootHasActiveJob}>
+                          {ui.chatwootSelectAllCases}
+                        </button>
+                        <button className="tiny" type="button" onClick={clearChatwootCaseSelection} disabled={chatwootHasActiveJob}>
+                          {ui.chatwootClearSelection}
+                        </button>
+                      </div>
+                    </div>
+                    <Field label={ui.chatwootCaseSearch} value={chatwootCaseSearch} onChange={setChatwootCaseSearch} placeholder="AI-548, booking, pending..." />
+                    <div className="chatwoot-case-picker-list">
+                      {filteredChatwootCases.map((testCase) => {
+                        const caseState = chatwootCaseStateById.get(testCase.caseId);
+                        const caseIsLocked = Boolean(caseState && caseState.status !== "pending");
+                        const caseCanStop = activeChatwootRunMatchesSuite && Boolean(caseState && ["pending", "running"].includes(caseState.status));
+                        const checked = activeChatwootRunMatchesSuite
+                          ? Boolean(caseState && !["skipped", "interrupted"].includes(caseState.status))
+                          : chatwootRunAllCases || chatwootSelectedCaseIds.includes(testCase.caseId);
+                        const caseExpanded = expandedChatwootCaseIds.includes(testCase.caseId);
+                        const caseSteps = testCase.steps || [];
+                        const stopConditions = testCase.stopConditions || {
+                          pass: (testCase.stopPatterns || []).map((pattern) => humanizeStopPatternForUi(pattern, "pass")),
+                          fail: (testCase.failPatterns || []).map((pattern) => humanizeStopPatternForUi(pattern, "fail")),
+                        };
+                        const stopConditionEdit = chatwootCaseStopConditionEdits[testCase.caseId] || {
+                          pass: sanitizeStopConditionsForUi(stopConditions.pass || [], "pass").join("\n"),
+                          fail: sanitizeStopConditionsForUi(stopConditions.fail || [], "fail").join("\n"),
+                        };
+                        const caseHasDetails = Boolean(testCase.testData || testCase.expectedResult || testCase.plannerInstruction || caseSteps.length);
+                        return (
+                          <article className={checked ? `chatwoot-case-option checked ${caseState?.status || ""}` : `chatwoot-case-option ${caseState?.status || ""}`} key={testCase.caseId || testCase.index}>
+                            <input
+                              type="checkbox"
+                              aria-label={`${testCase.caseId} ${testCase.title}`}
+                              checked={checked}
+                              disabled={activeChatwootRunMatchesSuite || caseIsLocked}
+                              title={caseIsLocked ? ui.chatwootCaseLocked : undefined}
+                              onChange={(event) => {
+                                if (activeChatwootRunMatchesSuite) return;
+                                setChatwootCaseChecked(testCase.caseId, event.target.checked);
+                              }}
+                            />
+                            <span className="chatwoot-case-content">
+                              <div className="chatwoot-case-title-line">
+                                <strong>
+                                  #{testCase.index} · {testCase.title}
+                                  {caseState ? <b className={`chatwoot-case-status ${caseState.status}`}>{chatwootCaseStatusLabel(caseState.status)}</b> : null}
+                                </strong>
+                                <button
+                                  className={caseExpanded ? "tiny chatwoot-case-detail-toggle open" : "tiny chatwoot-case-detail-toggle"}
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    toggleChatwootCaseDetails(testCase.caseId);
+                                  }}
+                                >
+                                  <ChevronDown size={13} />
+                                  <span>{caseExpanded ? ui.chatwootCaseCollapse : ui.chatwootCaseDetails}</span>
+                                </button>
+                              </div>
+                              <small>{testCase.caseId}</small>
+                              {testCase.openingPrompt ? (
+                                <em>
+                                  <span className="chatwoot-case-inline-label">{ui.chatwootOpeningPrompt}: </span>
+                                  {testCase.openingPrompt}
+                                </em>
+                              ) : null}
+                              {caseState?.error ? <em className="chatwoot-case-error">{caseState.error}</em> : null}
+                              {caseExpanded ? (
+                                <div className="chatwoot-case-detail">
+                                  {caseHasDetails ? (
+                                    <>
+                                      {testCase.testData ? (
+                                        <section className="chatwoot-case-detail-block">
+                                          <h4>{ui.chatwootCaseRunData}</h4>
+                                          <pre>{testCase.testData}</pre>
+                                        </section>
+                                      ) : null}
+                                      <section className="chatwoot-case-detail-block">
+                                        <h4>{ui.chatwootCasePlannerContext}</h4>
+                                        <p>{ui.chatwootCasePlannerContextHelp}</p>
+                                        {testCase.plannerInstruction ? <pre>{testCase.plannerInstruction}</pre> : null}
+                                      </section>
+                                      {caseSteps.length ? (
+                                        <section className="chatwoot-case-detail-block full">
+                                          <h4>{ui.chatwootCaseSteps}</h4>
+                                          <ol className="chatwoot-case-step-list">
+                                            {caseSteps.map((step, stepIndex) => (
+                                              <li key={`${testCase.caseId}-step-${step.index || stepIndex}`}>
+                                                <b>{step.index || stepIndex + 1}</b>
+                                                <span>
+                                                  {step.prompt ? <strong>{step.prompt}</strong> : null}
+                                                  {step.testData && step.testData !== step.prompt ? <small>{step.testData}</small> : null}
+                                                  {step.expected ? <em>{step.expected}</em> : null}
+                                                </span>
+                                              </li>
+                                            ))}
+                                          </ol>
+                                        </section>
+                                      ) : null}
+                                      {testCase.expectedResult ? (
+                                        <section className="chatwoot-case-detail-block full">
+                                          <h4>{ui.chatwootCaseExpected}</h4>
+                                          <pre>{testCase.expectedResult}</pre>
+                                        </section>
+                                      ) : null}
+                                    </>
+                                  ) : (
+                                    <p className="mini-note">{ui.chatwootCaseNoDetails}</p>
+                                  )}
+                                  <section className="chatwoot-case-detail-block full">
+                                    <h4>{ui.chatwootCaseStopPatternsEdit}</h4>
+                                    <p>{ui.chatwootCaseStopPatternsHelp}</p>
+                                    <div className="chatwoot-stop-condition-grid">
+                                      <label className="chatwoot-stop-condition-field pass">
+                                        <span>{ui.chatwootCasePassConditions}</span>
+                                        <textarea
+                                          className="chatwoot-stop-condition-editor"
+                                          value={stopConditionEdit.pass}
+                                          onChange={(event) => updateChatwootCaseStopCondition(testCase.caseId, "pass", event.target.value)}
+                                          rows={Math.min(5, Math.max(2, stopConditionEdit.pass.split(/\r?\n/).length + 1))}
+                                          placeholder={languageMode === "en" ? "Bot returns the expected payment link." : "Bot trả về link thanh toán đúng với dữ liệu test."}
+                                        />
+                                      </label>
+                                      <label className="chatwoot-stop-condition-field fail">
+                                        <span>{ui.chatwootCaseFailConditions}</span>
+                                        <textarea
+                                          className="chatwoot-stop-condition-editor"
+                                          value={stopConditionEdit.fail}
+                                          onChange={(event) => updateChatwootCaseStopCondition(testCase.caseId, "fail", event.target.value)}
+                                          rows={Math.min(5, Math.max(2, stopConditionEdit.fail.split(/\r?\n/).length + 1))}
+                                          placeholder={languageMode === "en" ? "Bot reports a system error or uses the wrong data." : "Bot báo lỗi hệ thống hoặc phản hồi sai dữ liệu test."}
+                                        />
+                                      </label>
+                                    </div>
+                                  </section>
+                                </div>
+                              ) : null}
+                            </span>
+                            {caseCanStop ? (
+                              <button
+                                className="button danger chatwoot-stop-case-button"
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void cancelChatwootCase(testCase.caseId);
+                                }}
+                                disabled={chatwootBusy === "cancel"}
+                              >
+                                {chatwootBusy === "cancel" ? <Loader2 className="spin" size={15} /> : <Square size={15} />}
+                                <span>{caseState?.status === "pending" ? ui.chatwootSkipPendingCase : ui.chatwootStopCase}</span>
+                              </button>
+                            ) : null}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : chatwootPreparedSuiteReady ? (
+                  <div className="mini-note">{ui.chatwootNoCaseMetadata}</div>
+                ) : (
+                  <div className="mini-note">
+                    {chatwootSuiteDraft.source === "manual" ? ui.chatwootManualPrepareHint : ui.chatwootWorkspacePrepareHint}
+                  </div>
+                )}
+                <div className="button-row">
+                  <IconButton
+                    icon={chatwootBusy === "run" ? <Loader2 className="spin" size={16} /> : <Play size={16} />}
+                    onClick={runChatwootUat}
+                    disabled={
+                      Boolean(chatwootBusy) ||
+                      chatwootHasActiveJob ||
+                      !chatwootInfo?.skillExists ||
+                      !selectedChatwootAgent ||
+                      !chatwootPreparedSuiteReady ||
+                      (!chatwootRunAllCases && selectedChatwootCases.length > 0 && !chatwootSelectedCaseIds.length) ||
+                      (chatwootRunUsesPlanner && effectiveChatwootPlannerBackend === "openai-compatible" && !chatwootInfo?.plannerAiReady)
+                    }
+                    variant="primary"
+                  >
+                    {ui.chatwootRun}
+                  </IconButton>
+                  {chatwootHasActiveJob ? (
+                    <IconButton
+                      icon={chatwootBusy === "cancel" ? <Loader2 className="spin" size={16} /> : <Square size={16} />}
+                      onClick={cancelChatwootUatJob}
+                      disabled={Boolean(chatwootBusy)}
+                      variant="danger"
+                    >
+                      {ui.chatwootStopRun}
+                    </IconButton>
+                  ) : null}
+                </div>
+                {chatwootMessage ? <div className={chatwootMessage.startsWith("Đã") || chatwootMessage.startsWith("Chatwoot") || chatwootMessage.startsWith("Stopped") ? "notice ok" : "notice"}>{chatwootMessage}</div> : null}
+              </div>
+
+              <div className="panel chatwoot-result-panel">
+                <div className="section-heading">
+                  <div>
+                    <h2>{ui.chatwootResult}</h2>
+                    <p>{chatwootResult?.report.suiteName || ui.emptyOutput}</p>
+                  </div>
+                </div>
+                {chatwootActiveJob ? (
+                  <div className={`chatwoot-job-status ${chatwootActiveJob.status}`}>
+                    <div>
+                      <strong>{ui.chatwootStatus}: {chatwootJobStatusLabel(chatwootActiveJob.status)}</strong>
+                      <span>{chatwootActiveJob.suiteName || chatwootActiveJob.suiteFile}</span>
+                    </div>
+                    <small>{formatHistoryDate(chatwootActiveJob.updatedAt, languageMode)}</small>
+                  </div>
+                ) : null}
+                {chatwootResult ? (
+                  <>
+                    <div className="metric-row chatwoot-metrics">
+                      <div>
+                        <strong>{chatwootResult.report.total}</strong>
+                        <span>{ui.chatwootMetricTotal}</span>
+                      </div>
+                      <div>
+                        <strong>{chatwootResult.report.success}</strong>
+                        <span>{ui.chatwootMetricPass}</span>
+                      </div>
+                      <div>
+                        <strong>{chatwootResult.report.handoff}</strong>
+                        <span>{ui.chatwootMetricHandoff}</span>
+                      </div>
+                      <div>
+                        <strong>{chatwootResult.report.failure}</strong>
+                        <span>{ui.chatwootMetricFail}</span>
+                      </div>
+                    </div>
+                    <div className="button-row compact-actions">
+                      {chatwootResult.files.report ? (
+                        <a className="button" href={chatwootResult.files.report.url} target="_blank" rel="noreferrer">
+                          <Link size={16} />
+                          <span>{ui.chatwootOpenReport}</span>
+                        </a>
+                      ) : null}
+                      {chatwootResult.files.raw ? (
+                        <a className="button" href={chatwootResult.files.raw.url} target="_blank" rel="noreferrer">
+                          <FileText size={16} />
+                          <span>{ui.chatwootOpenRaw}</span>
+                        </a>
+                      ) : null}
+                      {chatwootResult.files.yaml ? (
+                        <a className="button" href={chatwootResult.files.yaml.url} target="_blank" rel="noreferrer">
+                          <FileText size={16} />
+                          <span>{ui.chatwootOpenYaml}</span>
+                        </a>
+                      ) : null}
+                    </div>
+                    {chatwootFailedResults.length ? (
+                      <div className="chatwoot-failure-summary">
+                        <strong>{ui.chatwootFailureSummary}</strong>
+                        {chatwootFailedResults.map((result) => {
+                          const reasons = chatwootCaseResultReasons(result);
+                          const status = chatwootCaseResultStatus(result);
+                          return (
+                            <div className={`chatwoot-failure-row ${status.className}`} key={`${result.caseId}-${result.conversationId}-summary`}>
+                              <span>
+                                <b>{result.caseId || result.title}</b>
+                                <small>{result.title}</small>
+                              </span>
+                              <em>{reasons.join(" · ") || ui.chatwootUnknownFailure}</em>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                    <div className="chatwoot-case-list">
+                      {chatwootResult.report.results.map((result) => {
+                        const status = chatwootCaseResultStatus(result);
+                        const reasons = chatwootCaseResultReasons(result);
+                        return (
+                          <article className={`chatwoot-case-card ${status.className}`} key={`${result.caseId}-${result.conversationId}`}>
+                            <div>
+                              <div className="chatwoot-case-card-title">
+                                <strong>{result.caseId || result.title}</strong>
+                                <b className={`chatwoot-result-badge ${status.className}`}>{status.label}</b>
+                              </div>
+                              <span>{result.title}</span>
+                              {result.succeeded ? (
+                                <small>
+                                  {ui.chatwootCompletionReason}: {reasons.join(" · ") || result.completedReason || "-"}
+                                </small>
+                              ) : (
+                                <div className="chatwoot-case-failure-detail">
+                                  <small>
+                                    <b>{ui.chatwootFailureReason}:</b> {reasons.join(" · ") || ui.chatwootUnknownFailure}
+                                  </small>
+                                  <small>
+                                    <b>{ui.chatwootFailureHint}:</b> {chatwootFailureHint(reasons)}
+                                  </small>
+                                </div>
+                              )}
+                            </div>
+                            <div className="chatwoot-case-actions">
+                              {result.conversationUrl ? (
+                                <a className="tiny" href={result.conversationUrl} target="_blank" rel="noreferrer">
+                                  {ui.chatwootConversation}
+                                </a>
+                              ) : null}
+                              {result.paymentLink ? (
+                                <a className="tiny" href={result.paymentLink} target="_blank" rel="noreferrer">
+                                  {ui.chatwootPaymentLink}
+                                </a>
+                              ) : null}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                    {chatwootResult.stdout || chatwootResult.stderr ? (
+                      <div className="output">
+                        {chatwootResult.stdout ? <pre>{chatwootResult.stdout}</pre> : null}
+                        {chatwootResult.stderr ? <pre>{chatwootResult.stderr}</pre> : null}
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="empty">{ui.emptyOutput}</p>
+                )}
+                <div className="chatwoot-history-panel">
+                  <div className="section-heading compact-heading">
+                    <div>
+                      <h3>{ui.chatwootRunHistory}</h3>
+                      <p>{chatwootJobs.length ? `${chatwootJobs.length} ${ui.chatwootRunCountUnit}` : ui.chatwootNoHistory}</p>
+                    </div>
+                    <IconButton icon={chatwootBusy === "history" ? <Loader2 className="spin" size={14} /> : <RefreshCw size={14} />} onClick={loadChatwootJobs} disabled={Boolean(chatwootBusy)}>
+                      {ui.chatwootReloadHistory}
+                    </IconButton>
+                  </div>
+                  {chatwootJobs.length ? (
+                    <div className="chatwoot-history-list">
+                      {chatwootJobs.map((job) => (
+                        <article className={`chatwoot-history-card ${job.status}`} key={job.id}>
+                          <button type="button" onClick={() => {
+                            setChatwootActiveJob(job);
+                            if (job.result) setChatwootResult(job.result);
+                            setChatwootMessage(job.error || (job.status === "completed" ? ui.chatwootRunDone : ui.chatwootJobRunning));
+                          }}>
+                            <strong>{job.suiteName || job.suiteFile}</strong>
+                            <span>{chatwootJobStatusLabel(job.status)} · {formatHistoryDate(job.createdAt, languageMode)}</span>
+                          </button>
+                          {job.result?.files?.report ? (
+                            <a href={job.result.files.report.url} target="_blank" rel="noreferrer">
+                              {ui.chatwootOpenReport}
+                            </a>
+                          ) : null}
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+          </>
         ) : appView === "settings" ? (
           <>
             <header className="topbar">
@@ -4359,31 +6972,7 @@ function App() {
               </div>
             </header>
 
-            <section className="settings-layout">
-              <aside className="settings-section-nav" aria-label={ui.workspaceSettings}>
-                <button className={activeSettingsSection === "project" ? "active" : ""} type="button" onClick={() => setActiveSettingsSection("project")}>
-                  <Settings size={16} />
-                  <span>{ui.project}</span>
-                </button>
-                <button className={activeSettingsSection === "auth" ? "active" : ""} type="button" onClick={() => setActiveSettingsSection("auth")}>
-                  <ShieldCheck size={16} />
-                  <span>{ui.authentication}</span>
-                </button>
-                <button className={activeSettingsSection === "ai" ? "active" : ""} type="button" onClick={() => setActiveSettingsSection("ai")}>
-                  <Wand2 size={16} />
-                  <span>{ui.aiSettings}</span>
-                  {aiSettingsImprovePending ? (
-                    <span className="nav-badge" title={ui.aiSettingsPendingImprove} aria-label={ui.aiSettingsPendingImprove}>
-                      <Wand2 size={11} />
-                    </span>
-                  ) : null}
-                </button>
-                <button className={activeSettingsSection === "knowledgeAi" ? "active" : ""} type="button" onClick={() => setActiveSettingsSection("knowledgeAi")}>
-                  <BookOpen size={16} />
-                  <span>{ui.knowledgeAiSettings}</span>
-                </button>
-              </aside>
-
+            <section className="settings-layout settings-layout-single">
               <div className="settings-content">
               {activeSettingsSection === "project" ? (
               <section className="panel settings-panel">
@@ -4481,6 +7070,314 @@ function App() {
                   </IconButton>
                 </div>
                 {settingsStatus.project ? <div className="mini-note">{settingsStatus.project}</div> : null}
+              </section>
+              ) : null}
+
+              {activeSettingsSection === "automation" ? (
+              <section className="panel settings-panel automation-settings-panel">
+                <div className="panel-title automation-panel-title">
+                  <span className="panel-title-main">
+                    <Bot size={18} />
+                    <h2>{ui.automationSettings}</h2>
+                  </span>
+                  {!automationEditorOpen ? (
+                    <IconButton icon={<Plus size={15} />} onClick={openNewAutomationConnector} disabled={Boolean(settingsBusy)} variant="primary">
+                      {ui.createConnector}
+                    </IconButton>
+                  ) : null}
+                </div>
+                {!automationEditorOpen ? (
+                  <>
+                <div className="automation-agent-layout">
+                  <div className="automation-agent-list-panel">
+                    <div className="subhead">
+                      <span>{ui.chatwootSavedAgentList}</span>
+                      <small>{chatwootAgentProfiles.length ? `${chatwootAgentProfiles.length} ${ui.chatwootAgents.toLowerCase()}` : ""}</small>
+                    </div>
+                    {chatwootAgentProfiles.length ? (
+                      <div className="automation-agent-table" role="table" aria-label={ui.chatwootSavedAgentList}>
+                        <div className="automation-agent-table-head" role="row">
+                          <span>{ui.chatwootAgentName}</span>
+                          <span>{ui.chatwootInboxId}</span>
+                          <span>{ui.chatwootUiInboxId}</span>
+                          <span>{ui.chatwootCaptainAssistantId}</span>
+                          <span>{ui.chatwootPlannerBackend}</span>
+                          <span>{ui.chatwootLabels}</span>
+                          <span></span>
+                        </div>
+                        {chatwootAgentProfiles.map((profile) => (
+                          <article className={selectedChatwootAgentId === profile.id ? "automation-agent-row selected" : "automation-agent-row"} key={profile.id} role="row">
+                            <div className="automation-agent-name-cell">
+                              <strong>{profile.name}</strong>
+                              <small>{automationTargetLabels[profile.targetType] || ui.automationTargetOther} · {profile.config.chatwootApiBase || "-"}</small>
+                              <small>{formatHistoryDate(profile.updatedAt, languageMode)}</small>
+                            </div>
+                            <span className="automation-agent-cell" data-label={ui.chatwootInboxId}>{profile.config.chatwootInboxId || "-"}</span>
+                            <span className="automation-agent-cell" data-label={ui.chatwootUiInboxId}>{profile.config.chatwootUiInboxId || profile.config.chatwootInboxId || "-"}</span>
+                            <span className="automation-agent-cell" data-label={ui.chatwootCaptainAssistantId}>{profile.config.chatwootCaptainAssistantId || "-"}</span>
+                            <span className="automation-agent-cell" data-label={ui.chatwootPlannerBackend}>
+                              <strong>{chatwootPlannerBackendLabel(profile.config.chatwootPlannerBackend)}</strong>
+                              <small>{ui.chatwootPlannerModelSource}: {chatwootPlannerModelLabel(profile.config.chatwootPlannerBackend, profile.config.chatwootPlannerModel)}</small>
+                            </span>
+                            <span className="automation-agent-cell" data-label={ui.chatwootLabels}>
+                              <strong>{profile.config.chatwootLabels || "-"}</strong>
+                              <small>{ui.chatwootAssigneeName}: {profile.config.chatwootAssigneeName || "-"}</small>
+                            </span>
+                            <div className="automation-profile-card-actions">
+                              <button className="tiny" type="button" onClick={() => applyAutomationProfile(profile)} disabled={Boolean(settingsBusy)}>
+                                {ui.applyAutomationProfile}
+                              </button>
+                              <button className="tiny" type="button" onClick={() => editAutomationProfile(profile)} disabled={Boolean(settingsBusy)}>
+                                {ui.editConnector}
+                              </button>
+                              <button className="tiny danger" type="button" onClick={() => void deleteAutomationProfile(profile)} disabled={Boolean(settingsBusy)}>
+                                {ui.deleteAutomationProfile}
+                              </button>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mini-note">{ui.chatwootNoAgents}</div>
+                    )}
+                  </div>
+                </div>
+                  </>
+                ) : (
+                  <>
+                <div className="automation-editor-nav">
+                  <button className="tiny" type="button" onClick={closeAutomationConnectorEditor} disabled={Boolean(settingsBusy)}>
+                    <ArrowLeft size={14} />
+                    {ui.backToConnectors}
+                  </button>
+                </div>
+                <p className="panel-help automation-editor-help">{ui.automationSettingsHelp}</p>
+                <div className="automation-agent-editor">
+                  <div className="subhead">
+                    <span>{ui.chatwootAgentEditor}</span>
+                    <small>{ui.automationProfileChangedFieldsCopy}</small>
+                  </div>
+                  <div className="form-grid automation-agent-form">
+                    <Field
+                      label={automationProfileTargetType === "chatwoot" ? ui.chatwootAgentName : ui.automationProfileName}
+                      value={automationProfileName}
+                      onChange={setAutomationProfileName}
+                      placeholder={automationProfileTargetType === "chatwoot" ? ui.chatwootAgentNamePlaceholder : defaultAutomationProfileName(project) || ui.automationProfileNamePlaceholder}
+                    />
+                    <label className="field">
+                      <span>{ui.automationTargetType}</span>
+                      <select value={automationProfileTargetType} onChange={(event) => setAutomationProfileTargetType(event.target.value as AutomationProfile["targetType"])}>
+                        <option value="chatwoot">{ui.automationTargetChatwoot}</option>
+                        <option value="web">{ui.automationTargetWeb}</option>
+                        <option value="api">{ui.automationTargetApi}</option>
+                        <option value="other">{ui.automationTargetOther}</option>
+                      </select>
+                    </label>
+                  </div>
+                  <Field label={ui.chatwootApiBase} value={project.chatwootApiBase} onChange={(value) => setProjectValue("chatwootApiBase", value)} placeholder="https://uat-omniagent.vexere.net" />
+                  <div className="automation-agent-save-row">
+                    <small>{ui.chatwootApiBase}: {project.chatwootApiBase || "-"} · {ui.chatwootInboxId}: {project.chatwootInboxId || "-"} · {ui.chatwootCaptainAssistantId}: {project.chatwootCaptainAssistantId || "-"}</small>
+                    <div className="button-row compact-actions">
+                      <IconButton
+                        icon={settingsBusy === "automation" ? <Loader2 className="spin" size={15} /> : <Save size={15} />}
+                        onClick={() => void saveAutomationProfile()}
+                        disabled={Boolean(settingsBusy)}
+                        variant="primary"
+                      >
+                        {automationProfileTargetType === "chatwoot" ? ui.saveChatwootAgent : ui.saveAutomationProfile}
+                      </IconButton>
+                      <IconButton icon={<X size={15} />} onClick={closeAutomationConnectorEditor} disabled={Boolean(settingsBusy)}>
+                        {ui.cancelConnector}
+                      </IconButton>
+                    </div>
+                  </div>
+                </div>
+                <div className="label-policy automation-config-block">
+                  <div className="subhead">
+                    <span>{ui.automationAgentSection}</span>
+                    <small>{ui.automationAgentHelp}</small>
+                  </div>
+                  <div className="form-grid">
+                    <Field label={ui.chatwootInboxId} value={project.chatwootInboxId} onChange={(value) => setProjectValue("chatwootInboxId", value)} placeholder="3062" />
+                    <Field label={ui.chatwootUiInboxId} value={project.chatwootUiInboxId} onChange={(value) => setProjectValue("chatwootUiInboxId", value)} placeholder="3062" />
+                    <Field label={ui.chatwootCaptainAssistantId} value={project.chatwootCaptainAssistantId} onChange={(value) => setProjectValue("chatwootCaptainAssistantId", value)} placeholder="80" />
+                    <Field label={ui.chatwootAccountId} value={project.chatwootAccountId} onChange={(value) => setProjectValue("chatwootAccountId", value)} placeholder="3" />
+                  </div>
+                </div>
+                <div className="label-policy">
+                  <div className="subhead">
+                    <span>{ui.automationRunSection}</span>
+                    <small>{ui.automationRunBehaviorHelp}</small>
+                  </div>
+                  <div className="form-grid">
+                    <label className="field">
+                      <span>{ui.chatwootRunnerMode}</span>
+                      <select value={project.chatwootMode} onChange={(event) => setProjectValue("chatwootMode", event.target.value as ProjectConfig["chatwootMode"])}>
+                        <option value="adaptive">{ui.chatwootAdaptiveMode}</option>
+                        <option value="suite">{ui.chatwootSuiteMode}</option>
+                      </select>
+                    </label>
+                    <div
+                      className="field planner-field"
+                      onBlur={(event) => {
+                        const nextTarget = event.relatedTarget;
+                        if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+                          setPlannerMenuOpen(false);
+                        }
+                      }}
+                    >
+                      <span>{ui.chatwootPlannerBackend}</span>
+                      <div className="planner-select">
+                        <button
+                          type="button"
+                          className={`planner-select-trigger ${plannerMenuOpen ? "open" : ""}`}
+                          aria-label={chatwootPlannerBackendLabel(project.chatwootPlannerBackend)}
+                          aria-haspopup="listbox"
+                          aria-expanded={plannerMenuOpen}
+                          onClick={() => setPlannerMenuOpen((open) => !open)}
+                        >
+                          <strong>{chatwootPlannerBackendLabel(project.chatwootPlannerBackend)}</strong>
+                          <span className="planner-select-icons">
+                            <span
+                              className="planner-option-help"
+                              aria-label={chatwootPlannerBackendHelp(project.chatwootPlannerBackend)}
+                              data-tooltip={chatwootPlannerBackendHelp(project.chatwootPlannerBackend)}
+                            >
+                              <AlertCircle size={14} />
+                            </span>
+                            <ChevronDown size={18} />
+                          </span>
+                        </button>
+                        {plannerMenuOpen ? (
+                          <div className="planner-menu" role="listbox" aria-label={ui.chatwootPlannerBackend}>
+                            {(["openai-compatible", "heuristic", "codex-cli"] as ProjectConfig["chatwootPlannerBackend"][]).map((value) => {
+                              const selected = project.chatwootPlannerBackend === value;
+                              const help = chatwootPlannerBackendHelp(value);
+                              return (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  className={`planner-menu-option ${selected ? "selected" : ""}`}
+                                  aria-label={chatwootPlannerBackendLabel(value)}
+                                  role="option"
+                                  aria-selected={selected}
+                                  onClick={() => {
+                                    setChatwootPlannerBackend(value);
+                                    setPlannerMenuOpen(false);
+                                  }}
+                                >
+                                  <span>
+                                    <strong>{chatwootPlannerBackendLabel(value)}</strong>
+                                    <small>{help}</small>
+                                  </span>
+                                  <span className="planner-option-info" aria-hidden="true">
+                                    <AlertCircle size={14} />
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                    <label className="field">
+                      <span>{ui.chatwootChatUiMode}</span>
+                      <select value={project.chatwootChatUiMode} onChange={(event) => setProjectValue("chatwootChatUiMode", event.target.value as ProjectConfig["chatwootChatUiMode"])}>
+                        <option value="realistic">{ui.chatwootChatRealistic}</option>
+                        <option value="webhook-only">{ui.chatwootChatWebhookOnly}</option>
+                      </select>
+                    </label>
+                    <Field label={ui.chatwootMaxUserTurns} value={project.chatwootMaxUserTurns} onChange={(value) => setProjectValue("chatwootMaxUserTurns", value)} placeholder="10" />
+                  </div>
+                  <div className="form-grid">
+                    {project.chatwootPlannerBackend === "openai-compatible" ? (
+                      <div className="field">
+                        <span>{ui.chatwootPlannerModelSource}</span>
+                        <div className="planner-model-card">
+                          <strong>{aiSettingsPlannerModel || ui.chatwootPlannerModelMissing}</strong>
+                          <small>{ui.chatwootPlannerModelAiSettings}</small>
+                        </div>
+                      </div>
+                    ) : project.chatwootPlannerBackend === "codex-cli" ? (
+                      <Field
+                        label={ui.chatwootPlannerModelSource}
+                        value={project.chatwootPlannerModel}
+                        onChange={(value) => setProjectValue("chatwootPlannerModel", value)}
+                        placeholder={aiSettingsPlannerModel || "gpt-5.4-mini"}
+                      />
+                    ) : (
+                      <div className="field">
+                        <span>{ui.chatwootPlannerModelSource}</span>
+                        <div className="planner-model-card muted">
+                          <strong>{ui.chatwootPlannerModelNotUsed}</strong>
+                          <small>{ui.chatwootPlannerModelNotUsedHelp}</small>
+                        </div>
+                      </div>
+                    )}
+                    {project.chatwootPlannerBackend === "heuristic" ? (
+                      <div className="field">
+                        <span>{ui.chatwootPlannerTimeoutSeconds}</span>
+                        <div className="planner-model-card muted">
+                          <strong>{ui.chatwootPlannerModelNotUsed}</strong>
+                          <small>{ui.chatwootPlannerTimeoutNotUsedHelp}</small>
+                        </div>
+                      </div>
+                    ) : (
+                      <Field
+                        label={ui.chatwootPlannerTimeoutSeconds}
+                        value={project.chatwootPlannerTimeoutSeconds}
+                        onChange={(value) => setProjectValue("chatwootPlannerTimeoutSeconds", value)}
+                        placeholder="60"
+                      />
+                    )}
+                  </div>
+                </div>
+                <div className="label-policy">
+                  <div className="subhead">
+                    <span>{ui.automationAdvancedSection}</span>
+                    <small>{ui.automationAdvancedHelp}</small>
+                  </div>
+                  <Field label={ui.chatwootWebhookUrl} value={project.chatwootWebhookUrl} onChange={(value) => setProjectValue("chatwootWebhookUrl", value)} placeholder={chatwootInfo?.defaultWebhookUrl || "http://host.docker.internal:3000/webhook/chatwoot"} />
+                  <Field label={ui.chatwootHealthcheckUrl} value={project.chatwootHealthcheckUrl} onChange={(value) => setProjectValue("chatwootHealthcheckUrl", value)} placeholder={chatwootInfo?.defaultHealthcheckUrl || "http://host.docker.internal:3000/health"} />
+                  <div className="form-grid">
+                    <Field label={ui.chatwootLabels} value={project.chatwootLabels} onChange={(value) => setProjectValue("chatwootLabels", value)} placeholder="ai,booking" />
+                    <Field label={ui.chatwootAssigneeName} value={project.chatwootAssigneeName} onChange={(value) => setProjectValue("chatwootAssigneeName", value)} placeholder="Bot" />
+                    <Field label={ui.chatwootPinnedConversationId} value={project.chatwootPinnedConversationId} onChange={(value) => setProjectValue("chatwootPinnedConversationId", value)} placeholder="29131" />
+                  </div>
+                  <label className="toggle-row compact-toggle">
+                    <input
+                      type="checkbox"
+                      checked={project.chatwootSkipLocalWebhookPost}
+                      onChange={(event) => setProjectValue("chatwootSkipLocalWebhookPost", event.target.checked)}
+                    />
+                    <span>
+                      <strong>{ui.chatwootSkipLocalWebhookPost}</strong>
+                    </span>
+                  </label>
+                  <label className="toggle-row compact-toggle">
+                    <input
+                      type="checkbox"
+                      checked={project.chatwootSkipHealthcheck}
+                      onChange={(event) => setProjectValue("chatwootSkipHealthcheck", event.target.checked)}
+                    />
+                    <span>
+                      <strong>{ui.chatwootSkipHealthcheck}</strong>
+                    </span>
+                  </label>
+                </div>
+                <div className="button-row">
+                  <IconButton
+                    icon={settingsBusy === "automation" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+                    onClick={() => saveUserSettings("automation")}
+                    disabled={Boolean(settingsBusy) || !settingsDirty.automation}
+                    variant="primary"
+                  >
+                    {ui.save}
+                  </IconButton>
+                </div>
+                  </>
+                )}
+                {settingsStatus.automation ? <div className="mini-note">{settingsStatus.automation}</div> : null}
               </section>
               ) : null}
 
@@ -4726,6 +7623,16 @@ function App() {
                         </>
                       ) : null
                     }
+                  />
+                </div>
+                <div className="ai-stop-condition-editor">
+                  <Field
+                    label={ui.aiStopConditionGuidelines}
+                    value={aiSettings.stopConditionGuidelines}
+                    onChange={(value) => setAiSettingValue("stopConditionGuidelines", value)}
+                    textarea
+                    rows={6}
+                    placeholder={ui.aiStopConditionGuidelinesPlaceholder}
                   />
                 </div>
                 <div className="button-row ai-save-row">
@@ -5010,6 +7917,61 @@ function App() {
           </section>
         ) : null}
 
+        {testCases.length ? (
+          <section className="panel result-overview">
+            <div className="result-overview-copy">
+              <p className="eyebrow">{ui.draftResultTitle}</p>
+              <h2>{issue.key || issueKeyFromText(jiraUrl) || ui.runTitleEmpty}</h2>
+              <p>{issue.summary || ui.draftResultHelp}</p>
+            </div>
+            <div className="result-overview-metrics">
+              <span>
+                <strong>{testCases.length}</strong>
+                {ui.testCasesMetric}
+              </span>
+              <span>
+                <strong>{outline.branches.length}</strong>
+                {ui.branchesMetric}
+              </span>
+              <span>
+                <strong>{qualityItems.filter((item) => !item.ok).length}</strong>
+                {ui.qualityTitle}
+              </span>
+            </div>
+            <div className="button-row result-overview-actions">
+              <IconButton icon={<FileText size={16} />} onClick={() => setSourceConfigOpen(true)}>
+                {ui.editSourceConfig}
+              </IconButton>
+              <IconButton icon={busy === "draft" ? <Loader2 className="spin" size={16} /> : <Wand2 size={16} />} onClick={generateDraft} disabled={isWorking} variant="success">
+                {ui.regenerateDraft}
+              </IconButton>
+              <IconButton icon={busy === "workspace" ? <Loader2 className="spin" size={16} /> : <Save size={16} />} onClick={saveCurrentToWorkspace} disabled={isWorking || testCases.length === 0}>
+                {ui.saveToWorkspace}
+              </IconButton>
+              {testCases.length ? (
+                <IconButton icon={busy === "stopPatterns" ? <Loader2 className="spin" size={16} /> : <Wand2 size={16} />} onClick={refreshCurrentStopPatterns} disabled={isWorking || testCases.length === 0}>
+                  {currentStopPatternStats.needs ? ui.workspaceRefreshStopPatterns : ui.workspaceRefreshStopPatternsAgain}
+                </IconButton>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        <details
+          className={testCases.length ? "source-config-drawer" : "source-config-drawer setup-mode"}
+          open={!testCases.length || sourceConfigOpen}
+          onToggle={(event) => {
+            if (testCases.length) setSourceConfigOpen(event.currentTarget.open);
+          }}
+        >
+          <summary className="source-config-summary">
+            <span>
+              <Settings size={16} />
+              <strong>{ui.sourceConfigTitle}</strong>
+              <small>{ui.sourceConfigHelp}</small>
+            </span>
+            <ChevronDown size={16} />
+          </summary>
         <section className="issue-grid">
           <div className="issue-main-column">
             <div className="panel">
@@ -5115,9 +8077,29 @@ function App() {
 
           <div className="issue-side-column">
             <div className="panel jira-task-panel">
-            <div className="panel-title">
-              <Link size={18} />
-              <h2>{ui.jiraTask}</h2>
+            <div className="panel-title jira-panel-title">
+              <span className="jira-panel-heading">
+                <Link size={18} />
+                <h2>{ui.jiraTask}</h2>
+              </span>
+              <details className="readiness-compact">
+                <summary>
+                  {readinessItems.every((item) => item.ok) ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                  <span>{ui.readinessTitle}</span>
+                  <small>{readinessItems.filter((item) => item.ok).length}/{readinessItems.length}</small>
+                </summary>
+                <div className="readiness-compact-list">
+                  {readinessItems.map((item) => (
+                    <div className={item.ok ? "readiness-item ok" : "readiness-item warn"} key={item.id}>
+                      {item.ok ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
+                      <span>
+                        <strong>{item.label}</strong>
+                        <small>{item.detail}</small>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </details>
             </div>
             <Field
               label={ui.jiraUrlIssueKey}
@@ -5167,25 +8149,9 @@ function App() {
                 {ui.generateDraft}
               </IconButton>
             </div>
-            <div className="readiness-panel">
-              <div className="subhead">
-                <span>{ui.readinessTitle}</span>
-              </div>
-              <div className="readiness-list">
-                {readinessItems.map((item) => (
-                  <div className={item.ok ? "readiness-item ok" : "readiness-item warn"} key={item.id}>
-                    {item.ok ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
-                    <span>
-                      <strong>{item.label}</strong>
-                      <small>{item.detail}</small>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
             </div>
 
-          <div className="panel">
+          <div className="panel design-lens-panel">
             <div className="panel-title">
               <GitBranch size={18} />
               <h2>{ui.designLens}</h2>
@@ -5259,8 +8225,22 @@ function App() {
           </div>
           </div>
         </section>
+        </details>
 
         {testCases.length ? (
+          <details
+            className="result-action-drawer"
+            open={improvePanelOpen}
+            onToggle={(event) => setImprovePanelOpen(event.currentTarget.open)}
+          >
+            <summary className="source-config-summary">
+              <span>
+                <Wand2 size={16} />
+                <strong>{ui.improveDraftTitle}</strong>
+                <small>{ui.improveDraftHelp}</small>
+              </span>
+              <ChevronDown size={16} />
+            </summary>
           <section className="panel improve-panel">
             <div className="section-heading">
               <div>
@@ -5283,11 +8263,11 @@ function App() {
             <div className="button-row improve-actions">
               <IconButton
                 icon={busy === "promptImprove" ? <Loader2 className="spin" size={16} /> : <Wand2 size={16} />}
-                onClick={improvePromptWithAi}
+                onClick={improveDraftWithAi}
                 disabled={isWorking || !savedAiSettings.enabled}
                 variant="success"
               >
-                {ui.improvePromptButton}
+                {ui.improveDraftButton}
               </IconButton>
             </div>
             {promptImproveStatus ? (
@@ -5297,7 +8277,7 @@ function App() {
               <PromptImprovePreview
                 ui={ui}
                 proposal={draftPromptProposal}
-                applyLabel={ui.applyPromptImproveAndRegenerate}
+                applyLabel={ui.applyPromptImprove}
                 busy={busy === "promptImprove"}
                 onCompare={() =>
                   setPromptCompare({
@@ -5317,6 +8297,7 @@ function App() {
             ) : null}
             {!savedAiSettings.enabled ? <div className="mini-note">{ui.improveRequiresAi}</div> : null}
           </section>
+          </details>
         ) : null}
 
         <nav className="tabs">
@@ -5581,6 +8562,61 @@ function App() {
         ) : null}
           </>
         )}
+      {chatwootConfirmOpen ? (
+        <div className="field-expand-backdrop history-compare-backdrop" role="presentation" onMouseDown={() => setChatwootConfirmOpen(false)}>
+          <section
+            className="field-expand-panel chatwoot-confirm-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="chatwoot-confirm-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="field-expand-header">
+              <div>
+                <h2 id="chatwoot-confirm-title">{ui.chatwootConfirmTitle}</h2>
+                <small>{ui.chatwootConfirmCopy}</small>
+              </div>
+              <button className="field-expand-close" type="button" onClick={() => setChatwootConfirmOpen(false)} aria-label={ui.chatwootCancelRun}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="chatwoot-confirm-summary">
+              <div>
+                <span>{ui.chatwootSuite}</span>
+                <strong>{selectedChatwootSuite?.suiteName || chatwootForm.suiteFile}</strong>
+                <small>{selectedChatwootSuite?.goalSummary || selectedChatwootSuite?.relativePath}</small>
+              </div>
+              <div>
+                <span>{ui.chatwootStatus}</span>
+                <strong>{chatwootModeLabel(effectiveChatwootRunMode)} · {chatwootChatUiModeLabel(effectiveChatwootChatUiMode)} · {chatwootRunUsesPlanner ? chatwootPlannerBackendLabel(effectiveChatwootPlannerBackend) : ui.chatwootPlannerDisabledForFixed}</strong>
+                <small>{chatwootAutomationConfig.chatwootSkipLocalWebhookPost ? ui.chatwootSkipLocalWebhookPost : chatwootAutomationConfig.chatwootWebhookUrl}</small>
+              </div>
+              <div>
+                <span>{ui.chatwootCaseSelection}</span>
+                <strong>
+                  {chatwootRunAllCases
+                    ? `${ui.chatwootWillRunAllCases} ${selectedChatwootSuite?.caseCount || selectedChatwootCases.length || ""}`.trim()
+                    : `${chatwootEffectiveSelectedCaseCount}/${selectedChatwootCases.length} ${ui.chatwootSelectedCases}`}
+                </strong>
+                <small>{chatwootRunAllCases ? ui.chatwootRunAllCases : chatwootSelectedCaseIds.slice(0, 5).join(", ")}</small>
+              </div>
+              <div>
+                <span>{ui.chatwootAgent}</span>
+                <strong>{selectedChatwootAgent?.name || "-"}</strong>
+                <small>{ui.chatwootInboxId}: {chatwootAutomationConfig.chatwootInboxId || "-"} · {ui.chatwootUiInboxId}: {chatwootAutomationConfig.chatwootUiInboxId || "-"} · {ui.chatwootCaptainAssistantId}: {chatwootAutomationConfig.chatwootCaptainAssistantId || "-"}</small>
+              </div>
+            </div>
+            <div className="button-row end-actions">
+              <IconButton icon={<X size={16} />} onClick={() => setChatwootConfirmOpen(false)}>
+                {ui.chatwootCancelRun}
+              </IconButton>
+              <IconButton icon={chatwootBusy === "run" ? <Loader2 className="spin" size={16} /> : <Play size={16} />} onClick={startChatwootUatJob} disabled={Boolean(chatwootBusy) || !selectedChatwootAgent} variant="primary">
+                {ui.chatwootStartRun}
+              </IconButton>
+            </div>
+          </section>
+        </div>
+      ) : null}
       {promptCompare ? (
         <div className="field-expand-backdrop history-compare-backdrop" role="presentation" onMouseDown={() => setPromptCompare(null)}>
           <section

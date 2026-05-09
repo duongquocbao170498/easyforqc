@@ -41,14 +41,10 @@ Every test case must include:
 - `Title`
   - always starts with `[TC_0001] ...`
 - `Precondition`
-- `Steps`
-  - use 3-4 clear tester actions for the scenario, like the existing `ai_703`, `ai_704`, and `ai_707` suites
-  - each step is one Zephyr Test Player row; do not merge all actions into one paragraph
+- `Step`
 - `Test Data`
   - for chatbot/tool flows, this must be the real user messages
-  - for UI/reporting/integration flows, this must be a concrete dataset or named variant, not generic placeholder text
 - `Expected Result`
-  - write multiline bullet points so Jira/Zephyr is readable
 
 Preferred local JSON fields for stronger reusable design:
 
@@ -91,22 +87,26 @@ Use `structured_steps` when per-step test data and expected result matter:
 
 ## Persistent User Preference
 
-For future Jira QA tasks that may later sync into NocoDB:
+For future Jira QA tasks that may later sync into NocoDB or generate Chatwoot UAT suites:
 
 - keep Jira as `1 testcase = 1 scenario`
-- write testcase structure in the same style as the existing OmniAgent suites such as `ai_703_test_cases.json`, `ai_704_test_cases.json`, and `ai_707_test_cases_v2.json`: strong scenario title, concrete precondition, 3-4 action steps, realistic test data, and bullet expected results
-- use those suites as writing examples only; the actual content must be derived from the current Jira task, comments, acceptance criteria, and relevant docs
 - preserve Vietnamese text with full diacritics in testcase title, precondition, step, test data, and expected result when the source task is in Vietnamese
-- keep `Test Data` in Jira as the full ordered user conversation for that scenario
+- keep `Test Data` in Jira as the full ordered user conversation for that scenario, including all prior setup messages required to reach the action under test; for example, if the title tests the final "Đặt luôn đi" turn, include the earlier route/date, trip time, pickup/dropoff, price/seat choice, and contact/passenger messages before that final confirmation
+- for normal multi-step Zephyr cases created from `steps`, put the full scenario `Test Data` only on step 1; leave later step `Test Data` empty unless the case intentionally uses `structured_steps` with different per-step inputs
+- do not fill step 2/3 by copying the same `Test Data` from step 1; later steps should describe execution/checking actions such as sending the final message, checking trace, or verifying output
 - render `Test Data` as numbered lines:
   - `1. "..."`  
   - `2. "..."`  
   - `3. "..."`
 - each numbered line must contain exactly one user message, not multiple messages merged into one line
+- for chatbot/tool flows, write each numbered line as either the exact user message to replay or a clear user intent that can be adapted by `chatwoot-test-uat`; do not mix bot replies into `Test Data`
+- keep the order of user turns business-meaningful because `chatwoot-test-uat --mode adaptive` treats later lines as ordered intents such as changing trip time, changing seat, confirming passenger details, or asking for payment link
 - render `Expected Result` in Jira as multiline bullet points, not a semicolon-separated sentence
+- use explicit HTML line breaks `<br />` between numbered `Test Data` lines and between `Expected Result` bullets before importing to Zephyr; Zephyr test-player UI collapses plain newline `\n`, so do not rely on newline characters for display formatting
 - write strong scenario titles because the downstream NocoDB dataset may derive step identifiers from the Jira testcase title
+- never use ordinal tool aliases such as `Tool 1`, `Tool 2`, `Tool 3`, or `Toolchain` in testcase titles; use the exact tool names instead, for example `bus_trip_schedule_catalog_tool`, `bus_trip_stop_catalog_tool`, `bus_trip_price_options_tool`, `bus_trip_seat_map_tool`
 
-When the user also wants NocoDB sync via `sync-jira-test-cases-to-nocodb`, preserve enough structure in the local case JSON so the downstream sync can expand the scenario into step-based dataset rows.
+When the user also wants NocoDB sync via `sync-jira-test-cases-to-nocodb` or Chatwoot UAT execution via `chatwoot-test-uat`, preserve enough structure in the local case JSON so downstream skills can expand the scenario into step-based dataset rows or adaptive Chatwoot suite cases.
 
 ## Folder Naming Rule
 
@@ -292,10 +292,14 @@ Unless the user says otherwise, follow this pattern for future Jira QA tasks:
 5. Add all task test cases into that cycle
 6. Link the cycle back to the Jira issue via `issueKey`
 7. If requested, sync the same cases into NocoDB through `sync-jira-test-cases-to-nocodb`
-8. Keep Jira `Test Data` ready for step-based NocoDB expansion:
+8. Keep Jira `Test Data` ready for step-based NocoDB expansion and Chatwoot UAT suite generation:
    - one quoted user message per numbered line
+   - use `<br />` between numbered lines because Zephyr UI does not render plain newline reliably
+   - for chatbot/tool cases, include all user turns needed to reach the behavior under test, but do not include bot replies
+   - if the future run needs adaptive behavior, phrase each line as a user intent/message that can survive bot option changes
    - scenario title stable and descriptive
-   - `Expected Result` already formatted as multiline bullets
+   - scenario title uses exact tool names, not `Tool 1/2/3` or vague aliases
+   - `Expected Result` already formatted as multiline bullets separated with `<br />`
 
 ## Helper Script
 
@@ -403,6 +407,8 @@ Each case may contain:
   - string
 - `test_data`
 - `expected_result`
+- `scenario_type` or `case_mode`
+  - use `chatbot` or `tool` for multi-turn bot/tool flows so validation can warn when `test_data` is not written as numbered quoted user-message lines
 
 Example:
 
@@ -422,6 +428,23 @@ Example:
       "expected_result": "Callback được map đúng về conversation đã gửi link trước đó."
     }
   ]
+}
+```
+
+For chatbot/tool cases that will be reused by `chatwoot-test-uat`, prefer:
+
+```json
+{
+  "title": "Route-span booking đổi giờ và đổi ghế vẫn tạo booking có payment link",
+  "precondition": "UAT bot enabled, API inbox available, route-span tools available.",
+  "scenario_type": "chatbot",
+  "steps": [
+    "Gửi lần lượt các user intent trong Test Data qua bot.",
+    "Quan sát bot chọn tool/option đúng theo reply thực tế.",
+    "Xác nhận booking và kiểm tra link thanh toán."
+  ],
+  "test_data": "1. \"Sài Gòn đi Đà Lạt sáng mai có chuyến nào không?\"<br />2. \"Đổi sang chuyến tối mai\"<br />3. \"Chọn ghế còn trống theo bot gợi ý\"<br />4. \"Đặt luôn và gửi link thanh toán cho mình\"",
+  "expected_result": "- Bot giữ đúng route/date context<br />- Bot cho phép đổi giờ/ghế theo option thật đang có<br />- Bot tạo booking và gửi payment link"
 }
 ```
 

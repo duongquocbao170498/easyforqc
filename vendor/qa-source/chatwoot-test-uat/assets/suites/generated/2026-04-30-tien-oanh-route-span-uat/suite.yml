@@ -1,0 +1,2109 @@
+suite_name: tien-oanh-route-span-uat-passenger-55-case
+generated_at: '2026-04-30T08:11:54+07:00'
+goal_summary: Adaptive Chatwoot local booking suite for Tiến Oanh passenger trips on 01-05-2026, covering every live passenger schedule returned by bus_trip_schedule_catalog_tool for company_id=2. Each case starts a fresh conversation, uses max 15 user turns at runtime, prefers pickup/dropoff different from route endpoints when available, and includes mixed 1-ticket and 2-ticket cases with distinct passenger identities for 2-ticket bookings.
+source_trace:
+  generator: live-bus-trip-tools
+  company_id: '2'
+  company_name: Tiến Oanh
+  departure_date: 01-05-2026
+  route_count: 8
+  case_count: 55
+defaults:
+  webhook_url: http://localhost:3000/webhook/chatwoot
+  chat_ui_mode: realistic
+  ui_inbox_id: 3052
+  labels:
+  - ai
+  - tien-oanh
+  - route-span
+  - uat
+  assignee_name: Bot
+  reply_timeout_seconds: 300
+  reply_settle_seconds: 3
+  poll_interval_seconds: 2
+  inbox_id: 3049
+  captain_assistant_id: 80
+cases:
+- case_id: 01-sai-gon-da-lat-0500-44759756
+  title: 01. Sài Gòn - Đà Lạt 05:00 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đà Lạt on 01-05-2026 05:00 with 1 ticket, pickup Bến Xe Miền Đông Mới, dropoff Ngã 3 Madagui, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đà Lạt ngày 01-05-2026, chuyến 05:00. Anh muốn đón ở Bến Xe Miền Đông Mới và trả ở Ngã 3 Madagui. Hành khách tên Tran Minh An, số điện thoại 0908000001. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Tran Minh An
+    phone: 0908000001
+    email: qa.tienoanh.1@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Lâm Đồng
+    route_name: Sài Gòn - Đà Lạt
+    base_trip_id: '10613349'
+    trip_id: '44759756'
+    preferred_times:
+    - 05:00
+    preferred_pickup: Bến Xe Miền Đông Mới
+    preferred_dropoff: Ngã 3 Madagui
+    origin_selection_key_hint: origin:pickup:28861:178091:1730
+    destination_selection_key_hint: destination:dropoff:8852:159847:1063
+    ticket_count: 1
+    passenger_contacts:
+    - name: Tran Minh An
+      phone: 0908000001
+      email: qa.tienoanh.1@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 16
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 02-sai-gon-da-lat-0505-45107129
+  title: 02. Sài Gòn - Đà Lạt 05:05 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đà Lạt on 01-05-2026 05:05 with 1 ticket, pickup Bến Xe Miền Đông Mới, dropoff Ngã 3 Madagui, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đà Lạt ngày 01-05-2026, chuyến 05:05. Anh muốn đón ở Bến Xe Miền Đông Mới và trả ở Ngã 3 Madagui. Hành khách tên Le Quoc An, số điện thoại 0908000002. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Le Quoc An
+    phone: 0908000002
+    email: qa.tienoanh.2@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Lâm Đồng
+    route_name: Sài Gòn - Đà Lạt
+    base_trip_id: '10613349'
+    trip_id: '45107129'
+    preferred_times:
+    - 05:05
+    preferred_pickup: Bến Xe Miền Đông Mới
+    preferred_dropoff: Ngã 3 Madagui
+    origin_selection_key_hint: origin:pickup:28861:178091:1730
+    destination_selection_key_hint: destination:dropoff:8852:159847:1063
+    ticket_count: 1
+    passenger_contacts:
+    - name: Le Quoc An
+      phone: 0908000002
+      email: qa.tienoanh.2@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 23
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 03-sai-gon-da-lat-2300-44268447
+  title: 03. Sài Gòn - Đà Lạt 23:00 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đà Lạt on 01-05-2026 23:00 with 2 tickets, pickup Bến Xe Miền Đông Mới, dropoff Ngã 3 Madagui, and distinct per-ticket passenger identity carried through booking to payment link.
+  opening_prompt: Anh cần đặt 2 vé tuyến Sài Gòn - Đà Lạt ngày 01-05-2026, chuyến 23:00. Anh muốn đón ở Bến Xe Miền Đông Mới và trả ở Ngã 3 Madagui. Vé 1 tên Pham Quoc Binh, số điện thoại 0908000003. Vé 2 tên Hoang Thanh Binh, số điện thoại 0908000004. Nhờ em hỗ trợ đặt giúp anh, mỗi vé dùng đúng thông tin của từng khách nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Pham Quoc Binh
+    phone: 0908000003
+    email: qa.tienoanh.3@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Lâm Đồng
+    route_name: Sài Gòn - Đà Lạt
+    base_trip_id: '10613349'
+    trip_id: '44268447'
+    preferred_times:
+    - '23:00'
+    preferred_pickup: Bến Xe Miền Đông Mới
+    preferred_dropoff: Ngã 3 Madagui
+    origin_selection_key_hint: origin:pickup:28861:178091:1730
+    destination_selection_key_hint: destination:dropoff:8852:159847:1063
+    ticket_count: 2
+    passenger_contacts:
+    - name: Pham Quoc Binh
+      phone: 0908000003
+      email: qa.tienoanh.3@example.com
+    - name: Hoang Thanh Binh
+      phone: 0908000004
+      email: qa.tienoanh.4@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 18
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 04-sai-gon-da-lat-2315-44794084
+  title: 04. Sài Gòn - Đà Lạt 23:15 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đà Lạt on 01-05-2026 23:15 with 1 ticket, pickup Bến Xe Miền Đông Mới, dropoff Ngã 3 Madagui, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đà Lạt ngày 01-05-2026, chuyến 23:15. Anh muốn đón ở Bến Xe Miền Đông Mới và trả ở Ngã 3 Madagui. Hành khách tên Vo Thanh Binh, số điện thoại 0908000005. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Vo Thanh Binh
+    phone: 0908000005
+    email: qa.tienoanh.5@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Lâm Đồng
+    route_name: Sài Gòn - Đà Lạt
+    base_trip_id: '10613349'
+    trip_id: '44794084'
+    preferred_times:
+    - '23:15'
+    preferred_pickup: Bến Xe Miền Đông Mới
+    preferred_dropoff: Ngã 3 Madagui
+    origin_selection_key_hint: origin:pickup:28861:178091:1730
+    destination_selection_key_hint: destination:dropoff:8852:159847:1063
+    ticket_count: 1
+    passenger_contacts:
+    - name: Vo Thanh Binh
+      phone: 0908000005
+      email: qa.tienoanh.5@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 18
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 05-sai-gon-da-lat-2320-44759997
+  title: 05. Sài Gòn - Đà Lạt 23:20 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đà Lạt on 01-05-2026 23:20 with 1 ticket, pickup Bến Xe Miền Đông Mới, dropoff Ngã 3 Madagui, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đà Lạt ngày 01-05-2026, chuyến 23:20. Anh muốn đón ở Bến Xe Miền Đông Mới và trả ở Ngã 3 Madagui. Hành khách tên Dang Gia Chau, số điện thoại 0908000006. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Dang Gia Chau
+    phone: 0908000006
+    email: qa.tienoanh.6@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Lâm Đồng
+    route_name: Sài Gòn - Đà Lạt
+    base_trip_id: '10613349'
+    trip_id: '44759997'
+    preferred_times:
+    - '23:20'
+    preferred_pickup: Bến Xe Miền Đông Mới
+    preferred_dropoff: Ngã 3 Madagui
+    origin_selection_key_hint: origin:pickup:28861:178091:1730
+    destination_selection_key_hint: destination:dropoff:8852:159847:1063
+    ticket_count: 1
+    passenger_contacts:
+    - name: Dang Gia Chau
+      phone: 0908000006
+      email: qa.tienoanh.6@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 22
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 06-sai-gon-da-lat-2330-44764011
+  title: 06. Sài Gòn - Đà Lạt 23:30 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đà Lạt on 01-05-2026 23:30 with 2 tickets, pickup Bến Xe Miền Đông Mới, dropoff Ngã 3 Madagui, and distinct per-ticket passenger identity carried through booking to payment link.
+  opening_prompt: Anh cần đặt 2 vé tuyến Sài Gòn - Đà Lạt ngày 01-05-2026, chuyến 23:30. Anh muốn đón ở Bến Xe Miền Đông Mới và trả ở Ngã 3 Madagui. Vé 1 tên Bui Gia Chau, số điện thoại 0908000007. Vé 2 tên Do Anh Chau, số điện thoại 0908000008. Nhờ em hỗ trợ đặt giúp anh, mỗi vé dùng đúng thông tin của từng khách nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Bui Gia Chau
+    phone: 0908000007
+    email: qa.tienoanh.7@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Lâm Đồng
+    route_name: Sài Gòn - Đà Lạt
+    base_trip_id: '10613349'
+    trip_id: '44764011'
+    preferred_times:
+    - '23:30'
+    preferred_pickup: Bến Xe Miền Đông Mới
+    preferred_dropoff: Ngã 3 Madagui
+    origin_selection_key_hint: origin:pickup:28861:178091:1730
+    destination_selection_key_hint: destination:dropoff:8852:159847:1063
+    ticket_count: 2
+    passenger_contacts:
+    - name: Bui Gia Chau
+      phone: 0908000007
+      email: qa.tienoanh.7@example.com
+    - name: Do Anh Chau
+      phone: 0908000008
+      email: qa.tienoanh.8@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 20
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 07-sai-gon-da-lat-2345-44800729
+  title: 07. Sài Gòn - Đà Lạt 23:45 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đà Lạt on 01-05-2026 23:45 with 1 ticket, pickup Bến Xe Miền Đông Mới, dropoff Ngã 3 Madagui, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đà Lạt ngày 01-05-2026, chuyến 23:45. Anh muốn đón ở Bến Xe Miền Đông Mới và trả ở Ngã 3 Madagui. Hành khách tên Phan Anh Dung, số điện thoại 0908000009. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Phan Anh Dung
+    phone: 0908000009
+    email: qa.tienoanh.9@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Lâm Đồng
+    route_name: Sài Gòn - Đà Lạt
+    base_trip_id: '10613349'
+    trip_id: '44800729'
+    preferred_times:
+    - '23:45'
+    preferred_pickup: Bến Xe Miền Đông Mới
+    preferred_dropoff: Ngã 3 Madagui
+    origin_selection_key_hint: origin:pickup:28861:178091:1730
+    destination_selection_key_hint: destination:dropoff:8852:159847:1063
+    ticket_count: 1
+    passenger_contacts:
+    - name: Phan Anh Dung
+      phone: 0908000009
+      email: qa.tienoanh.9@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 24
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 08-sai-gon-dak-lak-bxmd-2105-44625004
+  title: 08. Sài Gòn - Đăk Lăk (BXMĐ) 21:05 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (BXMĐ) on 01-05-2026 21:05 with 1 ticket, pickup Văn Phòng Thủ Đức, dropoff Chợ Hoà Phú, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đăk Lăk (BXMĐ) ngày 01-05-2026, chuyến 21:05. Anh muốn đón ở Văn Phòng Thủ Đức và trả ở Chợ Hoà Phú. Hành khách tên Huynh Bao Dung, số điện thoại 0908000010. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Huynh Bao Dung
+    phone: 0908000010
+    email: qa.tienoanh.10@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (BXMĐ)
+    base_trip_id: '32628284'
+    trip_id: '44625004'
+    preferred_times:
+    - '21:05'
+    preferred_pickup: Văn Phòng Thủ Đức
+    preferred_dropoff: Chợ Hoà Phú
+    origin_selection_key_hint: origin:pickup:28804:159093:1730
+    destination_selection_key_hint: destination:dropoff:22707:190012:1731
+    ticket_count: 1
+    passenger_contacts:
+    - name: Huynh Bao Dung
+      phone: 0908000010
+      email: qa.tienoanh.10@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 24
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 09-sai-gon-dak-lak-bxmd-2115-44625005
+  title: 09. Sài Gòn - Đăk Lăk (BXMĐ) 21:15 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (BXMĐ) on 01-05-2026 21:15 with 2 tickets, pickup Văn Phòng Thủ Đức, dropoff Chợ Hoà Phú, and distinct per-ticket passenger identity carried through booking to payment link.
+  opening_prompt: Anh cần đặt 2 vé tuyến Sài Gòn - Đăk Lăk (BXMĐ) ngày 01-05-2026, chuyến 21:15. Anh muốn đón ở Văn Phòng Thủ Đức và trả ở Chợ Hoà Phú. Vé 1 tên Truong Bao Dung, số điện thoại 0908000011. Vé 2 tên Duong Hoang Giang, số điện thoại 0908000012. Nhờ em hỗ trợ đặt giúp anh, mỗi vé dùng đúng thông tin của từng khách nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Truong Bao Dung
+    phone: 0908000011
+    email: qa.tienoanh.11@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (BXMĐ)
+    base_trip_id: '32628284'
+    trip_id: '44625005'
+    preferred_times:
+    - '21:15'
+    preferred_pickup: Văn Phòng Thủ Đức
+    preferred_dropoff: Chợ Hoà Phú
+    origin_selection_key_hint: origin:pickup:28804:159093:1730
+    destination_selection_key_hint: destination:dropoff:22707:190012:1731
+    ticket_count: 2
+    passenger_contacts:
+    - name: Truong Bao Dung
+      phone: 0908000011
+      email: qa.tienoanh.11@example.com
+    - name: Duong Hoang Giang
+      phone: 0908000012
+      email: qa.tienoanh.12@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 34
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 10-sai-gon-dak-lak-tb-bxmd-1130-41709146
+  title: 10. Sài Gòn - Đăk Lăk (TB - BXMĐ) 11:30 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - BXMĐ) on 01-05-2026 11:30 with 1 ticket, pickup Văn Phòng Thủ Đức, dropoff Cây Xăng Kiến Tạo Đắk Song, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đăk Lăk (TB - BXMĐ) ngày 01-05-2026, chuyến 11:30. Anh muốn đón ở Văn Phòng Thủ Đức và trả ở Cây Xăng Kiến Tạo Đắk Song. Hành khách tên Ngo Hoang Giang, số điện thoại 0908000013. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Ngo Hoang Giang
+    phone: 0908000013
+    email: qa.tienoanh.13@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - BXMĐ)
+    base_trip_id: '32643669'
+    trip_id: '41709146'
+    preferred_times:
+    - '11:30'
+    preferred_pickup: Văn Phòng Thủ Đức
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:28858:159093:1730
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 1
+    passenger_contacts:
+    - name: Ngo Hoang Giang
+      phone: 0908000013
+      email: qa.tienoanh.13@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 34
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 11-sai-gon-dak-lak-tb-bxmd-1135-44623328
+  title: 11. Sài Gòn - Đăk Lăk (TB - BXMĐ) 11:35 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - BXMĐ) on 01-05-2026 11:35 with 1 ticket, pickup Văn Phòng Thủ Đức, dropoff Cây Xăng Kiến Tạo Đắk Song, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đăk Lăk (TB - BXMĐ) ngày 01-05-2026, chuyến 11:35. Anh muốn đón ở Văn Phòng Thủ Đức và trả ở Cây Xăng Kiến Tạo Đắk Song. Hành khách tên Ly Khanh Giang, số điện thoại 0908000014. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Ly Khanh Giang
+    phone: 0908000014
+    email: qa.tienoanh.14@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - BXMĐ)
+    base_trip_id: '32643669'
+    trip_id: '44623328'
+    preferred_times:
+    - '11:35'
+    preferred_pickup: Văn Phòng Thủ Đức
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:28858:159093:1730
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 1
+    passenger_contacts:
+    - name: Ly Khanh Giang
+      phone: 0908000014
+      email: qa.tienoanh.14@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 23
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 12-sai-gon-dak-lak-tb-bxmd-1145-44623329
+  title: 12. Sài Gòn - Đăk Lăk (TB - BXMĐ) 11:45 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - BXMĐ) on 01-05-2026 11:45 with 2 tickets, pickup Văn Phòng Thủ Đức, dropoff Cây Xăng Kiến Tạo Đắk Song, and distinct per-ticket passenger identity carried through booking to payment link.
+  opening_prompt: Anh cần đặt 2 vé tuyến Sài Gòn - Đăk Lăk (TB - BXMĐ) ngày 01-05-2026, chuyến 11:45. Anh muốn đón ở Văn Phòng Thủ Đức và trả ở Cây Xăng Kiến Tạo Đắk Song. Vé 1 tên Vu Khanh Ha, số điện thoại 0908000015. Vé 2 tên Dinh Tuan Ha, số điện thoại 0908000016. Nhờ em hỗ trợ đặt giúp anh, mỗi vé dùng đúng thông tin của từng khách nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Vu Khanh Ha
+    phone: 0908000015
+    email: qa.tienoanh.15@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - BXMĐ)
+    base_trip_id: '32643669'
+    trip_id: '44623329'
+    preferred_times:
+    - '11:45'
+    preferred_pickup: Văn Phòng Thủ Đức
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:28858:159093:1730
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 2
+    passenger_contacts:
+    - name: Vu Khanh Ha
+      phone: 0908000015
+      email: qa.tienoanh.15@example.com
+    - name: Dinh Tuan Ha
+      phone: 0908000016
+      email: qa.tienoanh.16@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 34
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 13-sai-gon-dak-lak-tb-bxmd-1930-44759652
+  title: 13. Sài Gòn - Đăk Lăk (TB - BXMĐ) 19:30 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - BXMĐ) on 01-05-2026 19:30 with 1 ticket, pickup Văn Phòng Thủ Đức, dropoff Cây Xăng Kiến Tạo Đắk Song, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đăk Lăk (TB - BXMĐ) ngày 01-05-2026, chuyến 19:30. Anh muốn đón ở Văn Phòng Thủ Đức và trả ở Cây Xăng Kiến Tạo Đắk Song. Hành khách tên Mai Tuan Ha, số điện thoại 0908000017. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Mai Tuan Ha
+    phone: 0908000017
+    email: qa.tienoanh.17@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - BXMĐ)
+    base_trip_id: '32643669'
+    trip_id: '44759652'
+    preferred_times:
+    - '19:30'
+    preferred_pickup: Văn Phòng Thủ Đức
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:28858:159093:1730
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 1
+    passenger_contacts:
+    - name: Mai Tuan Ha
+      phone: 0908000017
+      email: qa.tienoanh.17@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 34
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 14-sai-gon-dak-lak-tb-bxmd-1935-44624989
+  title: 14. Sài Gòn - Đăk Lăk (TB - BXMĐ) 19:35 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - BXMĐ) on 01-05-2026 19:35 with 1 ticket, pickup Văn Phòng Thủ Đức, dropoff Cây Xăng Kiến Tạo Đắk Song, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đăk Lăk (TB - BXMĐ) ngày 01-05-2026, chuyến 19:35. Anh muốn đón ở Văn Phòng Thủ Đức và trả ở Cây Xăng Kiến Tạo Đắk Song. Hành khách tên Ta Duc Khanh, số điện thoại 0908000018. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Ta Duc Khanh
+    phone: 0908000018
+    email: qa.tienoanh.18@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - BXMĐ)
+    base_trip_id: '32643669'
+    trip_id: '44624989'
+    preferred_times:
+    - '19:35'
+    preferred_pickup: Văn Phòng Thủ Đức
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:28858:159093:1730
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 1
+    passenger_contacts:
+    - name: Ta Duc Khanh
+      phone: 0908000018
+      email: qa.tienoanh.18@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 18
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 15-sai-gon-dak-lak-tb-bxmd-1945-44624990
+  title: 15. Sài Gòn - Đăk Lăk (TB - BXMĐ) 19:45 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - BXMĐ) on 01-05-2026 19:45 with 2 tickets, pickup Văn Phòng Thủ Đức, dropoff Cây Xăng Kiến Tạo Đắk Song, and distinct per-ticket passenger identity carried through booking to payment link.
+  opening_prompt: Anh cần đặt 2 vé tuyến Sài Gòn - Đăk Lăk (TB - BXMĐ) ngày 01-05-2026, chuyến 19:45. Anh muốn đón ở Văn Phòng Thủ Đức và trả ở Cây Xăng Kiến Tạo Đắk Song. Vé 1 tên Lam Duc Khanh, số điện thoại 0908000019. Vé 2 tên Nguyen Ngoc Khanh, số điện thoại 0908000020. Nhờ em hỗ trợ đặt giúp anh, mỗi vé dùng đúng thông tin của từng khách nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Lam Duc Khanh
+    phone: 0908000019
+    email: qa.tienoanh.19@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - BXMĐ)
+    base_trip_id: '32643669'
+    trip_id: '44624990'
+    preferred_times:
+    - '19:45'
+    preferred_pickup: Văn Phòng Thủ Đức
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:28858:159093:1730
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 2
+    passenger_contacts:
+    - name: Lam Duc Khanh
+      phone: 0908000019
+      email: qa.tienoanh.19@example.com
+    - name: Nguyen Ngoc Khanh
+      phone: 0908000020
+      email: qa.tienoanh.20@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 34
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 16-sai-gon-dak-lak-tb-bxmd-2100-44759660
+  title: 16. Sài Gòn - Đăk Lăk (TB - BXMĐ) 21:00 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - BXMĐ) on 01-05-2026 21:00 with 1 ticket, pickup Văn Phòng Thủ Đức, dropoff Cây Xăng Kiến Tạo Đắk Song, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đăk Lăk (TB - BXMĐ) ngày 01-05-2026, chuyến 21:00. Anh muốn đón ở Văn Phòng Thủ Đức và trả ở Cây Xăng Kiến Tạo Đắk Song. Hành khách tên Tran Ngoc Lam, số điện thoại 0908000021. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Tran Ngoc Lam
+    phone: 0908000021
+    email: qa.tienoanh.21@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - BXMĐ)
+    base_trip_id: '32643669'
+    trip_id: '44759660'
+    preferred_times:
+    - '21:00'
+    preferred_pickup: Văn Phòng Thủ Đức
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:28858:159093:1730
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 1
+    passenger_contacts:
+    - name: Tran Ngoc Lam
+      phone: 0908000021
+      email: qa.tienoanh.21@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 15
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 17-sai-gon-dak-lak-tb-bxmd-2110-44760244
+  title: 17. Sài Gòn - Đăk Lăk (TB - BXMĐ) 21:10 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - BXMĐ) on 01-05-2026 21:10 with 1 ticket, pickup Văn Phòng Thủ Đức, dropoff Cây Xăng Kiến Tạo Đắk Song, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đăk Lăk (TB - BXMĐ) ngày 01-05-2026, chuyến 21:10. Anh muốn đón ở Văn Phòng Thủ Đức và trả ở Cây Xăng Kiến Tạo Đắk Song. Hành khách tên Le Thu Lam, số điện thoại 0908000022. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Le Thu Lam
+    phone: 0908000022
+    email: qa.tienoanh.22@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - BXMĐ)
+    base_trip_id: '32643669'
+    trip_id: '44760244'
+    preferred_times:
+    - '21:10'
+    preferred_pickup: Văn Phòng Thủ Đức
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:28858:159093:1730
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 1
+    passenger_contacts:
+    - name: Le Thu Lam
+      phone: 0908000022
+      email: qa.tienoanh.22@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 11
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 18-sai-gon-dak-lak-tb-ntg-0830-44760177
+  title: 18. Sài Gòn - Đăk Lăk (TB - NTG) 08:30 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - NTG) on 01-05-2026 08:30 with 2 tickets, pickup Ngã Tư Chợ Đình, dropoff Cây Xăng Kiến Tạo Đắk Song, and distinct per-ticket passenger identity carried through booking to payment link.
+  opening_prompt: Anh cần đặt 2 vé tuyến Sài Gòn - Đăk Lăk (TB - NTG) ngày 01-05-2026, chuyến 08:30. Anh muốn đón ở Ngã Tư Chợ Đình và trả ở Cây Xăng Kiến Tạo Đắk Song. Vé 1 tên Pham Thu Lam, số điện thoại 0908000023. Vé 2 tên Hoang Phuong Nam, số điện thoại 0908000024. Nhờ em hỗ trợ đặt giúp anh, mỗi vé dùng đúng thông tin của từng khách nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Pham Thu Lam
+    phone: 0908000023
+    email: qa.tienoanh.23@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - NTG)
+    base_trip_id: '32644647'
+    trip_id: '44760177'
+    preferred_times:
+    - 08:30
+    preferred_pickup: Ngã Tư Chợ Đình
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:22431:189995:168108
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 2
+    passenger_contacts:
+    - name: Pham Thu Lam
+      phone: 0908000023
+      email: qa.tienoanh.23@example.com
+    - name: Hoang Phuong Nam
+      phone: 0908000024
+      email: qa.tienoanh.24@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 13
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 19-sai-gon-dak-lak-tb-ntg-0835-44759739
+  title: 19. Sài Gòn - Đăk Lăk (TB - NTG) 08:35 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - NTG) on 01-05-2026 08:35 with 1 ticket, pickup Ngã Tư Chợ Đình, dropoff Cây Xăng Kiến Tạo Đắk Song, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đăk Lăk (TB - NTG) ngày 01-05-2026, chuyến 08:35. Anh muốn đón ở Ngã Tư Chợ Đình và trả ở Cây Xăng Kiến Tạo Đắk Song. Hành khách tên Vo Phuong Nam, số điện thoại 0908000025. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Vo Phuong Nam
+    phone: 0908000025
+    email: qa.tienoanh.25@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - NTG)
+    base_trip_id: '32644647'
+    trip_id: '44759739'
+    preferred_times:
+    - 08:35
+    preferred_pickup: Ngã Tư Chợ Đình
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:22431:189995:168108
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 1
+    passenger_contacts:
+    - name: Vo Phuong Nam
+      phone: 0908000025
+      email: qa.tienoanh.25@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 24
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 20-sai-gon-dak-lak-tb-ntg-0840-44759734
+  title: 20. Sài Gòn - Đăk Lăk (TB - NTG) 08:40 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - NTG) on 01-05-2026 08:40 with 1 ticket, pickup Ngã Tư Chợ Đình, dropoff Cây Xăng Kiến Tạo Đắk Song, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đăk Lăk (TB - NTG) ngày 01-05-2026, chuyến 08:40. Anh muốn đón ở Ngã Tư Chợ Đình và trả ở Cây Xăng Kiến Tạo Đắk Song. Hành khách tên Dang Huu Nam, số điện thoại 0908000026. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Dang Huu Nam
+    phone: 0908000026
+    email: qa.tienoanh.26@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - NTG)
+    base_trip_id: '32644647'
+    trip_id: '44759734'
+    preferred_times:
+    - 08:40
+    preferred_pickup: Ngã Tư Chợ Đình
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:22431:189995:168108
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 1
+    passenger_contacts:
+    - name: Dang Huu Nam
+      phone: 0908000026
+      email: qa.tienoanh.26@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 23
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 21-sai-gon-dak-lak-tb-ntg-2000-44767977
+  title: 21. Sài Gòn - Đăk Lăk (TB - NTG) 20:00 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - NTG) on 01-05-2026 20:00 with 2 tickets, pickup Ngã Tư Chợ Đình, dropoff Cây Xăng Kiến Tạo Đắk Song, and distinct per-ticket passenger identity carried through booking to payment link.
+  opening_prompt: Anh cần đặt 2 vé tuyến Sài Gòn - Đăk Lăk (TB - NTG) ngày 01-05-2026, chuyến 20:00. Anh muốn đón ở Ngã Tư Chợ Đình và trả ở Cây Xăng Kiến Tạo Đắk Song. Vé 1 tên Bui Huu Phuc, số điện thoại 0908000027. Vé 2 tên Do Nhat Phuc, số điện thoại 0908000028. Nhờ em hỗ trợ đặt giúp anh, mỗi vé dùng đúng thông tin của từng khách nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Bui Huu Phuc
+    phone: 0908000027
+    email: qa.tienoanh.27@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - NTG)
+    base_trip_id: '32644647'
+    trip_id: '44767977'
+    preferred_times:
+    - '20:00'
+    preferred_pickup: Ngã Tư Chợ Đình
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:22431:189995:168108
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 2
+    passenger_contacts:
+    - name: Bui Huu Phuc
+      phone: 0908000027
+      email: qa.tienoanh.27@example.com
+    - name: Do Nhat Phuc
+      phone: 0908000028
+      email: qa.tienoanh.28@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 25
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 22-sai-gon-dak-lak-tb-ntg-2005-44624999
+  title: 22. Sài Gòn - Đăk Lăk (TB - NTG) 20:05 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - NTG) on 01-05-2026 20:05 with 1 ticket, pickup Ngã Tư Chợ Đình, dropoff Cây Xăng Kiến Tạo Đắk Song, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đăk Lăk (TB - NTG) ngày 01-05-2026, chuyến 20:05. Anh muốn đón ở Ngã Tư Chợ Đình và trả ở Cây Xăng Kiến Tạo Đắk Song. Hành khách tên Phan Nhat Phuc, số điện thoại 0908000029. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Phan Nhat Phuc
+    phone: 0908000029
+    email: qa.tienoanh.29@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - NTG)
+    base_trip_id: '32644647'
+    trip_id: '44624999'
+    preferred_times:
+    - '20:05'
+    preferred_pickup: Ngã Tư Chợ Đình
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:22431:189995:168108
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 1
+    passenger_contacts:
+    - name: Phan Nhat Phuc
+      phone: 0908000029
+      email: qa.tienoanh.29@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 16
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 23-sai-gon-dak-lak-tb-ntg-2015-44625000
+  title: 23. Sài Gòn - Đăk Lăk (TB - NTG) 20:15 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - NTG) on 01-05-2026 20:15 with 1 ticket, pickup Ngã Tư Chợ Đình, dropoff Cây Xăng Kiến Tạo Đắk Song, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đăk Lăk (TB - NTG) ngày 01-05-2026, chuyến 20:15. Anh muốn đón ở Ngã Tư Chợ Đình và trả ở Cây Xăng Kiến Tạo Đắk Song. Hành khách tên Huynh Tien Quan, số điện thoại 0908000030. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Huynh Tien Quan
+    phone: 0908000030
+    email: qa.tienoanh.30@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - NTG)
+    base_trip_id: '32644647'
+    trip_id: '44625000'
+    preferred_times:
+    - '20:15'
+    preferred_pickup: Ngã Tư Chợ Đình
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:22431:189995:168108
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 1
+    passenger_contacts:
+    - name: Huynh Tien Quan
+      phone: 0908000030
+      email: qa.tienoanh.30@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 34
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 24-sai-gon-dak-lak-tb-ntg-2140-44624985
+  title: 24. Sài Gòn - Đăk Lăk (TB - NTG) 21:40 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - NTG) on 01-05-2026 21:40 with 2 tickets, pickup Ngã Tư Chợ Đình, dropoff Cây Xăng Kiến Tạo Đắk Song, and distinct per-ticket passenger identity carried through booking to payment link.
+  opening_prompt: Anh cần đặt 2 vé tuyến Sài Gòn - Đăk Lăk (TB - NTG) ngày 01-05-2026, chuyến 21:40. Anh muốn đón ở Ngã Tư Chợ Đình và trả ở Cây Xăng Kiến Tạo Đắk Song. Vé 1 tên Truong Tien Quan, số điện thoại 0908000031. Vé 2 tên Duong Hong Quan, số điện thoại 0908000032. Nhờ em hỗ trợ đặt giúp anh, mỗi vé dùng đúng thông tin của từng khách nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Truong Tien Quan
+    phone: 0908000031
+    email: qa.tienoanh.31@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - NTG)
+    base_trip_id: '32644647'
+    trip_id: '44624985'
+    preferred_times:
+    - '21:40'
+    preferred_pickup: Ngã Tư Chợ Đình
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:22431:189995:168108
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 2
+    passenger_contacts:
+    - name: Truong Tien Quan
+      phone: 0908000031
+      email: qa.tienoanh.31@example.com
+    - name: Duong Hong Quan
+      phone: 0908000032
+      email: qa.tienoanh.32@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 24
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 25-sai-gon-dak-lak-tb-ntg-2145-44557302
+  title: 25. Sài Gòn - Đăk Lăk (TB - NTG) 21:45 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - NTG) on 01-05-2026 21:45 with 1 ticket, pickup Ngã Tư Chợ Đình, dropoff Cây Xăng Kiến Tạo Đắk Song, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đăk Lăk (TB - NTG) ngày 01-05-2026, chuyến 21:45. Anh muốn đón ở Ngã Tư Chợ Đình và trả ở Cây Xăng Kiến Tạo Đắk Song. Hành khách tên Ngo Hong Son, số điện thoại 0908000033. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Ngo Hong Son
+    phone: 0908000033
+    email: qa.tienoanh.33@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - NTG)
+    base_trip_id: '32644647'
+    trip_id: '44557302'
+    preferred_times:
+    - '21:45'
+    preferred_pickup: Ngã Tư Chợ Đình
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:22431:189995:168108
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 1
+    passenger_contacts:
+    - name: Ngo Hong Son
+      phone: 0908000033
+      email: qa.tienoanh.33@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 22
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 26-sai-gon-dak-lak-tb-ntg-2150-44625015
+  title: 26. Sài Gòn - Đăk Lăk (TB - NTG) 21:50 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - NTG) on 01-05-2026 21:50 with 1 ticket, pickup Ngã Tư Chợ Đình, dropoff Cây Xăng Kiến Tạo Đắk Song, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đăk Lăk (TB - NTG) ngày 01-05-2026, chuyến 21:50. Anh muốn đón ở Ngã Tư Chợ Đình và trả ở Cây Xăng Kiến Tạo Đắk Song. Hành khách tên Ly Xuan Son, số điện thoại 0908000034. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Ly Xuan Son
+    phone: 0908000034
+    email: qa.tienoanh.34@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - NTG)
+    base_trip_id: '32644647'
+    trip_id: '44625015'
+    preferred_times:
+    - '21:50'
+    preferred_pickup: Ngã Tư Chợ Đình
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:22431:189995:168108
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 1
+    passenger_contacts:
+    - name: Ly Xuan Son
+      phone: 0908000034
+      email: qa.tienoanh.34@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 24
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 27-sai-gon-dak-lak-tb-ntg-2200-44624986
+  title: 27. Sài Gòn - Đăk Lăk (TB - NTG) 22:00 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - NTG) on 01-05-2026 22:00 with 2 tickets, pickup Ngã Tư Chợ Đình, dropoff Cây Xăng Kiến Tạo Đắk Song, and distinct per-ticket passenger identity carried through booking to payment link.
+  opening_prompt: Anh cần đặt 2 vé tuyến Sài Gòn - Đăk Lăk (TB - NTG) ngày 01-05-2026, chuyến 22:00. Anh muốn đón ở Ngã Tư Chợ Đình và trả ở Cây Xăng Kiến Tạo Đắk Song. Vé 1 tên Vu Xuan Son, số điện thoại 0908000035. Vé 2 tên Dinh Van Trang, số điện thoại 0908000036. Nhờ em hỗ trợ đặt giúp anh, mỗi vé dùng đúng thông tin của từng khách nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Vu Xuan Son
+    phone: 0908000035
+    email: qa.tienoanh.35@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - NTG)
+    base_trip_id: '32644647'
+    trip_id: '44624986'
+    preferred_times:
+    - '22:00'
+    preferred_pickup: Ngã Tư Chợ Đình
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:22431:189995:168108
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 2
+    passenger_contacts:
+    - name: Vu Xuan Son
+      phone: 0908000035
+      email: qa.tienoanh.35@example.com
+    - name: Dinh Van Trang
+      phone: 0908000036
+      email: qa.tienoanh.36@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 34
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 28-sai-gon-dak-lak-tb-ntg-2205-44625016
+  title: 28. Sài Gòn - Đăk Lăk (TB - NTG) 22:05 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - NTG) on 01-05-2026 22:05 with 1 ticket, pickup Ngã Tư Chợ Đình, dropoff Cây Xăng Kiến Tạo Đắk Song, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đăk Lăk (TB - NTG) ngày 01-05-2026, chuyến 22:05. Anh muốn đón ở Ngã Tư Chợ Đình và trả ở Cây Xăng Kiến Tạo Đắk Song. Hành khách tên Mai Van Trang, số điện thoại 0908000037. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Mai Van Trang
+    phone: 0908000037
+    email: qa.tienoanh.37@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - NTG)
+    base_trip_id: '32644647'
+    trip_id: '44625016'
+    preferred_times:
+    - '22:05'
+    preferred_pickup: Ngã Tư Chợ Đình
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:22431:189995:168108
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 1
+    passenger_contacts:
+    - name: Mai Van Trang
+      phone: 0908000037
+      email: qa.tienoanh.37@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 34
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 29-sai-gon-dak-lak-tb-ntg-2300-44759701
+  title: 29. Sài Gòn - Đăk Lăk (TB - NTG) 23:00 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - NTG) on 01-05-2026 23:00 with 1 ticket, pickup Ngã Tư Chợ Đình, dropoff Cây Xăng Kiến Tạo Đắk Song, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Sài Gòn - Đăk Lăk (TB - NTG) ngày 01-05-2026, chuyến 23:00. Anh muốn đón ở Ngã Tư Chợ Đình và trả ở Cây Xăng Kiến Tạo Đắk Song. Hành khách tên Ta Kim Trang, số điện thoại 0908000038. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Ta Kim Trang
+    phone: 0908000038
+    email: qa.tienoanh.38@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - NTG)
+    base_trip_id: '32644647'
+    trip_id: '44759701'
+    preferred_times:
+    - '23:00'
+    preferred_pickup: Ngã Tư Chợ Đình
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:22431:189995:168108
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 1
+    passenger_contacts:
+    - name: Ta Kim Trang
+      phone: 0908000038
+      email: qa.tienoanh.38@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 8
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 30-sai-gon-dak-lak-tb-ntg-2305-44728294
+  title: 30. Sài Gòn - Đăk Lăk (TB - NTG) 23:05 ngày 01-05-2026
+  objective: Adaptive booking for route Sài Gòn - Đăk Lăk (TB - NTG) on 01-05-2026 23:05 with 2 tickets, pickup Ngã Tư Chợ Đình, dropoff Cây Xăng Kiến Tạo Đắk Song, and distinct per-ticket passenger identity carried through booking to payment link.
+  opening_prompt: Anh cần đặt 2 vé tuyến Sài Gòn - Đăk Lăk (TB - NTG) ngày 01-05-2026, chuyến 23:05. Anh muốn đón ở Ngã Tư Chợ Đình và trả ở Cây Xăng Kiến Tạo Đắk Song. Vé 1 tên Lam Kim Vy, số điện thoại 0908000039. Vé 2 tên Nguyen Minh Vy, số điện thoại 0908000040. Nhờ em hỗ trợ đặt giúp anh, mỗi vé dùng đúng thông tin của từng khách nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Lam Kim Vy
+    phone: 0908000039
+    email: qa.tienoanh.39@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Hồ Chí Minh
+    destination: Đắk Lắk
+    route_name: Sài Gòn - Đăk Lăk (TB - NTG)
+    base_trip_id: '32644647'
+    trip_id: '44728294'
+    preferred_times:
+    - '23:05'
+    preferred_pickup: Ngã Tư Chợ Đình
+    preferred_dropoff: Cây Xăng Kiến Tạo Đắk Song
+    origin_selection_key_hint: origin:pickup:22431:189995:168108
+    destination_selection_key_hint: destination:dropoff:22710:190010:1731
+    ticket_count: 2
+    passenger_contacts:
+    - name: Lam Kim Vy
+      phone: 0908000039
+      email: qa.tienoanh.39@example.com
+    - name: Nguyen Minh Vy
+      phone: 0908000040
+      email: qa.tienoanh.40@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 34
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 31-da-lat-sai-gon-2230-44655441
+  title: 31. Đà Lạt - Sài Gòn 22:30 ngày 01-05-2026
+  objective: Adaptive booking for route Đà Lạt - Sài Gòn on 01-05-2026 22:30 with 1 ticket, pickup Ngã 3 Tượng Phật, dropoff Bưu điện Trảng Bom, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đà Lạt - Sài Gòn ngày 01-05-2026, chuyến 22:30. Anh muốn đón ở Ngã 3 Tượng Phật và trả ở Bưu điện Trảng Bom. Hành khách tên Tran Minh Vy, số điện thoại 0908000041. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Tran Minh Vy
+    phone: 0908000041
+    email: qa.tienoanh.41@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Lâm Đồng
+    destination: Hồ Chí Minh
+    route_name: Đà Lạt - Sài Gòn
+    base_trip_id: '10613491'
+    trip_id: '44655441'
+    preferred_times:
+    - '22:30'
+    preferred_pickup: Ngã 3 Tượng Phật
+    preferred_dropoff: Bưu điện Trảng Bom
+    origin_selection_key_hint: origin:pickup:8856:162000:153096
+    destination_selection_key_hint: destination:dropoff:28864:116339:1730
+    ticket_count: 1
+    passenger_contacts:
+    - name: Tran Minh Vy
+      phone: 0908000041
+      email: qa.tienoanh.41@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 3
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 32-da-lat-sai-gon-2300-44655440
+  title: 32. Đà Lạt - Sài Gòn 23:00 ngày 01-05-2026
+  objective: Adaptive booking for route Đà Lạt - Sài Gòn on 01-05-2026 23:00 with 1 ticket, pickup Ngã 3 Tượng Phật, dropoff Bưu điện Trảng Bom, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đà Lạt - Sài Gòn ngày 01-05-2026, chuyến 23:00. Anh muốn đón ở Ngã 3 Tượng Phật và trả ở Bưu điện Trảng Bom. Hành khách tên Le Quoc Yen, số điện thoại 0908000042. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Le Quoc Yen
+    phone: 0908000042
+    email: qa.tienoanh.42@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Lâm Đồng
+    destination: Hồ Chí Minh
+    route_name: Đà Lạt - Sài Gòn
+    base_trip_id: '10613491'
+    trip_id: '44655440'
+    preferred_times:
+    - '23:00'
+    preferred_pickup: Ngã 3 Tượng Phật
+    preferred_dropoff: Bưu điện Trảng Bom
+    origin_selection_key_hint: origin:pickup:8856:162000:153096
+    destination_selection_key_hint: destination:dropoff:28864:116339:1730
+    ticket_count: 1
+    passenger_contacts:
+    - name: Le Quoc Yen
+      phone: 0908000042
+      email: qa.tienoanh.42@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 2
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 33-da-lat-sai-gon-n-1230-44760666
+  title: 33. Đà Lạt - Sài Gòn (N) 12:30 ngày 01-05-2026
+  objective: Adaptive booking for route Đà Lạt - Sài Gòn (N) on 01-05-2026 12:30 with 2 tickets, pickup Vòng xoay Liên Khương, dropoff Bến xe Ngã 4 Ga, and distinct per-ticket passenger identity carried through booking to payment link.
+  opening_prompt: Anh cần đặt 2 vé tuyến Đà Lạt - Sài Gòn (N) ngày 01-05-2026, chuyến 12:30. Anh muốn đón ở Vòng xoay Liên Khương và trả ở Bến xe Ngã 4 Ga. Vé 1 tên Pham Quoc Yen, số điện thoại 0908000043. Vé 2 tên Hoang Thanh Yen, số điện thoại 0908000044. Nhờ em hỗ trợ đặt giúp anh, mỗi vé dùng đúng thông tin của từng khách nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Pham Quoc Yen
+    phone: 0908000043
+    email: qa.tienoanh.43@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Lâm Đồng
+    destination: Hồ Chí Minh
+    route_name: Đà Lạt - Sài Gòn (N)
+    base_trip_id: '16801395'
+    trip_id: '44760666'
+    preferred_times:
+    - '12:30'
+    preferred_pickup: Vòng xoay Liên Khương
+    preferred_dropoff: Bến xe Ngã 4 Ga
+    origin_selection_key_hint: origin:pickup:12931:162017:153096
+    destination_selection_key_hint: destination:dropoff:28863:166619:173603
+    ticket_count: 2
+    passenger_contacts:
+    - name: Pham Quoc Yen
+      phone: 0908000043
+      email: qa.tienoanh.43@example.com
+    - name: Hoang Thanh Yen
+      phone: 0908000044
+      email: qa.tienoanh.44@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 13
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 34-da-lat-sai-gon-n-1300-44764497
+  title: 34. Đà Lạt - Sài Gòn (N) 13:00 ngày 01-05-2026
+  objective: Adaptive booking for route Đà Lạt - Sài Gòn (N) on 01-05-2026 13:00 with 1 ticket, pickup Vòng xoay Liên Khương, dropoff Bến xe Ngã 4 Ga, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đà Lạt - Sài Gòn (N) ngày 01-05-2026, chuyến 13:00. Anh muốn đón ở Vòng xoay Liên Khương và trả ở Bến xe Ngã 4 Ga. Hành khách tên Vo Thanh Long, số điện thoại 0908000045. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Vo Thanh Long
+    phone: 0908000045
+    email: qa.tienoanh.45@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Lâm Đồng
+    destination: Hồ Chí Minh
+    route_name: Đà Lạt - Sài Gòn (N)
+    base_trip_id: '16801395'
+    trip_id: '44764497'
+    preferred_times:
+    - '13:00'
+    preferred_pickup: Vòng xoay Liên Khương
+    preferred_dropoff: Bến xe Ngã 4 Ga
+    origin_selection_key_hint: origin:pickup:12931:162017:153096
+    destination_selection_key_hint: destination:dropoff:28863:166619:173603
+    ticket_count: 1
+    passenger_contacts:
+    - name: Vo Thanh Long
+      phone: 0908000045
+      email: qa.tienoanh.45@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 12
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 35-da-lat-sai-gon-n-1330-44765707
+  title: 35. Đà Lạt - Sài Gòn (N) 13:30 ngày 01-05-2026
+  objective: Adaptive booking for route Đà Lạt - Sài Gòn (N) on 01-05-2026 13:30 with 1 ticket, pickup Vòng xoay Liên Khương, dropoff Bến xe Ngã 4 Ga, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đà Lạt - Sài Gòn (N) ngày 01-05-2026, chuyến 13:30. Anh muốn đón ở Vòng xoay Liên Khương và trả ở Bến xe Ngã 4 Ga. Hành khách tên Dang Gia Long, số điện thoại 0908000046. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Dang Gia Long
+    phone: 0908000046
+    email: qa.tienoanh.46@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Lâm Đồng
+    destination: Hồ Chí Minh
+    route_name: Đà Lạt - Sài Gòn (N)
+    base_trip_id: '16801395'
+    trip_id: '44765707'
+    preferred_times:
+    - '13:30'
+    preferred_pickup: Vòng xoay Liên Khương
+    preferred_dropoff: Bến xe Ngã 4 Ga
+    origin_selection_key_hint: origin:pickup:12931:162017:153096
+    destination_selection_key_hint: destination:dropoff:28863:166619:173603
+    ticket_count: 1
+    passenger_contacts:
+    - name: Dang Gia Long
+      phone: 0908000046
+      email: qa.tienoanh.46@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 24
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 36-da-lat-sai-gon-n-1400-44732067
+  title: 36. Đà Lạt - Sài Gòn (N) 14:00 ngày 01-05-2026
+  objective: Adaptive booking for route Đà Lạt - Sài Gòn (N) on 01-05-2026 14:00 with 2 tickets, pickup Vòng xoay Liên Khương, dropoff Bến xe Ngã 4 Ga, and distinct per-ticket passenger identity carried through booking to payment link.
+  opening_prompt: Anh cần đặt 2 vé tuyến Đà Lạt - Sài Gòn (N) ngày 01-05-2026, chuyến 14:00. Anh muốn đón ở Vòng xoay Liên Khương và trả ở Bến xe Ngã 4 Ga. Vé 1 tên Bui Gia Long, số điện thoại 0908000047. Vé 2 tên Do Anh Nhi, số điện thoại 0908000048. Nhờ em hỗ trợ đặt giúp anh, mỗi vé dùng đúng thông tin của từng khách nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Bui Gia Long
+    phone: 0908000047
+    email: qa.tienoanh.47@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Lâm Đồng
+    destination: Hồ Chí Minh
+    route_name: Đà Lạt - Sài Gòn (N)
+    base_trip_id: '16801395'
+    trip_id: '44732067'
+    preferred_times:
+    - '14:00'
+    preferred_pickup: Vòng xoay Liên Khương
+    preferred_dropoff: Bến xe Ngã 4 Ga
+    origin_selection_key_hint: origin:pickup:12931:162017:153096
+    destination_selection_key_hint: destination:dropoff:28863:166619:173603
+    ticket_count: 2
+    passenger_contacts:
+    - name: Bui Gia Long
+      phone: 0908000047
+      email: qa.tienoanh.47@example.com
+    - name: Do Anh Nhi
+      phone: 0908000048
+      email: qa.tienoanh.48@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 15
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 37-da-lat-sai-gon-n-1430-44759507
+  title: 37. Đà Lạt - Sài Gòn (N) 14:30 ngày 01-05-2026
+  objective: Adaptive booking for route Đà Lạt - Sài Gòn (N) on 01-05-2026 14:30 with 1 ticket, pickup Vòng xoay Liên Khương, dropoff Bến xe Ngã 4 Ga, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đà Lạt - Sài Gòn (N) ngày 01-05-2026, chuyến 14:30. Anh muốn đón ở Vòng xoay Liên Khương và trả ở Bến xe Ngã 4 Ga. Hành khách tên Phan Anh Nhi, số điện thoại 0908000049. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Phan Anh Nhi
+    phone: 0908000049
+    email: qa.tienoanh.49@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Lâm Đồng
+    destination: Hồ Chí Minh
+    route_name: Đà Lạt - Sài Gòn (N)
+    base_trip_id: '16801395'
+    trip_id: '44759507'
+    preferred_times:
+    - '14:30'
+    preferred_pickup: Vòng xoay Liên Khương
+    preferred_dropoff: Bến xe Ngã 4 Ga
+    origin_selection_key_hint: origin:pickup:12931:162017:153096
+    destination_selection_key_hint: destination:dropoff:28863:166619:173603
+    ticket_count: 1
+    passenger_contacts:
+    - name: Phan Anh Nhi
+      phone: 0908000049
+      email: qa.tienoanh.49@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 15
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 38-dak-lak-sai-gon-bxmd-tb-0915-44760709
+  title: 38. Đăk Lăk - Sài Gòn (BXMĐ - TB) 09:15 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (BXMĐ - TB) on 01-05-2026 09:15 with 1 ticket, pickup Hồ Tây Đắk Mil, dropoff Phí Tân Lập, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đăk Lăk - Sài Gòn (BXMĐ - TB) ngày 01-05-2026, chuyến 09:15. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Tân Lập. Hành khách tên Huynh Bao Nhi, số điện thoại 0908000050. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Huynh Bao Nhi
+    phone: 0908000050
+    email: qa.tienoanh.50@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (BXMĐ - TB)
+    base_trip_id: '32643682'
+    trip_id: '44760709'
+    preferred_times:
+    - 09:15
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Tân Lập
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22418:190003:168108
+    ticket_count: 1
+    passenger_contacts:
+    - name: Huynh Bao Nhi
+      phone: 0908000050
+      email: qa.tienoanh.50@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 22
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 39-dak-lak-sai-gon-bxmd-tb-0930-44658181
+  title: 39. Đăk Lăk - Sài Gòn (BXMĐ - TB) 09:30 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (BXMĐ - TB) on 01-05-2026 09:30 with 2 tickets, pickup Hồ Tây Đắk Mil, dropoff Phí Tân Lập, and distinct per-ticket passenger identity carried through booking to payment link.
+  opening_prompt: Anh cần đặt 2 vé tuyến Đăk Lăk - Sài Gòn (BXMĐ - TB) ngày 01-05-2026, chuyến 09:30. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Tân Lập. Vé 1 tên Truong Bao Thao, số điện thoại 0908000051. Vé 2 tên Duong Hoang Thao, số điện thoại 0908000052. Nhờ em hỗ trợ đặt giúp anh, mỗi vé dùng đúng thông tin của từng khách nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Truong Bao Thao
+    phone: 0908000051
+    email: qa.tienoanh.51@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (BXMĐ - TB)
+    base_trip_id: '32643682'
+    trip_id: '44658181'
+    preferred_times:
+    - 09:30
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Tân Lập
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22418:190003:168108
+    ticket_count: 2
+    passenger_contacts:
+    - name: Truong Bao Thao
+      phone: 0908000051
+      email: qa.tienoanh.51@example.com
+    - name: Duong Hoang Thao
+      phone: 0908000052
+      email: qa.tienoanh.52@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 10
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 40-dak-lak-sai-gon-bxmd-tb-2000-44759655
+  title: 40. Đăk Lăk - Sài Gòn (BXMĐ - TB) 20:00 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (BXMĐ - TB) on 01-05-2026 20:00 with 1 ticket, pickup Hồ Tây Đắk Mil, dropoff Phí Tân Lập, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đăk Lăk - Sài Gòn (BXMĐ - TB) ngày 01-05-2026, chuyến 20:00. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Tân Lập. Hành khách tên Ngo Hoang Thao, số điện thoại 0908000053. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Ngo Hoang Thao
+    phone: 0908000053
+    email: qa.tienoanh.53@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (BXMĐ - TB)
+    base_trip_id: '32643682'
+    trip_id: '44759655'
+    preferred_times:
+    - '20:00'
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Tân Lập
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22418:190003:168108
+    ticket_count: 1
+    passenger_contacts:
+    - name: Ngo Hoang Thao
+      phone: 0908000053
+      email: qa.tienoanh.53@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 3
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 41-dak-lak-sai-gon-bxmd-tb-2010-44759704
+  title: 41. Đăk Lăk - Sài Gòn (BXMĐ - TB) 20:10 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (BXMĐ - TB) on 01-05-2026 20:10 with 1 ticket, pickup Hồ Tây Đắk Mil, dropoff Phí Tân Lập, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đăk Lăk - Sài Gòn (BXMĐ - TB) ngày 01-05-2026, chuyến 20:10. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Tân Lập. Hành khách tên Ly Khanh Huy, số điện thoại 0908000054. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Ly Khanh Huy
+    phone: 0908000054
+    email: qa.tienoanh.54@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (BXMĐ - TB)
+    base_trip_id: '32643682'
+    trip_id: '44759704'
+    preferred_times:
+    - '20:10'
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Tân Lập
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22418:190003:168108
+    ticket_count: 1
+    passenger_contacts:
+    - name: Ly Khanh Huy
+      phone: 0908000054
+      email: qa.tienoanh.54@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 2
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 42-dak-lak-sai-gon-bxmd-tb-2015-43391512
+  title: 42. Đăk Lăk - Sài Gòn (BXMĐ - TB) 20:15 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (BXMĐ - TB) on 01-05-2026 20:15 with 1 ticket, pickup Hồ Tây Đắk Mil, dropoff Phí Tân Lập, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đăk Lăk - Sài Gòn (BXMĐ - TB) ngày 01-05-2026, chuyến 20:15. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Tân Lập. Hành khách tên Vu Khanh Huy, số điện thoại 0908000055. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Vu Khanh Huy
+    phone: 0908000055
+    email: qa.tienoanh.55@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (BXMĐ - TB)
+    base_trip_id: '32643682'
+    trip_id: '43391512'
+    preferred_times:
+    - '20:15'
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Tân Lập
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22418:190003:168108
+    ticket_count: 1
+    passenger_contacts:
+    - name: Vu Khanh Huy
+      phone: 0908000055
+      email: qa.tienoanh.55@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 2
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 43-dak-lak-sai-gon-bxmd-tb-2330-44411000
+  title: 43. Đăk Lăk - Sài Gòn (BXMĐ - TB) 23:30 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (BXMĐ - TB) on 01-05-2026 23:30 with 1 ticket, pickup Hồ Tây Đắk Mil, dropoff Phí Tân Lập, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đăk Lăk - Sài Gòn (BXMĐ - TB) ngày 01-05-2026, chuyến 23:30. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Tân Lập. Hành khách tên Dinh Tuan Huy, số điện thoại 0908000056. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Dinh Tuan Huy
+    phone: 0908000056
+    email: qa.tienoanh.56@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (BXMĐ - TB)
+    base_trip_id: '32643682'
+    trip_id: '44411000'
+    preferred_times:
+    - '23:30'
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Tân Lập
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22418:190003:168108
+    ticket_count: 1
+    passenger_contacts:
+    - name: Dinh Tuan Huy
+      phone: 0908000056
+      email: qa.tienoanh.56@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 0
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 44-dak-lak-sai-gon-bxmd-tb-2345-44759554
+  title: 44. Đăk Lăk - Sài Gòn (BXMĐ - TB) 23:45 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (BXMĐ - TB) on 01-05-2026 23:45 with 1 ticket, pickup Hồ Tây Đắk Mil, dropoff Phí Tân Lập, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đăk Lăk - Sài Gòn (BXMĐ - TB) ngày 01-05-2026, chuyến 23:45. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Tân Lập. Hành khách tên Mai Tuan Linh, số điện thoại 0908000057. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Mai Tuan Linh
+    phone: 0908000057
+    email: qa.tienoanh.57@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (BXMĐ - TB)
+    base_trip_id: '32643682'
+    trip_id: '44759554'
+    preferred_times:
+    - '23:45'
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Tân Lập
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22418:190003:168108
+    ticket_count: 1
+    passenger_contacts:
+    - name: Mai Tuan Linh
+      phone: 0908000057
+      email: qa.tienoanh.57@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 2
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 45-dak-lak-sai-gon-ntg-tb-1300-44736433
+  title: 45. Đăk Lăk - Sài Gòn (NTG - TB) 13:00 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (NTG - TB) on 01-05-2026 13:00 with 2 tickets, pickup Hồ Tây Đắk Mil, dropoff Phí Lái Thiêu, and distinct per-ticket passenger identity carried through booking to payment link.
+  opening_prompt: Anh cần đặt 2 vé tuyến Đăk Lăk - Sài Gòn (NTG - TB) ngày 01-05-2026, chuyến 13:00. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Lái Thiêu. Vé 1 tên Ta Duc Linh, số điện thoại 0908000058. Vé 2 tên Lam Duc Linh, số điện thoại 0908000059. Nhờ em hỗ trợ đặt giúp anh, mỗi vé dùng đúng thông tin của từng khách nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Ta Duc Linh
+    phone: 0908000058
+    email: qa.tienoanh.58@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (NTG - TB)
+    base_trip_id: '32644662'
+    trip_id: '44736433'
+    preferred_times:
+    - '13:00'
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Lái Thiêu
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22436:189991:168108
+    ticket_count: 2
+    passenger_contacts:
+    - name: Ta Duc Linh
+      phone: 0908000058
+      email: qa.tienoanh.58@example.com
+    - name: Lam Duc Linh
+      phone: 0908000059
+      email: qa.tienoanh.59@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 24
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 46-dak-lak-sai-gon-ntg-tb-1305-44759751
+  title: 46. Đăk Lăk - Sài Gòn (NTG - TB) 13:05 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (NTG - TB) on 01-05-2026 13:05 with 1 ticket, pickup Hồ Tây Đắk Mil, dropoff Phí Lái Thiêu, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đăk Lăk - Sài Gòn (NTG - TB) ngày 01-05-2026, chuyến 13:05. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Lái Thiêu. Hành khách tên Nguyen Ngoc An, số điện thoại 0908000060. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Nguyen Ngoc An
+    phone: 0908000060
+    email: qa.tienoanh.60@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (NTG - TB)
+    base_trip_id: '32644662'
+    trip_id: '44759751'
+    preferred_times:
+    - '13:05'
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Lái Thiêu
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22436:189991:168108
+    ticket_count: 1
+    passenger_contacts:
+    - name: Nguyen Ngoc An
+      phone: 0908000060
+      email: qa.tienoanh.60@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 15
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 47-dak-lak-sai-gon-ntg-tb-1310-44759509
+  title: 47. Đăk Lăk - Sài Gòn (NTG - TB) 13:10 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (NTG - TB) on 01-05-2026 13:10 with 1 ticket, pickup Hồ Tây Đắk Mil, dropoff Phí Lái Thiêu, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đăk Lăk - Sài Gòn (NTG - TB) ngày 01-05-2026, chuyến 13:10. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Lái Thiêu. Hành khách tên Tran Ngoc An, số điện thoại 0908000061. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Tran Ngoc An
+    phone: 0908000061
+    email: qa.tienoanh.61@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (NTG - TB)
+    base_trip_id: '32644662'
+    trip_id: '44759509'
+    preferred_times:
+    - '13:10'
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Lái Thiêu
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22436:189991:168108
+    ticket_count: 1
+    passenger_contacts:
+    - name: Tran Ngoc An
+      phone: 0908000061
+      email: qa.tienoanh.61@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 28
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 48-dak-lak-sai-gon-ntg-tb-2045-44765098
+  title: 48. Đăk Lăk - Sài Gòn (NTG - TB) 20:45 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (NTG - TB) on 01-05-2026 20:45 with 1 ticket, pickup Hồ Tây Đắk Mil, dropoff Phí Lái Thiêu, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đăk Lăk - Sài Gòn (NTG - TB) ngày 01-05-2026, chuyến 20:45. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Lái Thiêu. Hành khách tên Le Thu An, số điện thoại 0908000062. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Le Thu An
+    phone: 0908000062
+    email: qa.tienoanh.62@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (NTG - TB)
+    base_trip_id: '32644662'
+    trip_id: '44765098'
+    preferred_times:
+    - '20:45'
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Lái Thiêu
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22436:189991:168108
+    ticket_count: 1
+    passenger_contacts:
+    - name: Le Thu An
+      phone: 0908000062
+      email: qa.tienoanh.62@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 4
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 49-dak-lak-sai-gon-ntg-tb-2100-44731401
+  title: 49. Đăk Lăk - Sài Gòn (NTG - TB) 21:00 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (NTG - TB) on 01-05-2026 21:00 with 1 ticket, pickup Hồ Tây Đắk Mil, dropoff Phí Lái Thiêu, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đăk Lăk - Sài Gòn (NTG - TB) ngày 01-05-2026, chuyến 21:00. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Lái Thiêu. Hành khách tên Pham Thu Binh, số điện thoại 0908000063. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Pham Thu Binh
+    phone: 0908000063
+    email: qa.tienoanh.63@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (NTG - TB)
+    base_trip_id: '32644662'
+    trip_id: '44731401'
+    preferred_times:
+    - '21:00'
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Lái Thiêu
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22436:189991:168108
+    ticket_count: 1
+    passenger_contacts:
+    - name: Pham Thu Binh
+      phone: 0908000063
+      email: qa.tienoanh.63@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 2
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 50-dak-lak-sai-gon-ntg-tb-2110-44268462
+  title: 50. Đăk Lăk - Sài Gòn (NTG - TB) 21:10 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (NTG - TB) on 01-05-2026 21:10 with 1 ticket, pickup Hồ Tây Đắk Mil, dropoff Phí Lái Thiêu, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đăk Lăk - Sài Gòn (NTG - TB) ngày 01-05-2026, chuyến 21:10. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Lái Thiêu. Hành khách tên Hoang Phuong Binh, số điện thoại 0908000064. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Hoang Phuong Binh
+    phone: 0908000064
+    email: qa.tienoanh.64@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (NTG - TB)
+    base_trip_id: '32644662'
+    trip_id: '44268462'
+    preferred_times:
+    - '21:10'
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Lái Thiêu
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22436:189991:168108
+    ticket_count: 1
+    passenger_contacts:
+    - name: Hoang Phuong Binh
+      phone: 0908000064
+      email: qa.tienoanh.64@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 0
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 51-dak-lak-sai-gon-ntg-tb-2130-45141301
+  title: 51. Đăk Lăk - Sài Gòn (NTG - TB) 21:30 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (NTG - TB) on 01-05-2026 21:30 with 2 tickets, pickup Hồ Tây Đắk Mil, dropoff Phí Lái Thiêu, and distinct per-ticket passenger identity carried through booking to payment link.
+  opening_prompt: Anh cần đặt 2 vé tuyến Đăk Lăk - Sài Gòn (NTG - TB) ngày 01-05-2026, chuyến 21:30. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Lái Thiêu. Vé 1 tên Vo Phuong Binh, số điện thoại 0908000065. Vé 2 tên Dang Huu Chau, số điện thoại 0908000066. Nhờ em hỗ trợ đặt giúp anh, mỗi vé dùng đúng thông tin của từng khách nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Vo Phuong Binh
+    phone: 0908000065
+    email: qa.tienoanh.65@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (NTG - TB)
+    base_trip_id: '32644662'
+    trip_id: '45141301'
+    preferred_times:
+    - '21:30'
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Lái Thiêu
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22436:189991:168108
+    ticket_count: 2
+    passenger_contacts:
+    - name: Vo Phuong Binh
+      phone: 0908000065
+      email: qa.tienoanh.65@example.com
+    - name: Dang Huu Chau
+      phone: 0908000066
+      email: qa.tienoanh.66@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 9
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 52-dak-lak-sai-gon-ntg-tb-2200-44268442
+  title: 52. Đăk Lăk - Sài Gòn (NTG - TB) 22:00 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (NTG - TB) on 01-05-2026 22:00 with 1 ticket, pickup Hồ Tây Đắk Mil, dropoff Phí Lái Thiêu, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đăk Lăk - Sài Gòn (NTG - TB) ngày 01-05-2026, chuyến 22:00. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Lái Thiêu. Hành khách tên Bui Huu Chau, số điện thoại 0908000067. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Bui Huu Chau
+    phone: 0908000067
+    email: qa.tienoanh.67@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (NTG - TB)
+    base_trip_id: '32644662'
+    trip_id: '44268442'
+    preferred_times:
+    - '22:00'
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Lái Thiêu
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22436:189991:168108
+    ticket_count: 1
+    passenger_contacts:
+    - name: Bui Huu Chau
+      phone: 0908000067
+      email: qa.tienoanh.67@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 2
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 53-dak-lak-sai-gon-ntg-tb-2215-44759720
+  title: 53. Đăk Lăk - Sài Gòn (NTG - TB) 22:15 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (NTG - TB) on 01-05-2026 22:15 with 1 ticket, pickup Hồ Tây Đắk Mil, dropoff Phí Lái Thiêu, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đăk Lăk - Sài Gòn (NTG - TB) ngày 01-05-2026, chuyến 22:15. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Lái Thiêu. Hành khách tên Do Nhat Chau, số điện thoại 0908000068. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Do Nhat Chau
+    phone: 0908000068
+    email: qa.tienoanh.68@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (NTG - TB)
+    base_trip_id: '32644662'
+    trip_id: '44759720'
+    preferred_times:
+    - '22:15'
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Lái Thiêu
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22436:189991:168108
+    ticket_count: 1
+    passenger_contacts:
+    - name: Do Nhat Chau
+      phone: 0908000068
+      email: qa.tienoanh.68@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 2
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 54-dak-lak-sai-gon-ntg-tb-2230-41786994
+  title: 54. Đăk Lăk - Sài Gòn (NTG - TB) 22:30 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (NTG - TB) on 01-05-2026 22:30 with 2 tickets, pickup Hồ Tây Đắk Mil, dropoff Phí Lái Thiêu, and distinct per-ticket passenger identity carried through booking to payment link.
+  opening_prompt: Anh cần đặt 2 vé tuyến Đăk Lăk - Sài Gòn (NTG - TB) ngày 01-05-2026, chuyến 22:30. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Lái Thiêu. Vé 1 tên Phan Nhat Dung, số điện thoại 0908000069. Vé 2 tên Huynh Tien Dung, số điện thoại 0908000070. Nhờ em hỗ trợ đặt giúp anh, mỗi vé dùng đúng thông tin của từng khách nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Phan Nhat Dung
+    phone: 0908000069
+    email: qa.tienoanh.69@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (NTG - TB)
+    base_trip_id: '32644662'
+    trip_id: '41786994'
+    preferred_times:
+    - '22:30'
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Lái Thiêu
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22436:189991:168108
+    ticket_count: 2
+    passenger_contacts:
+    - name: Phan Nhat Dung
+      phone: 0908000069
+      email: qa.tienoanh.69@example.com
+    - name: Huynh Tien Dung
+      phone: 0908000070
+      email: qa.tienoanh.70@example.com
+    seat_template_id: 7015
+    seat_template_name: Giường nằm 34 chỗ
+    available_seats: 18
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking
+- case_id: 55-dak-lak-sai-gon-ntg-tb-2300-44586162
+  title: 55. Đăk Lăk - Sài Gòn (NTG - TB) 23:00 ngày 01-05-2026
+  objective: Adaptive booking for route Đăk Lăk - Sài Gòn (NTG - TB) on 01-05-2026 23:00 with 1 ticket, pickup Hồ Tây Đắk Mil, dropoff Phí Lái Thiêu, and completion to booking/payment evidence.
+  opening_prompt: Anh cần đặt 1 vé tuyến Đăk Lăk - Sài Gòn (NTG - TB) ngày 01-05-2026, chuyến 23:00. Anh muốn đón ở Hồ Tây Đắk Mil và trả ở Phí Lái Thiêu. Hành khách tên Truong Tien Dung, số điện thoại 0908000071. Em hỗ trợ đặt giúp anh nhé.
+  stop_regex_any:
+  - (?i)https?://\\S+
+  - (?i)(mã vé|ticket code|booking code|mã đặt chỗ|mã booking).*[A-Z0-9]{5,12}
+  contact:
+    name: Truong Tien Dung
+    phone: 0908000071
+    email: qa.tienoanh.71@example.com
+  metadata:
+    operator_name: Tiến Oanh
+    company_id: '2'
+    departure_date: '2026-05-01'
+    origin: Đắk Lắk
+    destination: Hồ Chí Minh
+    route_name: Đăk Lăk - Sài Gòn (NTG - TB)
+    base_trip_id: '32644662'
+    trip_id: '44586162'
+    preferred_times:
+    - '23:00'
+    preferred_pickup: Hồ Tây Đắk Mil
+    preferred_dropoff: Phí Lái Thiêu
+    origin_selection_key_hint: origin:pickup:22709:190009:1731
+    destination_selection_key_hint: destination:dropoff:22436:189991:168108
+    ticket_count: 1
+    passenger_contacts:
+    - name: Truong Tien Dung
+      phone: 0908000071
+      email: qa.tienoanh.71@example.com
+    seat_template_id: 8009
+    seat_template_name: Limousine 22 Phòng (WC)
+    available_seats: 2
+    max_user_turns: 15
+    route_span_case: true
+    case_kind: live-uat-passenger-booking

@@ -1,0 +1,184 @@
+suite_name: lien-hung-local-booking-payment-suite
+generated_at: '2026-04-24T06:21:26.697715+00:00'
+goal_summary: Reusable local Chatwoot regression coverage for the traced Liên Hưng
+  booking flow that produced booking code 1Z7E5B2 and ticket code M0KV6F, with emphasis
+  on trip discovery, stop-point validation, pickup selection, contact capture, and
+  payment-link delivery.
+source_trace:
+  channel: telegram-via-local-webhook-to-chatwoot-uat
+  chatwoot_base_url: https://uat-omniagent.vexere.net
+  account_id: 3
+  inbox_id: 3049
+  captain_assistant_id: 80
+  conversation_id: 27806
+  conversation_url: https://uat-omniagent.vexere.net/app/accounts/3/conversations/27806
+defaults:
+  webhook_url: http://localhost:3000/webhook/chatwoot
+  chat_ui_mode: realistic
+  pinned_conversation_id: "28171"
+  labels:
+  - ai
+  assignee_name: Bot
+  reply_timeout_seconds: 180
+  reply_settle_seconds: 3
+  poll_interval_seconds: 2
+  inbox_id: 3049
+  captain_assistant_id: 80
+  contact_id: "30002"
+  source_id: "6590371429"
+cases:
+- case_id: 01-golden-path-cam-lam
+  title: 01. Golden path Bưu điện Cam Lâm
+  objective: Confirm the traced Nha Trang to Trà Vinh booking flow can discover the
+    trip, validate Bưu điện Cam Lâm, select Agribank CN Cam Lâm, capture contact details,
+    and return a payment link.
+  contact:
+    name: Khánh Thị Thiện
+    phone: null
+  stop_regex_any:
+  - (?i)https?://\S+
+  steps:
+  - prompt: đi Nha Trang đi Trà Vinh ngày mai có chuyến nào ko em
+    expectation:
+      contains_any:
+      - Nha Trang
+      - Trà Vinh
+      regex_any:
+      - (?i)17:00|17 giờ|17h
+  - prompt: Chuyến 17:00 hôm đó đúng chuyến mình đang cần không em?
+    expectation:
+      contains_any:
+      - '17:00'
+      - chuyến
+      regex_any:
+      - (?i)limousine|ghế|còn chỗ|còn vé
+  - prompt: Bưu điện Cam Lâm có phải là điểm đón hợp lệ trên chuyến này không em
+    expectation:
+      contains_any:
+      - Bưu điện Cam Lâm
+      regex_any:
+      - (?i)hợp lệ|điểm đón
+  - prompt: Cho em xem danh sách điểm đón ở BĐ Cam Lâm với
+    expectation:
+      contains_any:
+      - BĐ Cam Lâm
+      regex_any:
+      - (?i)Agribank CN Cam Lâm
+  - prompt: Em chọn Agribank CN Cam Lâm, cho em 1 vé VVIP nhé
+    expectation:
+      contains_any:
+      - Agribank CN Cam Lâm
+      - VVIP
+      regex_any:
+      - (?i)401000|giá vé|thành tiền|ghế
+  - prompt: Tên em là Khánh Thị Thiện, số điện thoại 0967142713. Gửi em link thanh toán
+      nhé
+    expectation:
+      contains_any:
+      - thanh toán
+      regex_any:
+      - (?i)(mã đặt chỗ|booking code|ticket code|mã vé)[:\s]*[A-Z0-9]{6,8}
+      - https?://\S+
+  assignee_name: Bot
+  labels:
+  - ai
+- case_id: 02-compact-booking-path
+  title: 02. Luồng đặt vé ngắn gọn
+  objective: Verify a shorter discovery-to-booking flow still reaches pickup selection,
+    booking confirmation, and a payment link.
+  contact:
+    name: Tran Minh Huy
+    phone: null
+  stop_regex_any:
+  - (?i)https?://\S+
+  steps:
+  - prompt: Từ Nha Trang đi Trà Vinh ngày 24/04/2026 còn chuyến nào không em
+    expectation:
+      contains_any:
+      - Nha Trang
+      - Trà Vinh
+      - 24/04/2026
+      regex_any:
+      - (?i)chuyến|giờ chạy
+  - prompt: Cho em đi chuyến phù hợp lúc 17 giờ, điểm đón ở BĐ Cam Lâm giúp em luôn
+      nhé
+    expectation:
+      contains_any:
+      - BĐ Cam Lâm
+      - '17'
+      regex_any:
+      - (?i)Bưu điện Cam Lâm|Agribank CN Cam Lâm
+  - prompt: Em chọn Agribank CN Cam Lâm, cho em 1 vé VVIP luôn
+    expectation:
+      contains_any:
+      - Agribank CN Cam Lâm
+      - 1 vé
+      - VVIP
+      regex_any:
+      - (?i)401000|giá vé|thành tiền|ghế
+  - prompt: Tên em là Tran Minh Huy, số 0901234567. Chốt giúp em nha
+    expectation:
+      contains_any:
+      - mã
+      regex_any:
+      - (?i)(mã đặt chỗ|booking code|ticket code|mã vé)[:\s]*[A-Z0-9]{6,8}
+  - prompt: Gửi em link thanh toán với em cảm ơn
+    expectation:
+      contains_any:
+      - thanh toán
+      regex_any:
+      - https?://\S+
+  assignee_name: Bot
+  labels:
+  - ai
+- case_id: 03-contact-capture-path
+  title: 03. Luồng bot hỏi lại tên và số
+  objective: Confirm the bot requests passenger name and phone before completion,
+    then continues through booking confirmation to payment link delivery.
+  contact:
+    name: Nguyen Thi Mai
+    phone: null
+  stop_regex_any:
+  - (?i)https?://\S+
+  steps:
+  - prompt: Cho em xem chuyến từ Nha Trang đi Trà Vinh ngày mai với em đang cần đi
+      gấp
+    expectation:
+      contains_any:
+      - Nha Trang
+      - Trà Vinh
+      - ngày mai
+      regex_any:
+      - (?i)24/04/2026|chuyến
+  - prompt: Chuyến đó có dừng ở Bưu điện Cam Lâm không em
+    expectation:
+      contains_any:
+      - Bưu điện Cam Lâm
+      regex_any:
+      - (?i)có|không
+  - prompt: Ở BĐ Cam Lâm có những điểm đón nào vậy em
+    expectation:
+      contains_any:
+      - BĐ Cam Lâm
+      regex_any:
+      - (?i)Agribank CN Cam Lâm|điểm đón
+  - prompt: Em lấy 1 vé VVIP, chốt giúp em với
+    expectation:
+      contains_any:
+      - 1 vé
+      - VVIP
+      regex_any:
+      - (?i)tên|số điện thoại|liên hệ
+  - prompt: Em tên Nguyen Thi Mai, số 0912345678
+    expectation:
+      regex_any:
+      - (?i)booking code|ticket code|mã vé|mã đặt chỗ
+  - prompt: Gửi em link thanh toán nhé
+    expectation:
+      contains_any:
+      - thanh toán
+      regex_any:
+      - https?://\S+
+  assignee_name: Bot
+  labels:
+  - ai

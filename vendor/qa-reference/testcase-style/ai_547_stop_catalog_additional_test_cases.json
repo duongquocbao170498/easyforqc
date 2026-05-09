@@ -1,0 +1,294 @@
+{
+  "test_cases": [
+    {
+      "title": "[TC_0021] bus_trip_stop_catalog_tool phân biệt options và points khi báo giá mặc định theo endpoint",
+      "objective": "Kiểm tra contract endpoint default: endpoint chỉ nằm trong *_options và endpoint object, không nằm trong *_points, nhưng vẫn phải dùng được để gọi pricing khi khách chưa chọn điểm cụ thể.",
+      "priority": "High",
+      "technique": "Integration contract / field mapping",
+      "risk": "Bot chỉ đọc origin_points/destination_points nên bỏ mất origin:endpoint hoặc destination:endpoint, làm không báo được giá tạm.",
+      "requirement_ref": "AI-547 AC: output đủ để AI tiếp tục bước chọn chuyến và lấy giá discovery; Langfuse trace 019df0bdd09fa9ab131c5003a4219659 observation ed575404b92a84ce.",
+      "coverage_tags": [
+        "stop_catalog",
+        "endpoint",
+        "selection_key",
+        "pricing_contract"
+      ],
+      "scenario_type": "tool",
+      "precondition": "Test seed có chuyến Tiến Oanh Sài Gòn - Đà Lạt ngày mai; `bus_trip_stop_catalog_tool` trả origin_endpoint, destination_endpoint, origin_options, destination_options, origin_points, destination_points.",
+      "structured_steps": [
+        {
+          "description": "Gọi bus_trip_stop_catalog_tool cho chuyến đã lock.",
+          "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến tối phù hợp bot vừa gợi ý nhé.\"\n3. \"Anh đi từ đầu tuyến đến cuối tuyến, chưa cần chọn điểm đón trả cụ thể.\"",
+          "expected_result": "- Output có origin_endpoint.selection_key = origin:endpoint và destination_endpoint.selection_key = destination:endpoint\n- origin_options chứa item kind=endpoint\n- destination_options chứa item kind=endpoint\n- origin_points và destination_points không cần chứa endpoint"
+        },
+        {
+          "description": "Gọi bus_trip_price_options_tool khi khách chưa chọn điểm cụ thể.",
+          "test_data": "4. \"Báo giá tạm tuyến đầu đến cuối trước\"",
+          "expected_result": "- Input pricing dùng origin_selection_key = origin:endpoint\n- Input pricing dùng destination_selection_key = destination:endpoint\n- Không lấy phần tử đầu tiên của origin_points/destination_points thay cho endpoint"
+        }
+      ],
+      "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến tối phù hợp bot vừa gợi ý nhé.\"\n3. \"Anh đi từ đầu tuyến đến cuối tuyến, chưa cần chọn điểm đón trả cụ thể.\"\n4. \"Báo giá tạm tuyến đầu đến cuối trước\"",
+      "expected_result": "- Bot/toolchain phân biệt rõ *_options dùng cho selection_key và *_points dùng cho điểm thực tế\n- Pricing default được gọi bằng endpoint keys\n- Không báo thiếu điểm đón/trả khi chỉ cần giá tạm"
+    },
+    {
+      "title": "[TC_0022] bus_trip_stop_catalog_tool không dedupe điểm theo name khi cùng tên có nhiều selection key khác nhau",
+      "objective": "Bảo vệ contract selection_key: cùng một name hoặc point_id có thể xuất hiện nhiều lần theo bus_stop_id/context khác nhau.",
+      "priority": "High",
+      "technique": "Integration contract / field mapping",
+      "risk": "Bot dedupe theo tên điểm, giữ sai selection_key, dẫn đến pricing sai cặp bus_stop_id hoặc sai route-stop context.",
+      "requirement_ref": "AI-547 scope: pickup/dropoff point đã normalize phải trả candidate trips hoặc nearest match; output đủ cho bước chọn chuyến/tạo booking.",
+      "coverage_tags": [
+        "stop_catalog",
+        "duplicate_name",
+        "selection_key",
+        "field_mapping"
+      ],
+      "scenario_type": "tool",
+      "precondition": "bus_trip_stop_catalog_tool trả nhiều item trùng name như Bến Xe Miền Đông Mới hoặc Ngã 3 Madagui nhưng khác selection_key/bus_stop_id.",
+      "structured_steps": [
+        {
+          "description": "Quan sát danh sách origin_options/destination_options có item trùng tên.",
+          "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến phù hợp bot vừa gợi ý nhé.\"\n3. \"Anh muốn lên ở Bến Xe Miền Đông Mới.\"",
+          "expected_result": "- Tool output giữ nguyên tất cả option có name trùng nhưng selection_key khác nhau\n- Bot không tự xóa bớt option chỉ vì name giống nhau"
+        },
+        {
+          "description": "Resolve điểm khách nói khi có nhiều selection_key cùng tên hoặc cùng point_id.",
+          "test_data": "4. \"Đúng bến xe miền đông mới đó\"",
+          "expected_result": "- Nếu context bus_stop_id chưa đủ rõ, bot hỏi lại ngắn gọn hoặc chọn theo chuyến/route đã lock nếu chỉ có một option hợp lệ trong context\n- Không gọi pricing bằng selection_key đã bị dedupe sai"
+        }
+      ],
+      "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến phù hợp bot vừa gợi ý nhé.\"\n3. \"Anh muốn lên ở Bến Xe Miền Đông Mới.\"\n4. \"Đúng bến xe miền đông mới đó\"",
+      "expected_result": "- Không dedupe theo name\n- Exact selection_key được giữ nguyên từ origin_options/destination_options\n- Nếu mơ hồ, bot hỏi lại thay vì tự chọn sai"
+    },
+    {
+      "title": "[TC_0023] bus_trip_stop_catalog_tool resolve route_stop trung gian trong origin_options dù không thuộc pickup_lists",
+      "objective": "Kiểm tra các route stop trung gian do tool sinh ra vẫn là lựa chọn điểm lên hợp lệ khi nằm trong origin_options.",
+      "priority": "High",
+      "technique": "Decision table",
+      "risk": "Bot chỉ tin pickup_lists/origin_points từ danh sách pickup truyền thống và bỏ qua route_stop, làm báo sai là không hỗ trợ đón ở điểm dọc tuyến.",
+      "requirement_ref": "AI-547 scope: output gồm điểm đón, điểm trả, trung chuyển và nearest match.",
+      "coverage_tags": [
+        "route_stop",
+        "origin_options",
+        "pickup",
+        "nearest_match"
+      ],
+      "scenario_type": "tool",
+      "precondition": "`bus_trip_stop_catalog_tool` output cho chuyến Sài Gòn - Đà Lạt có origin_options route_stop như Ngã 3 Madagui, Coop Mart Bảo Lộc, Bến xe Di Linh, Công viên Đức Trọng.",
+      "structured_steps": [
+        {
+          "description": "Khách chọn điểm lên là điểm dọc tuyến có list_id route_stop.",
+          "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến phù hợp bot vừa gợi ý nhé.\"\n3. \"Anh lên ở Ngã 3 Madagui được không?\"",
+          "expected_result": "- Bot kiểm tra origin_options trước khi kết luận\n- Nếu origin_options có origin:pickup:route_stop:159847 thì coi là option điểm lên hợp lệ\n- Không báo không có chỉ vì điểm này không thuộc pickup_lists truyền thống"
+        },
+        {
+          "description": "Gọi pricing bằng route_stop selection_key.",
+          "test_data": "4. \"Nếu lên ở đó thì giá sao?\"",
+          "expected_result": "- bus_trip_price_options_tool nhận origin_selection_key đúng dạng origin:pickup:route_stop:<point_id>\n- destination_selection_key vẫn lấy từ destination_options đã chọn hoặc destination:endpoint nếu khách chưa chọn điểm xuống"
+        }
+      ],
+      "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến phù hợp bot vừa gợi ý nhé.\"\n3. \"Anh lên ở Ngã 3 Madagui được không?\"\n4. \"Nếu lên ở đó thì giá sao?\"",
+      "expected_result": "- Route-stop origin được xử lý như pickup option hợp lệ khi có trong origin_options\n- Không loại bỏ route_stop khỏi flow pricing"
+    },
+    {
+      "title": "[TC_0024] bus_trip_stop_catalog_tool resolve route_stop trung gian trong destination_options khi khách muốn xuống dọc tuyến",
+      "objective": "Kiểm tra destination route_stop/dropoff được dùng đúng khi khách chọn điểm xuống dọc tuyến.",
+      "priority": "High",
+      "technique": "Decision table",
+      "risk": "Bot chỉ dùng destination_endpoint hoặc destination_points chính, bỏ qua route_stop/dropoff context và báo sai điểm xuống không hợp lệ.",
+      "requirement_ref": "AI-547 scope: input có dropoff cụ thể đã normalize thì tool trả candidate trips hoặc nearest match.",
+      "coverage_tags": [
+        "route_stop",
+        "destination_options",
+        "dropoff",
+        "field_mapping"
+      ],
+      "scenario_type": "tool",
+      "precondition": "`bus_trip_stop_catalog_tool` output có destination_options gồm nhiều dropoff và route_stop như Bến xe Di Linh, Công viên Đức Trọng, Ngã ba Liên Khương.",
+      "structured_steps": [
+        {
+          "description": "Khách chọn điểm xuống dọc tuyến.",
+          "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến phù hợp bot vừa gợi ý nhé.\"\n3. \"Anh đi từ đầu tuyến, xuống ở Công viên Đức Trọng chứ không vào Đà Lạt.\"",
+          "expected_result": "- Bot tìm trong destination_options/destination_points và chọn đúng selection_key của điểm Công viên Đức Trọng\n- Không tự đổi về destination:endpoint Văn Phòng Đà Lạt"
+        },
+        {
+          "description": "Khách hỏi lại giá cho điểm xuống đã đổi.",
+          "test_data": "4. \"Vậy giá xuống Đức Trọng bao nhiêu?\"",
+          "expected_result": "- Toolchain gọi bus_trip_price_options_tool với destination_selection_key của Công viên Đức Trọng\n- Nếu nhiều key trùng tên theo bus_stop_id, bot dùng context đã lock hoặc hỏi lại"
+        }
+      ],
+      "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến phù hợp bot vừa gợi ý nhé.\"\n3. \"Anh đi từ đầu tuyến, xuống ở Công viên Đức Trọng chứ không vào Đà Lạt.\"\n4. \"Vậy giá xuống Đức Trọng bao nhiêu?\"",
+      "expected_result": "- Điểm xuống dọc tuyến được resolve từ destination_options\n- Không fallback về endpoint khi khách đã chọn điểm cụ thể\n- Pricing dùng exact selection_key"
+    },
+    {
+      "title": "[TC_0025] bus_trip_stop_catalog_tool xử lý transfer_points nằm trong destination_options nhưng không nằm trong destination_points",
+      "objective": "Kiểm tra điểm trung chuyển destination transfer vẫn được render/resolve đúng dù tách khỏi destination_points.",
+      "priority": "High",
+      "technique": "Integration contract / field mapping",
+      "risk": "Bot chỉ hiển thị destination_points nên bỏ mất transfer_points, hoặc không dùng được selection_key kind=transfer cho bước tiếp theo.",
+      "requirement_ref": "AI-547 scope: output gồm điểm đón, điểm trả, trung chuyển.",
+      "coverage_tags": [
+        "transfer_points",
+        "destination_options",
+        "selection_key",
+        "rendering"
+      ],
+      "scenario_type": "tool",
+      "precondition": "`bus_trip_stop_catalog_tool` output có transfer_points item Nội thành Đà Lạt và destination_options cũng chứa item kind=transfer.",
+      "structured_steps": [
+        {
+          "description": "Khách hỏi có trung chuyển nội thành không.",
+          "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến phù hợp bot vừa gợi ý nhé.\"\n3. \"Đến Đà Lạt có trung chuyển nội thành không?\"",
+          "expected_result": "- Bot kiểm tra transfer_points và destination_options\n- Nếu có item kind=transfer, bot trả lời có trung chuyển theo dữ liệu tool\n- Không nói không có chỉ vì destination_points không chứa item này"
+        },
+        {
+          "description": "Khách chọn trung chuyển làm điểm trả.",
+          "test_data": "4. \"Cho tôi trả nội thành Đà Lạt bán kính 7km\"",
+          "expected_result": "- Bot dùng selection_key kind=transfer từ destination_options\n- Nếu cần pricing/booking, không tự đổi sang destination:endpoint"
+        }
+      ],
+      "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến phù hợp bot vừa gợi ý nhé.\"\n3. \"Đến Đà Lạt có trung chuyển nội thành không?\"\n4. \"Cho tôi trả nội thành Đà Lạt bán kính 7km\"",
+      "expected_result": "- transfer_points được cover như một nhánh riêng\n- transfer option không bị mất khi render danh sách điểm trả/trung chuyển\n- selection_key kind=transfer được giữ nguyên"
+    },
+    {
+      "title": "[TC_0026] bus_trip_stop_catalog_tool render đầy đủ pickup dropoff transfer và đánh dấu endpoint rõ khi xin khách chọn điểm",
+      "objective": "Kiểm tra response cho khách không làm mất lựa chọn quan trọng khi output có nhiều list/options.",
+      "priority": "Normal",
+      "technique": "Use-case / scenario flow",
+      "risk": "Bot rút gọn danh sách, giấu transfer hoặc endpoint, khiến khách không biết có option hợp lệ để chọn.",
+      "requirement_ref": "AI-547 AC: output đủ để AI tiếp tục bước chọn chuyến, tạo booking, hoặc handoff mà không re-search dư thừa.",
+      "coverage_tags": [
+        "rendering",
+        "pickup",
+        "dropoff",
+        "transfer",
+        "endpoint"
+      ],
+      "scenario_type": "tool",
+      "precondition": "`bus_trip_stop_catalog_tool` trả origin_options, destination_options, origin_points, destination_points, transfer_points với số lượng nhiều.",
+      "structured_steps": [
+        {
+          "description": "Khách vừa chốt chuyến nhưng chưa chọn điểm đón/trả.",
+          "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến phù hợp bot vừa gợi ý nhé.\"\n3. \"Cho anh xem đầy đủ điểm đón, điểm trả và trung chuyển của chuyến này.\"",
+          "expected_result": "- Bot hiển thị danh sách điểm đón và điểm trả/trung chuyển theo dữ liệu live\n- Không dùng dấu ... hoặc nói còn nhiều điểm khác mà không liệt kê\n- Endpoint nếu được dùng cho báo giá tạm phải gọi là điểm đầu tuyến/điểm cuối tuyến, không lộ thuật ngữ endpoint"
+        }
+      ],
+      "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến phù hợp bot vừa gợi ý nhé.\"\n3. \"Cho anh xem đầy đủ điểm đón, điểm trả và trung chuyển của chuyến này.\"",
+      "expected_result": "- Danh sách điểm đón/trả/trung chuyển đủ để khách chọn tiếp\n- Không lộ selection_key, bus_stop_id, point_id ra text khách\n- Không mất transfer option"
+    },
+    {
+      "title": "[TC_0027] bus_trip_price_options_tool phải dùng selection key nguyên văn từ options khi khách chọn điểm cụ thể sau khi đã báo giá endpoint",
+      "objective": "Kiểm tra state transition từ báo giá endpoint sang báo giá theo điểm cụ thể.",
+      "priority": "High",
+      "technique": "State transition",
+      "risk": "Sau khi đã báo giá endpoint, bot reuse stale origin:endpoint/destination:endpoint dù khách đổi sang điểm cụ thể.",
+      "requirement_ref": "AI-547 AC: với input có pickup/dropoff cụ thể đã normalize, tool trả candidate trips hoặc nearest match.",
+      "coverage_tags": [
+        "state_transition",
+        "selection_key",
+        "pricing_contract",
+        "stale_context"
+      ],
+      "scenario_type": "tool",
+      "precondition": "Bot đã gọi `bus_trip_stop_catalog_tool` và `bus_trip_price_options_tool` bằng endpoint keys để báo giá tạm cho chuyến Tiến Oanh đã chọn.",
+      "structured_steps": [
+        {
+          "description": "Khách đổi từ endpoint sang pickup cụ thể.",
+          "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến phù hợp bot vừa gợi ý nhé.\"\n3. \"Anh đi từ đầu tuyến đến cuối tuyến, báo giá tạm giúp anh.\"\n4. \"Lúc nãy báo giá đầu cuối rồi, giờ anh muốn lên ở Văn Phòng Thủ Đức.\"",
+          "expected_result": "- Bot resolve Văn Phòng Thủ Đức trong origin_options\n- Bot không giữ origin:endpoint nếu khách đã chọn pickup cụ thể"
+        },
+        {
+          "description": "Khách đổi điểm trả cụ thể.",
+          "test_data": "5. \"Xuống Bến xe Di Linh\"",
+          "expected_result": "- Bot resolve Bến xe Di Linh trong destination_options\n- Gọi bus_trip_price_options_tool bằng exact keys mới\n- Không reuse destination:endpoint"
+        }
+      ],
+      "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến phù hợp bot vừa gợi ý nhé.\"\n3. \"Anh đi từ đầu tuyến đến cuối tuyến, báo giá tạm giúp anh.\"\n4. \"Lúc nãy báo giá đầu cuối rồi, giờ anh muốn lên ở Văn Phòng Thủ Đức.\"\n5. \"Xuống Bến xe Di Linh\"",
+      "expected_result": "- Selection key được cập nhật theo điểm khách chọn mới nhất\n- Giá được tính lại theo cặp key mới\n- Latest user turn thắng context cũ"
+    },
+    {
+      "title": "[TC_0028] bus_trip_stop_catalog_tool không dùng tên điểm tự do thay cho selection key khi gọi bus_trip_price_options_tool",
+      "objective": "Kiểm tra payload contract giữa stop catalog và price options.",
+      "priority": "High",
+      "technique": "Integration contract / field mapping",
+      "risk": "Toolchain truyền name/address thay vì selection_key, khiến pricing fail hoặc tính sai.",
+      "requirement_ref": "AI-547 output đủ để AI tiếp tục bước giá vé/fare; `bus_trip_price_options_tool` yêu cầu origin_selection_key và destination_selection_key.",
+      "coverage_tags": [
+        "payload_contract",
+        "selection_key",
+        "pricing_tool"
+      ],
+      "scenario_type": "tool",
+      "precondition": "`bus_trip_stop_catalog_tool` đã trả selection_key cho điểm Bến Xe Miền Đông Mới và Văn Phòng Đà Lạt.",
+      "structured_steps": [
+        {
+          "description": "Khách chọn điểm bằng tên tự nhiên.",
+          "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến phù hợp bot vừa gợi ý nhé.\"\n3. \"Lên Bến Xe Miền Đông Mới, xuống Văn Phòng Đà Lạt\"",
+          "expected_result": "- Bot map tên tự nhiên sang exact selection_key từ origin_options/destination_options\n- Không truyền origin_selection_key = Bến Xe Miền Đông Mới hoặc destination_selection_key = Văn Phòng Đà Lạt"
+        },
+        {
+          "description": "Quan sát input bus_trip_price_options_tool.",
+          "test_data": "4. \"Báo giá giúp tôi\"",
+          "expected_result": "- Input Tool 3 chỉ dùng key dạng origin:... và destination:...\n- Payload không chứa raw name làm key thay thế"
+        }
+      ],
+      "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến phù hợp bot vừa gợi ý nhé.\"\n3. \"Lên Bến Xe Miền Đông Mới, xuống Văn Phòng Đà Lạt\"\n4. \"Báo giá giúp tôi\"",
+      "expected_result": "- Contract `bus_trip_stop_catalog_tool` -> `bus_trip_price_options_tool` đúng\n- Không dùng tên điểm tự do thay selection_key\n- Nếu resolve không chắc, bot hỏi lại trước khi gọi `bus_trip_price_options_tool`"
+    },
+    {
+      "title": "[TC_0029] bus_trip_stop_catalog_tool xử lý điểm khách nói gần đúng không dấu nhưng không tự xác nhận nếu có nhiều candidate",
+      "objective": "Kiểm tra normalize/fuzzy matching phải có guardrail khi nhiều option gần giống nhau.",
+      "priority": "Normal",
+      "technique": "Fallback / partial failure / recovery",
+      "risk": "Bot fuzzy match quá mạnh và chọn sai điểm khi có nhiều candidate gần giống hoặc trùng tên.",
+      "requirement_ref": "AI-547 scope: trả exact match hoặc nearest match nếu không có chuyến/điểm khớp hoàn toàn.",
+      "coverage_tags": [
+        "fuzzy_match",
+        "ambiguity",
+        "nearest_match",
+        "stop_catalog"
+      ],
+      "scenario_type": "tool",
+      "precondition": "`bus_trip_stop_catalog_tool` output có nhiều điểm có tên gần giống hoặc nhiều option cùng point name.",
+      "structured_steps": [
+        {
+          "description": "Khách nhập điểm không dấu/ngắn gọn.",
+          "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến phù hợp bot vừa gợi ý nhé.\"\n3. \"toi len o mien dong moi, xuong da lat\"",
+          "expected_result": "- Bot normalize được ý định điểm đón/trả\n- Nếu chỉ có một candidate chắc chắn trong context thì chọn đúng selection_key\n- Nếu có nhiều candidate hợp lý thì hỏi lại option cụ thể"
+        }
+      ],
+      "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn chuyến phù hợp bot vừa gợi ý nhé.\"\n3. \"toi len o mien dong moi, xuong da lat\"",
+      "expected_result": "- Fuzzy match không làm mất guardrail ambiguity\n- Không xác nhận điểm khi selection_key chưa rõ\n- Không tự bịa điểm ngoài output `bus_trip_stop_catalog_tool`"
+    },
+    {
+      "title": "[TC_0030] Chuỗi bus_trip_schedule_catalog_tool -> bus_trip_stop_catalog_tool -> bus_trip_price_options_tool không dùng catalog điểm của trip cũ khi user đổi giờ trong cùng ngày",
+      "objective": "Kiểm tra stale context ở tầng stop catalog khi cùng route/ngày có nhiều trip_id.",
+      "priority": "High",
+      "technique": "State transition",
+      "risk": "Bot giữ origin_options/destination_options của trip cũ rồi gọi pricing cho trip mới bằng selection_key không khớp.",
+      "requirement_ref": "AI-547 AC: output đủ để AI tiếp tục bước chọn chuyến; không cần re-search dư thừa nhưng phải refresh khi context đổi.",
+      "coverage_tags": [
+        "stale_context",
+        "trip_id",
+        "stop_catalog",
+        "pricing_contract"
+      ],
+      "scenario_type": "tool",
+      "precondition": "`bus_trip_schedule_catalog_tool` trả nhiều chuyến Tiến Oanh cùng route/ngày. Bot đã gọi `bus_trip_stop_catalog_tool` cho một chuyến ban đầu.",
+      "structured_steps": [
+        {
+          "description": "Khách đổi giờ sau khi đã có catalog điểm của chuyến cũ.",
+          "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn một chuyến tối, lên Văn Phòng Thủ Đức và xuống Văn Phòng Đà Lạt.\"\n3. \"Anh đổi sang chuyến khác cùng ngày trong danh sách bot vừa gợi ý nhé.\"",
+          "expected_result": "- Bot coi stop catalog cũ là stale\n- Bot gọi lại bus_trip_stop_catalog_tool với trip_id/base_trip_id của chuyến mới trước khi resolve điểm hoặc gọi pricing"
+        },
+        {
+          "description": "Khách chọn lại cùng tên điểm sau khi đổi giờ.",
+          "test_data": "4. \"Vẫn lên Văn Phòng Thủ Đức, xuống Văn Phòng Đà Lạt\"",
+          "expected_result": "- Điểm được resolve từ output Tool 2 mới của chuyến mới\n- Tool 3 không dùng selection_key còn sót từ chuyến ban đầu"
+        }
+      ],
+      "test_data": "1. \"Ngày mai Tiến Oanh Sài Gòn đi Đà Lạt có chuyến nào buổi tối không em?\"\n2. \"Anh chọn một chuyến tối, lên Văn Phòng Thủ Đức và xuống Văn Phòng Đà Lạt.\"\n3. \"Anh đổi sang chuyến khác cùng ngày trong danh sách bot vừa gợi ý nhé.\"\n4. \"Vẫn lên Văn Phòng Thủ Đức, xuống Văn Phòng Đà Lạt\"",
+      "expected_result": "- Context stop/pricing được refresh theo trip mới\n- Không trộn trip_id mới với selection_key cũ\n- Nếu chuyến mới không có điểm tương ứng, bot báo/gợi ý theo catalog mới"
+    }
+  ]
+}

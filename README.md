@@ -316,6 +316,8 @@ Backend gọi các portable skill đã cài trong Codex:
 
 - `vendor/portable-skills/create-portable-jira-test-cases/scripts/create_portable_jira_test_cases.py`
 - `vendor/portable-skills/create-portable-xmind-test-design/scripts/create_portable_xmind_test_design.py`
+- `vendor/qa-source/chatwoot-test-uat/scripts/interactive_chatwoot_loop.py`
+- `vendor/qa-source/chatwoot-test-uat/scripts/run_chatwoot_suite.py`
 
 Source skill mặc định:
 
@@ -324,3 +326,31 @@ vendor/qa-source
 ```
 
 Credential Jira không được ghi vào repo. App truyền credential qua environment variables khi gọi script.
+
+## Chatwoot UAT automation
+
+Màn hình `Chatwoot UAT` dùng skill vendored `vendor/qa-source/chatwoot-test-uat` để chạy suite YAML lên UAT Chatwoot và trả về conversation URL, YAML/raw JSON và HTML report.
+
+Các secret Chatwoot không nhập lại ở browser. Local Docker có thể mount `~/.skills/config.yml` vào `/home/node/.skills/config.yml`, hoặc cấu hình env trên server:
+
+```text
+CHATWOOT_UAT_API_BASE=https://uat-omniagent.vexere.net
+CHATWOOT_UAT_ACCOUNT_ID=3
+CHATWOOT_UAT_INBOX_ID=3062
+CHATWOOT_UAT_UI_INBOX_ID=3062
+CHATWOOT_UAT_CAPTAIN_ASSISTANT_ID=80
+CHATWOOT_UAT_API_KEY=...
+CHATWOOT_UAT_USER_API_KEY=...
+```
+
+`CHATWOOT_UAT_UI_INBOX_ID` là Api inbox dùng để tạo hội thoại hiển thị trong Chatwoot UAT. EasyForQC đang default về `3062` (`BaoApiInbox`) và sẽ override xuống từng case trong suite khi chạy từ UI, tránh YAML cũ giữ inbox khác.
+
+Khi chạy trực tiếp với `uat-omniagent.vexere.net`, bật tùy chọn `Dùng xử lý native của UAT Chatwoot` để app chỉ tạo incoming message trong Chatwoot và chờ bot UAT xử lý, giống `CHATWOOT_TEST_SKIP_LOCAL_WEBHOOK_POST=1` trong skill.
+
+Để sync lại skill từ OmniAgent:
+
+```bash
+OMNIAGENT_REPO_ROOT="$HOME/Vexere/knowledge_base/omniagent" scripts/sync-omni-skills.sh
+```
+
+Script mặc định sync `create-jira-test-cases` và `chatwoot-test-uat`, đồng thời bỏ qua `.jira.local.json`, `.DS_Store`, `__pycache__` và `assets/output`. `create-xmind-test-design` đang là bản fork Docker-safe trong EasyForQC; chỉ set `SYNC_XMIND_SKILL=true` nếu đã giữ lại fallback convert PNG cho Linux container.

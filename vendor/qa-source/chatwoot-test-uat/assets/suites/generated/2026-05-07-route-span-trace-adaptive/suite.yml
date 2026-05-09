@@ -1,0 +1,216 @@
+suite_name: route-span-trace-adaptive
+generated_at: "2026-05-07T13:35:00+07:00"
+goal_summary: >
+  Adaptive UAT suite rebuilt from Langfuse traces 019df428d20f4998dd5b3d6f2f4d1df0
+  and 019df42f7a662b3321303fa34d3c9609. The runner must read each real bot reply,
+  then pick a valid next user option from that reply instead of replaying fixed steps.
+source_trace:
+  trace_ids:
+    - 019df428d20f4998dd5b3d6f2f4d1df0
+    - 019df42f7a662b3321303fa34d3c9609
+  conversation_id: 28074
+  operator_name: Tiến Oanh
+  company_id: "2"
+  learned_patterns:
+    - Ask route/date/time window first, then select a concrete trip from the bot catalog.
+    - If the user changes time window after the first answer, follow the latest user turn.
+    - If a requested seat is unavailable, choose an alternative seat from the bot response.
+    - Choose pickup/dropoff from bot suggestions; do not keep invalid route-span points.
+    - Provide passenger contact only after bot asks, then confirm the bot summary before booking.
+    - If the bot creates a booking or returns a ticket code without a payment URL, ask for the payment link immediately.
+defaults:
+  webhook_url: http://localhost:3000/webhook/chatwoot
+  chat_ui_mode: realistic
+  ui_inbox_id: 3062
+  labels:
+    - ai
+    - tien-oanh
+    - route-span
+    - uat
+    - adaptive
+  assignee_name: Bot
+  reply_timeout_seconds: 300
+  reply_settle_seconds: 3
+  poll_interval_seconds: 2
+  inbox_id: 3049
+  captain_assistant_id: 80
+cases:
+  - case_id: adaptive-01-morning-then-evening
+    title: Hỏi chuyến sáng rồi đổi sang chiều tối
+    objective: >
+      Start with a morning-trip discovery question, then after the bot answers,
+      change to evening trips and continue by choosing a valid evening option,
+      seat/room, pickup/dropoff, passenger info, and booking confirmation.
+    opening_prompt: Bạn ơi, ngày mai tuyến Sài Gòn đi Đà Lạt buổi sáng có chuyến nào không?
+    stop_regex_any:
+      - (?i)https?://\S+
+    contact:
+      name: Dương Quốc Thiện
+      phone: "0908375751"
+      email: qa.route.adaptive.1@example.com
+    metadata:
+      scenario: morning_to_evening_change
+      operator_name: Tiến Oanh
+      company_id: "2"
+      departure_date: "2026-05-08"
+      origin: Sài Gòn
+      destination: Đà Lạt
+      route_name: Sài Gòn - Đà Lạt
+      preferred_times: ["23:30", "23:15", "23:00"]
+      preferred_pickup: Văn Phòng Tân Bình
+      preferred_dropoff: Ngã ba Liên Khương
+      preferred_seats: ["B4", "B5", "A5", "B7", "A7"]
+      ticket_count: 1
+      target_completion: payment_link
+
+  - case_id: adaptive-02-two-passengers-b9-a9
+    title: Hai khách chọn cặp B9 A9 rồi map tên theo ghế
+    objective: >
+      Recreate the successful two-passenger trace shape: ask for evening trips,
+      select 23:30, choose two seats if available, choose pickup/dropoff from bot
+      suggestions, provide two passenger contacts, confirm seat-name mapping, and
+      proceed to booking unless the bot reports a mismatch.
+    opening_prompt: Bạn ơi cho mình đặt 2 vé đi Sài Gòn Đà Lạt vào chiều tối ngày mai nha.
+    stop_regex_any:
+      - (?i)https?://\S+
+    contact:
+      name: Thiện Thần Thánh
+      phone: "0908375751"
+      email: qa.route.adaptive.2@example.com
+    metadata:
+      scenario: two_passenger_pair_seats
+      operator_name: Tiến Oanh
+      company_id: "2"
+      departure_date: "2026-05-08"
+      origin: Sài Gòn
+      destination: Đà Lạt
+      route_name: Sài Gòn - Đà Lạt
+      preferred_times: ["23:30", "23:15", "23:00"]
+      preferred_pickup: Văn Phòng Tân Bình
+      preferred_dropoff: Ngã ba Liên Khương
+      preferred_seats: ["B9", "A9", "B5", "A5", "B7", "A7"]
+      ticket_count: 2
+      passenger_contacts:
+        - name: Thiện Thần Thánh
+          phone: "0908375751"
+          seat_hint: B9
+        - name: Khánh Sky
+          phone: "0908765432"
+          seat_hint: A9
+      target_completion: payment_link
+
+  - case_id: adaptive-03-seat-unavailable-fallback
+    title: Chọn B9 nhưng nếu hết thì đổi sang ghế bot gợi ý
+    objective: >
+      Recreate the second trace: user asks for 1 ticket at 23:30 and prefers B9;
+      if bot says B9 is unavailable, choose a valid alternative from the response,
+      then provide pickup/dropoff/contact and confirm booking.
+    opening_prompt: Bạn ơi cho mình đặt 1 vé đi Sài Gòn Đà Lạt vào chiều tối ngày mai nha, chuyến 23h30 ghế B9.
+    stop_regex_any:
+      - (?i)https?://\S+
+    contact:
+      name: Dương Quốc Thiện
+      phone: "0908375751"
+      email: qa.route.adaptive.3@example.com
+    metadata:
+      scenario: unavailable_seat_fallback
+      operator_name: Tiến Oanh
+      company_id: "2"
+      departure_date: "2026-05-08"
+      origin: Sài Gòn
+      destination: Đà Lạt
+      route_name: Sài Gòn - Đà Lạt
+      preferred_times: ["23:30"]
+      requested_seat: B9
+      fallback_seats: ["B4", "B5", "A5", "B7", "A7", "A2", "B10"]
+      preferred_pickup: Văn Phòng Tân Bình
+      preferred_dropoff: Ngã ba Liên Khương
+      ticket_count: 1
+      target_completion: payment_link
+
+  - case_id: adaptive-04-typo-stop-selection
+    title: Chọn điểm đón trả có typo như trace
+    objective: >
+      Test whether the bot can interpret a noisy user selection for pickup/dropoff
+      after it suggests valid points, then continue with passenger info and booking
+      confirmation.
+    opening_prompt: Mình muốn đi Sài Gòn Đà Lạt ngày mai tối, ưu tiên chuyến 23h30, 1 vé.
+    stop_regex_any:
+      - (?i)https?://\S+
+    contact:
+      name: Trần Route Typo
+      phone: "0908375752"
+      email: qa.route.adaptive.4@example.com
+    metadata:
+      scenario: typo_pickup_dropoff
+      operator_name: Tiến Oanh
+      company_id: "2"
+      departure_date: "2026-05-08"
+      origin: Sài Gòn
+      destination: Đà Lạt
+      route_name: Sài Gòn - Đà Lạt
+      preferred_times: ["23:30", "23:15", "23:00"]
+      preferred_pickup: Văn Phòng Tân Bình
+      preferred_dropoff: Ngã ba Liên Khương
+      noisy_stop_reply: Văn Phòng Tân Bình vvaf gã ba Liên Khương -N
+      ticket_count: 1
+      target_completion: payment_link
+
+  - case_id: adaptive-05-invalid-point-recover
+    title: Điểm đón trả không khớp thì chọn lại option hợp lệ của bot
+    objective: >
+      User initially asks for a route-span point that may not be valid for the
+      selected trip. The planner must accept a valid alternative from bot output,
+      not keep forcing the invalid point.
+    opening_prompt: Tiến Oanh ngày mai từ Sài Gòn đi Buôn Ma Thuột có chuyến nào buổi sáng không?
+    stop_regex_any:
+      - (?i)https?://\S+
+    contact:
+      name: Phạm Route Recover
+      phone: "0908375753"
+      email: qa.route.adaptive.5@example.com
+    metadata:
+      scenario: invalid_point_recover
+      operator_name: Tiến Oanh
+      company_id: "2"
+      departure_date: "2026-05-08"
+      origin: Sài Gòn
+      destination: Buôn Ma Thuột
+      route_name: Sài Gòn - Buôn Ma Thuột
+      preferred_times: ["11:30", "08:30", "08:40"]
+      initial_pickup: Bến Xe Miền Đông Mới
+      fallback_pickup_policy: choose_valid_option_from_bot
+      preferred_dropoff: Bến xe phía Nam Buôn Ma Thuột
+      ticket_count: 1
+      target_completion: payment_link
+
+  - case_id: adaptive-06-change-seat-after-confirmed
+    title: Chọn B9 rồi đổi sang ghế khác trước khi chốt
+    objective: >
+      User first asks for a 23:30 Sài Gòn - Đà Lạt ticket with B9. After the bot
+      confirms B9 or starts the booking path, the user changes seat to another
+      available seat, then continues pickup/dropoff, contact, confirmation, and
+      payment link.
+    opening_prompt: Bạn ơi cho mình đặt 1 vé đi Sài Gòn Đà Lạt vào chiều tối ngày mai nha, chuyến 23h30 ghế B9.
+    stop_regex_any:
+      - (?i)https?://\S+
+    contact:
+      name: Dương Quốc Thiện
+      phone: "0908375751"
+      email: qa.route.adaptive.6@example.com
+    metadata:
+      scenario: change_seat_after_initial_selection
+      operator_name: Tiến Oanh
+      company_id: "2"
+      departure_date: "2026-05-08"
+      origin: Sài Gòn
+      destination: Đà Lạt
+      route_name: Sài Gòn - Đà Lạt
+      preferred_times: ["23:30"]
+      requested_seat: B9
+      change_to_seat: B11
+      fallback_seats: ["B11", "B4", "B5", "A5", "B7", "A7"]
+      preferred_pickup: Văn Phòng Tân Bình
+      preferred_dropoff: Ngã ba Liên Khương
+      ticket_count: 1
+      target_completion: payment_link
