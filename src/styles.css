@@ -376,7 +376,7 @@ button:disabled {
 
 .chatwoot-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: start;
   width: min(100%, 1180px);
@@ -469,10 +469,10 @@ button:disabled {
 }
 
 .chatwoot-readiness-head {
-  align-items: center;
+  align-items: flex-start;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .chatwoot-readiness-head strong,
@@ -496,7 +496,7 @@ button:disabled {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .readiness-chip {
@@ -721,12 +721,16 @@ button:disabled {
 .automation-editor-nav {
   display: flex;
   justify-content: flex-start;
-  margin-top: 12px;
+  margin: 12px auto 10px;
+  max-width: 920px;
+  width: 100%;
 }
 
 .automation-editor-help {
-  margin: 14px auto 10px;
+  line-height: 1.5;
+  margin: 0 auto 14px;
   max-width: 920px;
+  padding: 0 2px;
 }
 
 .automation-agent-editor,
@@ -741,11 +745,13 @@ button:disabled {
   align-self: start;
   justify-self: center;
   max-width: 920px;
+  padding: 16px;
   width: 100%;
 }
 
 .automation-agent-form {
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
+  gap: 12px 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
 }
 
 .automation-agent-save-row {
@@ -783,8 +789,7 @@ button:disabled {
   display: grid;
   gap: 8px;
   margin-top: 12px;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
+  overflow: visible;
   padding-bottom: 2px;
 }
 
@@ -794,14 +799,14 @@ button:disabled {
   display: grid;
   gap: 10px;
   grid-template-columns:
-    minmax(180px, 1.35fr)
-    minmax(74px, 0.55fr)
-    minmax(74px, 0.6fr)
-    minmax(88px, 0.68fr)
-    minmax(128px, 0.95fr)
-    minmax(130px, 0.95fr)
-    minmax(132px, auto);
-  min-width: 920px;
+    minmax(140px, 1.25fr)
+    minmax(48px, 0.42fr)
+    minmax(48px, 0.42fr)
+    minmax(56px, 0.5fr)
+    minmax(96px, 0.85fr)
+    minmax(88px, 0.75fr)
+    minmax(76px, auto);
+  min-width: 0;
 }
 
 .automation-agent-table-head {
@@ -912,7 +917,7 @@ button:disabled {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   justify-content: flex-end;
   min-width: 0;
 }
@@ -1245,6 +1250,12 @@ button:disabled {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+@media (min-width: 1841px) {
+  .chatwoot-layout {
+    grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.75fr);
+  }
+}
+
 .workspace-panel {
   width: min(100%, 1180px);
   max-width: 1180px;
@@ -1260,21 +1271,22 @@ button:disabled {
 }
 
 .qa-workspace-card {
-  align-items: center;
+  align-items: stretch;
   border: 1px solid var(--border);
   border-left: 3px solid var(--green);
   border-radius: 8px;
   background: var(--surface-soft);
   display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(0, 1fr) auto minmax(230px, auto);
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   padding: 10px 12px;
 }
 
 .qa-workspace-card-head {
-  align-items: center;
+  align-items: flex-start;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: space-between;
   min-width: 0;
@@ -1338,8 +1350,11 @@ button:disabled {
 
 .workspace-compact-metrics {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .workspace-compact-metrics span {
@@ -1354,6 +1369,7 @@ button:disabled {
   padding: 4px 9px;
   font-size: 11px;
   font-weight: 800;
+  flex: 0 1 auto;
   white-space: nowrap;
 }
 
@@ -1374,8 +1390,9 @@ button:disabled {
 }
 
 .workspace-card-actions {
-  justify-content: flex-end;
+  justify-content: flex-start;
   margin-top: 0;
+  min-width: 0;
 }
 
 .workspace-card-actions .button {
@@ -4856,14 +4873,14 @@ pre {
   .automation-agent-table-head,
   .automation-agent-row {
     grid-template-columns:
-      minmax(160px, 1.15fr)
-      minmax(58px, 0.45fr)
-      minmax(58px, 0.45fr)
-      minmax(70px, 0.48fr)
-      minmax(112px, 0.78fr)
-      minmax(108px, 0.74fr)
-      minmax(118px, auto);
-    min-width: 780px;
+      minmax(140px, 1.25fr)
+      minmax(48px, 0.42fr)
+      minmax(48px, 0.42fr)
+      minmax(56px, 0.5fr)
+      minmax(96px, 0.85fr)
+      minmax(88px, 0.75fr)
+      minmax(76px, auto);
+    min-width: 0;
   }
 
   .automation-profile-card-actions {
@@ -4929,6 +4946,15 @@ pre {
     align-items: flex-start;
     flex-direction: column;
     gap: 4px;
+  }
+
+  .automation-panel-title {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .automation-panel-title .panel-title-main {
+    width: 100%;
   }
 
   .settings-section-nav {
@@ -5174,6 +5200,18 @@ pre {
 
   .button-row {
     align-items: stretch;
+  }
+}
+
+@media (max-width: 520px) {
+  .workspace-compact-metrics span {
+    flex: 1 1 calc(50% - 6px);
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .workspace-compact-metrics span:nth-child(3) {
+    flex-basis: 100%;
   }
 }
 
