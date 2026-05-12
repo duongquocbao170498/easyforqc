@@ -256,8 +256,23 @@ button:disabled {
 
 .side-nav {
   display: grid;
-  gap: 8px;
+  gap: 14px;
   margin: 2px 0 12px;
+}
+
+.side-nav-section {
+  display: grid;
+  gap: 7px;
+}
+
+.side-nav-section-title {
+  color: #71717a;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+  padding: 6px 8px 0;
+  text-transform: uppercase;
 }
 
 .sidebar-bottom-nav {
@@ -2258,7 +2273,11 @@ select {
   background: #151518;
   color: var(--ink);
   outline: none;
-  padding: 10px 11px;
+  padding: 11px 13px;
+}
+
+select {
+  padding-right: 38px;
 }
 
 textarea {
@@ -2285,7 +2304,7 @@ textarea {
 
 .field-control-wrap.has-expand input,
 .field-control-wrap.has-expand textarea {
-  padding-right: 26px;
+  padding-right: 36px;
 }
 
 .field-control-wrap.has-saved-secret input {
@@ -2294,14 +2313,14 @@ textarea {
 
 .field-expand-button {
   position: absolute;
-  top: 5px;
-  right: 5px;
+  top: 7px;
+  right: 8px;
   z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border: 1px solid var(--border-strong);
   border-radius: 4px;
   background: rgba(47, 48, 53, 0.92);
@@ -4438,6 +4457,10 @@ pre {
   color: #374151;
 }
 
+:root[data-theme="light"] .side-nav-section-title {
+  color: #6b7280;
+}
+
 :root[data-theme="light"] .side-nav button:hover:not(:disabled),
 :root[data-theme="light"] .settings-section-nav button:hover:not(:disabled) {
   background: #f4f4f5;
@@ -5160,6 +5183,10 @@ pre {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
+  }
+
+  .side-nav-section {
+    grid-column: 1 / -1;
   }
 
   .side-nav-group {

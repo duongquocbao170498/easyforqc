@@ -625,6 +625,9 @@ const UI_TEXT = {
     parseTitle: "Đọc issue key từ link",
     fetchButton: "Đọc Jira",
     appNavigationLabel: "Điều hướng app",
+    navAutomationGroup: "Tạo & chạy automation",
+    navKnowledgeGroup: "Kiến thức",
+    navSettingsGroup: "Cấu hình",
     generateTask: "Tạo task",
     qaWorkspace: "QA Workspace",
     knowledge: "Kiến thức QA",
@@ -1147,6 +1150,9 @@ const UI_TEXT = {
     parseTitle: "Read the issue key from the link",
     fetchButton: "Fetch",
     appNavigationLabel: "App navigation",
+    navAutomationGroup: "Create & run automation",
+    navKnowledgeGroup: "Knowledge",
+    navSettingsGroup: "Settings",
     generateTask: "Generate Task",
     qaWorkspace: "QA Workspace",
     knowledge: "Knowledge",
@@ -5911,103 +5917,112 @@ function App() {
         </div>
 
         <nav className="side-nav" aria-label={ui.appNavigationLabel}>
-          <button className={appView === "run" ? "active" : ""} type="button" onClick={() => {
-            setAppView("run");
-            setSettingsNavOpen(false);
-          }}>
-            <Play size={16} />
-            <span>{ui.generateTask}</span>
-          </button>
-          <button className={appView === "workspace" ? "active" : ""} type="button" onClick={() => {
-            setAppView("workspace");
-            setSettingsNavOpen(false);
-          }}>
-            <Layers size={16} />
-            <span>{ui.qaWorkspace}</span>
-          </button>
-          <button className={appView === "chatwoot" ? "active" : ""} type="button" onClick={() => {
-            setAppView("chatwoot");
-            setSettingsNavOpen(false);
-          }}>
-            <Bot size={16} />
-            <span>{ui.chatwootUat}</span>
-          </button>
-          <button className={appView === "knowledge" ? "active" : ""} type="button" onClick={() => {
-            setAppView("knowledge");
-            setSettingsNavOpen(false);
-          }}>
-            <BookOpen size={16} />
-            <span>{ui.knowledge}</span>
-          </button>
-          <div className={`${appView === "settings" ? "side-nav-group active" : "side-nav-group"} ${settingsNavOpen ? "open" : "collapsed"}`}>
-            <button
-              className={appView === "settings" ? "active" : ""}
-              type="button"
-              onClick={() => {
-                if (appView !== "settings") {
-                  setAppView("settings");
-                  setSettingsNavOpen(true);
-                  return;
-                }
-                setSettingsNavOpen((current) => !current);
-              }}
-              aria-expanded={settingsNavOpen}
-            >
-              <Settings size={16} />
-              <span>{ui.workspaceSettings}</span>
-              {aiSettingsImprovePending ? (
-                <span className="nav-badge" title={ui.aiSettingsPendingImprove} aria-label={ui.aiSettingsPendingImprove}>
-                  <Wand2 size={11} />
-                </span>
-              ) : null}
-              <ChevronDown className="side-nav-chevron" size={14} />
+          <div className="side-nav-section">
+            <span className="side-nav-section-title">{ui.navAutomationGroup}</span>
+            <button className={appView === "run" ? "active" : ""} type="button" onClick={() => {
+              setAppView("run");
+              setSettingsNavOpen(false);
+            }}>
+              <Play size={16} />
+              <span>{ui.generateTask}</span>
             </button>
-            <div className="side-nav-subitems">
-              <button className={appView === "settings" && activeSettingsSection === "project" ? "active" : ""} type="button" onClick={() => {
-                setAppView("settings");
-                setSettingsNavOpen(true);
-                setActiveSettingsSection("project");
-              }}>
-                <Settings size={14} />
-                <span>{ui.project}</span>
-              </button>
-              <button className={appView === "settings" && activeSettingsSection === "auth" ? "active" : ""} type="button" onClick={() => {
-                setAppView("settings");
-                setSettingsNavOpen(true);
-                setActiveSettingsSection("auth");
-              }}>
-                <ShieldCheck size={14} />
-                <span>{ui.authentication}</span>
-              </button>
-              <button className={appView === "settings" && activeSettingsSection === "automation" ? "active" : ""} type="button" onClick={() => {
-                setAppView("settings");
-                setSettingsNavOpen(true);
-                setActiveSettingsSection("automation");
-              }}>
-                <Bot size={14} />
-                <span>{ui.automationSettings}</span>
-              </button>
-              <button className={appView === "settings" && activeSettingsSection === "ai" ? "active" : ""} type="button" onClick={() => {
-                setAppView("settings");
-                setSettingsNavOpen(true);
-                setActiveSettingsSection("ai");
-              }}>
-                <Wand2 size={14} />
-                <span>{ui.aiSettings}</span>
+            <button className={appView === "workspace" ? "active" : ""} type="button" onClick={() => {
+              setAppView("workspace");
+              setSettingsNavOpen(false);
+            }}>
+              <Layers size={16} />
+              <span>{ui.qaWorkspace}</span>
+            </button>
+            <button className={appView === "chatwoot" ? "active" : ""} type="button" onClick={() => {
+              setAppView("chatwoot");
+              setSettingsNavOpen(false);
+            }}>
+              <Bot size={16} />
+              <span>{ui.chatwootUat}</span>
+            </button>
+          </div>
+          <div className="side-nav-section">
+            <span className="side-nav-section-title">{ui.navKnowledgeGroup}</span>
+            <button className={appView === "knowledge" ? "active" : ""} type="button" onClick={() => {
+              setAppView("knowledge");
+              setSettingsNavOpen(false);
+            }}>
+              <BookOpen size={16} />
+              <span>{ui.knowledge}</span>
+            </button>
+          </div>
+          <div className="side-nav-section">
+            <span className="side-nav-section-title">{ui.navSettingsGroup}</span>
+            <div className={`${appView === "settings" ? "side-nav-group active" : "side-nav-group"} ${settingsNavOpen ? "open" : "collapsed"}`}>
+              <button
+                className={appView === "settings" ? "active" : ""}
+                type="button"
+                onClick={() => {
+                  if (appView !== "settings") {
+                    setAppView("settings");
+                    setSettingsNavOpen(true);
+                    return;
+                  }
+                  setSettingsNavOpen((current) => !current);
+                }}
+                aria-expanded={settingsNavOpen}
+              >
+                <Settings size={16} />
+                <span>{ui.workspaceSettings}</span>
                 {aiSettingsImprovePending ? (
                   <span className="nav-badge" title={ui.aiSettingsPendingImprove} aria-label={ui.aiSettingsPendingImprove}>
                     <Wand2 size={11} />
                   </span>
                 ) : null}
+                <ChevronDown className="side-nav-chevron" size={14} />
               </button>
-              <button className={appView === "settings" && activeSettingsSection === "knowledgeAi" ? "active" : ""} type="button" onClick={() => {
-                setAppView("settings");
-                setSettingsNavOpen(true);
-                setActiveSettingsSection("knowledgeAi");
-              }}>
-                <BookOpen size={14} />
-                <span>{ui.knowledgeAiSettings}</span>
-              </button>
+              <div className="side-nav-subitems">
+                <button className={appView === "settings" && activeSettingsSection === "project" ? "active" : ""} type="button" onClick={() => {
+                  setAppView("settings");
+                  setSettingsNavOpen(true);
+                  setActiveSettingsSection("project");
+                }}>
+                  <Settings size={14} />
+                  <span>{ui.project}</span>
+                </button>
+                <button className={appView === "settings" && activeSettingsSection === "auth" ? "active" : ""} type="button" onClick={() => {
+                  setAppView("settings");
+                  setSettingsNavOpen(true);
+                  setActiveSettingsSection("auth");
+                }}>
+                  <ShieldCheck size={14} />
+                  <span>{ui.authentication}</span>
+                </button>
+                <button className={appView === "settings" && activeSettingsSection === "automation" ? "active" : ""} type="button" onClick={() => {
+                  setAppView("settings");
+                  setSettingsNavOpen(true);
+                  setActiveSettingsSection("automation");
+                }}>
+                  <Bot size={14} />
+                  <span>{ui.automationSettings}</span>
+                </button>
+                <button className={appView === "settings" && activeSettingsSection === "ai" ? "active" : ""} type="button" onClick={() => {
+                  setAppView("settings");
+                  setSettingsNavOpen(true);
+                  setActiveSettingsSection("ai");
+                }}>
+                  <Wand2 size={14} />
+                  <span>{ui.aiSettings}</span>
+                  {aiSettingsImprovePending ? (
+                    <span className="nav-badge" title={ui.aiSettingsPendingImprove} aria-label={ui.aiSettingsPendingImprove}>
+                      <Wand2 size={11} />
+                    </span>
+                  ) : null}
+                </button>
+                <button className={appView === "settings" && activeSettingsSection === "knowledgeAi" ? "active" : ""} type="button" onClick={() => {
+                  setAppView("settings");
+                  setSettingsNavOpen(true);
+                  setActiveSettingsSection("knowledgeAi");
+                }}>
+                  <BookOpen size={14} />
+                  <span>{ui.knowledgeAiSettings}</span>
+                </button>
+              </div>
             </div>
           </div>
         </nav>
